@@ -4,11 +4,17 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1420",
     "build": "vite build",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@spotify-wallpaper/shared-types": "0.0.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.2"
+  }
 }

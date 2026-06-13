@@ -232,6 +232,26 @@ npm run build
 
 For Wallpaper Engine import, build the project and select `apps/wallpaper/dist` as the Web Wallpaper folder.
 
+## Optional configurator
+
+The configurator is optional and is not required for the Wallpaper Engine wallpaper runtime.
+
+Run the browser version:
+
+```sh
+npm run dev -w @spotify-wallpaper/configurator
+```
+
+Run the Tauri shell:
+
+```sh
+npm run tauri:dev -w @spotify-wallpaper/configurator
+```
+
+The configurator can edit the first milestone settings, preview the mock layout, import existing settings JSON, and export
+Wallpaper Engine settings JSON. Refresh Token export is disabled by default and must be explicitly enabled in the
+configurator before the token appears in generated JSON.
+
 The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 
 - `spotify_client_id`

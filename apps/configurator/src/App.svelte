@@ -1,127 +1,192 @@
 <script lang="ts">
-  import type { LayoutItem, WallpaperSettings } from '@spotify-wallpaper/shared-types';
+  import {
+    buildSettings,
+    defaultDraft,
+    exportSettingsJson,
+    importSettingsJson,
+    layoutPresetOptions,
+    type ConfiguratorDraft
+  } from './settingsModel';
 
-  const item = (partial: Partial<LayoutItem>): LayoutItem => ({
-    enabled: true,
-    x: 50,
-    y: 50,
-    unit: 'percent',
-    anchor: 'center',
-    width: 360,
-    height: 120,
-    scale: 1,
-    rotation: 0,
-    opacity: 1,
-    zIndex: 2,
-    responsive: 'clamp-safe-area',
-    safeAreaMargin: 20,
-    locked: false,
-    participatesInTransition: true,
-    ...partial
-  });
+  let draft: ConfiguratorDraft = { ...defaultDraft };
+  let importSource = '';
+  let importWarning: string | null = null;
+  let copyStatus = '';
 
-  const defaults: WallpaperSettings = {
-    schemaVersion: 1,
-    spotify: { clientId: '', hasRefreshToken: false, pollIntervalPlayingMs: 1000, pollIntervalPausedMs: 3000 },
-    layout: {
-      preset: 'Left Dock',
-      items: {
-        albumArt: item({ x: 8, y: 50, anchor: 'center-left', width: 360, height: 360 }),
-        trackText: item({ x: 34, y: 48, anchor: 'center-left', width: 520, height: 260 }),
-        seekbar: item({ x: 34, y: 68, anchor: 'center-left', width: 420, height: 44 }),
-        lyrics: item({ x: 68, y: 50, anchor: 'center', width: 560, height: 240 }),
-        clock: item({ x: 96, y: 94, anchor: 'bottom-right', width: 220, height: 72 }),
-        debug: item({ x: 98.8, y: 2, anchor: 'top-right', width: 280, height: 240 })
-      }
-    },
-    theme: { mode: 'album', textColor: '#f6f7fb', autoReadability: true },
-    background: { mode: 'album-blur', opacity: 0.72, blurPx: 26, solidColor: '#111318' },
-    albumArt: { visible: true },
-    text: { visible: true },
-    player: { visible: true, controlsEnabled: true, showDevice: true, showVolume: true, showShuffleRepeat: true },
-    seekbar: { visible: true, style: 'line' },
-    lyrics: {
-      enabled: false,
-      sourceText: '',
-      mode: 'current',
-      offsetMs: 0,
-      showMissingState: true,
-      provider: {
-        name: 'user-lrc',
-        searchInputs: {
-          title: true,
-          artists: true,
-          album: true,
-          duration: true
-        },
-        supportsSynced: true,
-        supportsPlain: false,
-        cachePolicy: 'none',
-        failureReason: 'not-configured'
-      }
-    },
-    visualizer: {
-      enabled: true,
-      mode: 'album-ring',
-      intensity: 0.72,
-      sensitivity: 1,
-      smoothing: 0.35,
-      decay: 0.22,
-      bassWeight: 1.2,
-      midWeight: 1,
-      trebleWeight: 0.82,
-      barCount: 56,
-      lineWidth: 3,
-      radius: 1.18,
-      gap: 10,
-      rotationSpeed: 0.16,
-      particleCount: 0,
-      particleLife: 0,
-      glowStrength: 0.62,
-      colorMode: 'theme',
-      mirrorMode: 'mirror',
-      clampMax: 1,
-      noiseGate: 0.03,
-      idleAnimation: true
-    },
-    clock: {
-      enabled: true,
-      hour12: false,
-      showSeconds: false,
-      showDate: false,
-      showWeekday: false,
-      fontSizePx: 34,
-      fontWeight: 700,
-      letterSpacingPx: 0,
-      opacity: 0.9,
-      colorMode: 'auto',
-      fixedColor: '#f6f7fb'
-    },
-    transitions: {
-      enabled: false,
-      preset: 'fade',
-      durationMs: 700,
-      easing: 'ease-out',
-      background: true,
-      albumArt: true,
-      text: true,
-      lyrics: true,
-      visualizer: false,
-      reduceMotion: false
-    },
-    performance: { mode: 'standard' },
-    rainmeter: { enabled: false },
-    debug: { enabled: false }
+  $: settings = buildSettings(draft);
+  $: settingsJson = exportSettingsJson(draft);
+  $: previewClasses = ['mock-wallpaper', `preset-${draft.preset.toLowerCase().replaceAll(' ', '-')}`].join(' ');
+  $: exportSummary = draft.includeRefreshToken && draft.spotifyRefreshToken.trim() ? 'includes refresh token' : 'token excluded';
+
+  const update = <K extends keyof ConfiguratorDraft>(key: K, value: ConfiguratorDraft[K]) => {
+    draft = { ...draft, [key]: value };
+    copyStatus = '';
   };
 
-  const settingsJson = JSON.stringify(defaults, null, 2);
+  const importSettings = () => {
+    const imported = importSettingsJson(importSource);
+    draft = imported.draft;
+    importWarning = imported.warning;
+    copyStatus = imported.warning ? '' : 'Imported settings JSON';
+  };
+
+  const copySettings = async () => {
+    try {
+      await navigator.clipboard.writeText(settingsJson);
+      copyStatus = 'Copied settings JSON';
+    } catch {
+      copyStatus = 'Clipboard unavailable';
+    }
+  };
 </script>
 
 <main>
-  <section>
-    <h1>Configurator Skeleton</h1>
-    <p>Optional settings editor foundation. The wallpaper does not depend on this app.</p>
-    <textarea readonly value={settingsJson} aria-label="Default settings JSON"></textarea>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Optional configurator</p>
+      <h1>Spotify Wallpaper Settings</h1>
+    </div>
+    <div class="status-stack">
+      <span>{exportSummary}</span>
+      <span>{settings.layout.preset}</span>
+    </div>
+  </header>
+
+  <section class="workspace">
+    <form class="editor" aria-label="Settings editor">
+      <fieldset>
+        <legend>Spotify</legend>
+        <label>
+          <span>Client ID</span>
+          <input value={draft.spotifyClientId} on:input={(event) => update('spotifyClientId', event.currentTarget.value)} />
+        </label>
+        <label>
+          <span>Refresh token</span>
+          <input
+            type="password"
+            value={draft.spotifyRefreshToken}
+            autocomplete="off"
+            on:input={(event) => update('spotifyRefreshToken', event.currentTarget.value)}
+          />
+        </label>
+        <label class="check-row">
+          <input
+            type="checkbox"
+            checked={draft.includeRefreshToken}
+            on:change={(event) => update('includeRefreshToken', event.currentTarget.checked)}
+          />
+          <span>Include token in export</span>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Layout</legend>
+        <label>
+          <span>Preset</span>
+          <select value={draft.preset} on:change={(event) => update('preset', event.currentTarget.value as ConfiguratorDraft['preset'])}>
+            {#each layoutPresetOptions as preset}
+              <option value={preset}>{preset}</option>
+            {/each}
+          </select>
+        </label>
+        <label>
+          <span>Performance</span>
+          <select
+            value={draft.performanceMode}
+            on:change={(event) => update('performanceMode', event.currentTarget.value as ConfiguratorDraft['performanceMode'])}
+          >
+            <option value="low-power">Low power</option>
+            <option value="standard">Standard</option>
+            <option value="high-effect">High effect</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Visual</legend>
+        <label>
+          <span>Background</span>
+          <select
+            value={draft.backgroundMode}
+            on:change={(event) => update('backgroundMode', event.currentTarget.value as ConfiguratorDraft['backgroundMode'])}
+          >
+            <option value="album-blur">Album blur</option>
+            <option value="album-gradient">Album gradient</option>
+            <option value="solid-color">Solid color</option>
+          </select>
+        </label>
+        <label>
+          <span>Theme</span>
+          <select value={draft.themeMode} on:change={(event) => update('themeMode', event.currentTarget.value as ConfiguratorDraft['themeMode'])}>
+            <option value="album">Album</option>
+            <option value="fallback">Fallback</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset class="toggle-grid">
+        <legend>Modules</legend>
+        <label class="check-row">
+          <input type="checkbox" checked={draft.playerControlsEnabled} on:change={(event) => update('playerControlsEnabled', event.currentTarget.checked)} />
+          <span>Player controls</span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" checked={draft.visualizerEnabled} on:change={(event) => update('visualizerEnabled', event.currentTarget.checked)} />
+          <span>Visualizer</span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" checked={draft.lyricsEnabled} on:change={(event) => update('lyricsEnabled', event.currentTarget.checked)} />
+          <span>Lyrics</span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" checked={draft.transitionEnabled} on:change={(event) => update('transitionEnabled', event.currentTarget.checked)} />
+          <span>Transitions</span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" checked={draft.clockEnabled} on:change={(event) => update('clockEnabled', event.currentTarget.checked)} />
+          <span>Clock</span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" checked={draft.clockShowSeconds} on:change={(event) => update('clockShowSeconds', event.currentTarget.checked)} />
+          <span>Clock seconds</span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" checked={draft.debugEnabled} on:change={(event) => update('debugEnabled', event.currentTarget.checked)} />
+          <span>Debug overlay</span>
+        </label>
+      </fieldset>
+    </form>
+
+    <section class="preview-pane" aria-label="Mock wallpaper preview">
+      <div class={previewClasses}>
+        <div class="preview-album"></div>
+        <div class="preview-copy">
+          <span>{settings.player.controlsEnabled ? 'Controls ready' : 'Controls off'}</span>
+          <strong>Afterglow Atlas</strong>
+          <small>Nami Kuroda, The Static Lights</small>
+          <div class="preview-progress"><span></span></div>
+        </div>
+        {#if settings.clock.enabled}
+          <div class="preview-clock">22:10{settings.clock.showSeconds ? ':36' : ''}</div>
+        {/if}
+      </div>
+
+      <div class="export-actions">
+        <button type="button" on:click={copySettings}>Copy JSON</button>
+        <span>{copyStatus}</span>
+      </div>
+      <textarea readonly value={settingsJson} aria-label="Generated settings JSON"></textarea>
+    </section>
+
+    <section class="import-pane" aria-label="Import settings">
+      <h2>Import</h2>
+      <textarea bind:value={importSource} aria-label="Import settings JSON"></textarea>
+      <div class="export-actions">
+        <button type="button" on:click={importSettings}>Import JSON</button>
+        <span>{importWarning}</span>
+      </div>
+    </section>
   </section>
 </main>
 
@@ -131,39 +196,283 @@
     font-family:
       Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     color: #1c232b;
-    background: #eef2f5;
+    background: #f3f6f8;
   }
 
   main {
-    display: grid;
     min-height: 100vh;
-    place-items: center;
-    padding: 32px;
   }
 
-  section {
-    width: min(920px, 100%);
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 24px 32px;
+    border-bottom: 1px solid #d8e0e6;
+    background: #ffffff;
+  }
+
+  .eyebrow,
+  h1 {
+    margin: 0;
+  }
+
+  .eyebrow {
+    color: #66727f;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
   }
 
   h1 {
-    margin: 0 0 10px;
-    font-size: 2rem;
+    margin-top: 4px;
+    font-size: 1.8rem;
   }
 
-  p {
-    margin: 0 0 18px;
+  .status-stack {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    color: #40505f;
+    font-size: 0.88rem;
+  }
+
+  .status-stack span {
+    padding: 6px 10px;
+    border: 1px solid #d3dce4;
+    border-radius: 8px;
+    background: #f7fafc;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(320px, 420px) minmax(420px, 1fr);
+    gap: 24px;
+    padding: 24px 32px 32px;
+  }
+
+  .editor,
+  .preview-pane,
+  .import-pane {
+    min-width: 0;
+  }
+
+  .editor {
+    display: grid;
+    gap: 18px;
+  }
+
+  fieldset {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    border: 0;
+    border-top: 1px solid #d8e0e6;
+    padding: 16px 0 0;
+  }
+
+  legend,
+  h2 {
+    color: #27323c;
+    font-size: 0.95rem;
+    font-weight: 800;
+  }
+
+  label {
+    display: grid;
+    gap: 6px;
+    color: #40505f;
+    font-size: 0.86rem;
+    font-weight: 650;
+  }
+
+  input,
+  select,
+  textarea {
+    box-sizing: border-box;
+    width: 100%;
+    border: 1px solid #c9d3dc;
+    border-radius: 8px;
+    padding: 9px 10px;
+    color: #1c232b;
+    background: #ffffff;
+    font: inherit;
+  }
+
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .check-row input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .toggle-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .toggle-grid legend {
+    grid-column: 1 / -1;
+  }
+
+  .preview-pane {
+    display: grid;
+    gap: 14px;
+    align-content: start;
+  }
+
+  .mock-wallpaper {
+    position: relative;
+    min-height: 360px;
+    overflow: hidden;
+    border: 1px solid #c9d3dc;
+    border-radius: 8px;
+    background:
+      radial-gradient(circle at 20% 18%, rgb(124 177 199 / 42%), transparent 34%),
+      linear-gradient(135deg, #15191f, #28313a 54%, #101318);
+  }
+
+  .preview-album {
+    position: absolute;
+    left: 34px;
+    top: 50%;
+    width: 180px;
+    aspect-ratio: 1;
+    border-radius: 8px;
+    background:
+      linear-gradient(135deg, rgb(255 255 255 / 26%), transparent),
+      linear-gradient(145deg, #93cab3, #496a8f 55%, #f2c66a);
+    box-shadow: 0 22px 52px rgb(0 0 0 / 36%);
+    transform: translateY(-50%);
+  }
+
+  .preview-copy {
+    position: absolute;
+    left: 248px;
+    top: 50%;
+    display: grid;
+    gap: 8px;
+    width: min(48%, 520px);
+    color: #f6f7fb;
+    transform: translateY(-50%);
+  }
+
+  .preview-copy span,
+  .preview-copy small {
+    color: rgb(246 247 251 / 72%);
+  }
+
+  .preview-copy strong {
+    overflow-wrap: anywhere;
+    font-size: 2.2rem;
+    line-height: 1;
+  }
+
+  .preview-progress {
+    width: min(100%, 360px);
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 20%);
+  }
+
+  .preview-progress span {
+    display: block;
+    width: 42%;
+    height: 100%;
+    background: linear-gradient(90deg, #93cab3, #f2c66a);
+  }
+
+  .preview-clock {
+    position: absolute;
+    right: 24px;
+    bottom: 22px;
+    color: #f6f7fb;
+    font-size: 1.6rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .preset-bottom-player .preview-album {
+    top: auto;
+    bottom: 20px;
+    width: 110px;
+    transform: none;
+  }
+
+  .preset-bottom-player .preview-copy {
+    left: 164px;
+    top: auto;
+    bottom: 30px;
+    transform: none;
+  }
+
+  .preset-ambient-background .preview-album {
+    display: none;
+  }
+
+  .preset-ambient-background .preview-copy {
+    left: 50%;
+    top: 50%;
+    text-align: center;
+    transform: translate(-50%, -50%);
+  }
+
+  .export-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 36px;
     color: #52606d;
+    font-size: 0.88rem;
+  }
+
+  button {
+    min-width: 112px;
+    height: 36px;
+    border: 1px solid #1f6feb;
+    border-radius: 8px;
+    color: #ffffff;
+    background: #1f6feb;
+    font-weight: 750;
+    cursor: pointer;
   }
 
   textarea {
-    width: 100%;
-    min-height: 480px;
+    min-height: 280px;
     resize: vertical;
-    border: 1px solid #c9d3dc;
-    border-radius: 8px;
-    padding: 16px;
-    color: #1c232b;
-    background: #ffffff;
-    font: 0.92rem/1.5 "Cascadia Mono", Consolas, monospace;
+    font: 0.86rem/1.45 "Cascadia Mono", Consolas, monospace;
+  }
+
+  .import-pane {
+    grid-column: 2;
+  }
+
+  .import-pane h2 {
+    margin: 0 0 10px;
+  }
+
+  .import-pane textarea {
+    min-height: 120px;
+  }
+
+  @media (max-width: 980px) {
+    .topbar,
+    .workspace {
+      padding-inline: 18px;
+    }
+
+    .workspace {
+      grid-template-columns: 1fr;
+    }
+
+    .import-pane {
+      grid-column: auto;
+    }
   }
 </style>
