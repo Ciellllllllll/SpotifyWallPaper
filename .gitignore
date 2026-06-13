@@ -7,3 +7,5 @@ packages/*/dist/
 artifacts/
 AGENTS.md
 docs/
+CLAUDE.md
+.claude/h5i.md
