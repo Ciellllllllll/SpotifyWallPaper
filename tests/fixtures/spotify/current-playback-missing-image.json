@@ -1,0 +1,24 @@
+{
+  "device": null,
+  "shuffle_state": null,
+  "repeat_state": "off",
+  "progress_ms": null,
+  "is_playing": true,
+  "item": {
+    "type": "track",
+    "id": "track-no-image",
+    "uri": "spotify:track:track-no-image",
+    "name": "No Image Song",
+    "duration_ms": 200000,
+    "external_urls": {},
+    "artists": [
+      {
+        "name": "Image Missing"
+      }
+    ],
+    "album": {
+      "name": "No Image Album",
+      "images": []
+    }
+  }
+}

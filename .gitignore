@@ -1,2 +1,7 @@
-AGENTS.md
-docs/
+node_modules/
+target/
+dist/
+apps/*/dist/
+packages/*/dist/
+.codex-*.log
+artifacts/

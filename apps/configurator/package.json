@@ -1,0 +1,14 @@
+{
+  "name": "@spotify-wallpaper/configurator",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@spotify-wallpaper/shared-types": "0.0.0"
+  },
+  "devDependencies": {}
+}

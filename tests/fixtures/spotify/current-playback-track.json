@@ -1,0 +1,43 @@
+{
+  "device": {
+    "id": "device-1",
+    "is_active": true,
+    "is_restricted": false,
+    "name": "Desktop",
+    "type": "Computer",
+    "volume_percent": 55
+  },
+  "shuffle_state": false,
+  "repeat_state": "off",
+  "progress_ms": 65000,
+  "is_playing": true,
+  "item": {
+    "type": "track",
+    "id": "track-1",
+    "uri": "spotify:track:track-1",
+    "name": "Current Song",
+    "duration_ms": 180000,
+    "external_urls": {
+      "spotify": "https://open.spotify.com/track/track-1"
+    },
+    "artists": [
+      {
+        "name": "First Artist"
+      },
+      {
+        "name": "Second Artist"
+      }
+    ],
+    "album": {
+      "name": "Current Album",
+      "images": [
+        {
+          "url": "https://i.scdn.co/image/large"
+        },
+        {
+          "url": "https://i.scdn.co/image/small"
+        }
+      ]
+    }
+  }
+}
