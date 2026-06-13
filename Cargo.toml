@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/config-schema",
+  "crates/visual-core"
+]
