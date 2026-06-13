@@ -1,7 +1,7 @@
 import type { NormalizedPlayback, SpotifyPlaybackError, WallpaperSettings } from '@spotify-wallpaper/shared-types';
-import { fetchCurrentPlayback } from './client';
+import { fetchCurrentPlayback, sendPlaybackCommand } from './client';
 import { refreshAccessToken, shouldRefreshToken } from './token';
-import type { Fetcher, SpotifyCredentials, SpotifyResult, SpotifyTokenState } from './types';
+import type { Fetcher, SpotifyCredentials, SpotifyPlaybackCommand, SpotifyResult, SpotifyTokenState } from './types';
 
 const DEFAULT_PLAYING_INTERVAL_MS = 1000;
 const DEFAULT_PAUSED_INTERVAL_MS = 3000;
@@ -24,6 +24,24 @@ export class SpotifyPlaybackSession {
   ) {}
 
   async poll(nowMs = Date.now()): Promise<SpotifyResult<NormalizedPlayback>> {
+    const token = await this.accessToken(nowMs);
+    if (!token.ok) {
+      return token;
+    }
+
+    return fetchCurrentPlayback(token.value, this.fetcher, new Date(nowMs).toISOString());
+  }
+
+  async control(command: SpotifyPlaybackCommand, nowMs = Date.now()): Promise<SpotifyResult<void>> {
+    const token = await this.accessToken(nowMs);
+    if (!token.ok) {
+      return token;
+    }
+
+    return sendPlaybackCommand(token.value, command, this.fetcher);
+  }
+
+  private async accessToken(nowMs: number): Promise<SpotifyResult<string>> {
     if (shouldRefreshToken(this.token, nowMs)) {
       const refreshed = await refreshAccessToken(this.credentials, this.fetcher, nowMs);
       if (!refreshed.ok) {
@@ -33,8 +51,7 @@ export class SpotifyPlaybackSession {
       this.token = refreshed.value;
     }
 
-    const token = this.token;
-    if (!token) {
+    if (!this.token) {
       return {
         ok: false,
         error: {
@@ -44,7 +61,7 @@ export class SpotifyPlaybackSession {
       };
     }
 
-    return fetchCurrentPlayback(token.accessToken, this.fetcher, new Date(nowMs).toISOString());
+    return { ok: true, value: this.token.accessToken };
   }
 }
 

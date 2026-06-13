@@ -132,9 +132,14 @@ export interface WallpaperSettings {
   };
   player: {
     visible: boolean;
+    controlsEnabled: boolean;
+    showDevice: boolean;
+    showVolume: boolean;
+    showShuffleRepeat: boolean;
   };
   seekbar: {
     visible: boolean;
+    style: 'line' | 'album-ring';
   };
   lyrics: {
     enabled: boolean;
@@ -174,6 +179,12 @@ export interface WallpaperSettings {
     showSeconds: boolean;
     showDate: boolean;
     showWeekday: boolean;
+    fontSizePx: number;
+    fontWeight: number;
+    letterSpacingPx: number;
+    opacity: number;
+    colorMode: 'auto' | 'fixed';
+    fixedColor: string;
   };
   transitions: {
     enabled: boolean;

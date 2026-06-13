@@ -204,4 +204,57 @@ describe('loadSettings', () => {
       reduceMotion: true
     });
   });
+
+  it('loads and repairs player, seekbar, and clock settings', () => {
+    const loaded = loadSettings(
+      JSON.stringify({
+        player: {
+          visible: false,
+          controlsEnabled: false,
+          showDevice: false,
+          showVolume: true,
+          showShuffleRepeat: false
+        },
+        seekbar: {
+          visible: true,
+          style: 'album-ring'
+        },
+        clock: {
+          enabled: true,
+          hour12: true,
+          showSeconds: true,
+          showDate: true,
+          showWeekday: true,
+          fontSizePx: 500,
+          fontWeight: 735,
+          letterSpacingPx: -4,
+          opacity: 2,
+          colorMode: 'fixed',
+          fixedColor: '#112233'
+        }
+      })
+    );
+
+    expect(loaded.warning).toContain('repaired');
+    expect(loaded.settings.player).toMatchObject({
+      visible: false,
+      controlsEnabled: false,
+      showDevice: false,
+      showVolume: true,
+      showShuffleRepeat: false
+    });
+    expect(loaded.settings.seekbar.style).toBe('album-ring');
+    expect(loaded.settings.clock).toMatchObject({
+      hour12: true,
+      showSeconds: true,
+      showDate: true,
+      showWeekday: true,
+      fontSizePx: 180,
+      fontWeight: 700,
+      letterSpacingPx: 0,
+      opacity: 1,
+      colorMode: 'fixed',
+      fixedColor: '#112233'
+    });
+  });
 });

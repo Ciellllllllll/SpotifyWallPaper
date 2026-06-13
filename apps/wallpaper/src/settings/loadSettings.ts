@@ -32,6 +32,8 @@ export const loadSettings = (source: unknown = readDefaultSettingsSource()): Loa
   const layout = record.layout && typeof record.layout === 'object' ? (record.layout as Record<string, unknown>) : {};
   const theme = record.theme && typeof record.theme === 'object' ? (record.theme as Record<string, unknown>) : {};
   const background = record.background && typeof record.background === 'object' ? (record.background as Record<string, unknown>) : {};
+  const player = record.player && typeof record.player === 'object' ? (record.player as Record<string, unknown>) : {};
+  const seekbar = record.seekbar && typeof record.seekbar === 'object' ? (record.seekbar as Record<string, unknown>) : {};
   const lyrics = record.lyrics && typeof record.lyrics === 'object' ? (record.lyrics as Record<string, unknown>) : {};
   const visualizer = record.visualizer && typeof record.visualizer === 'object' ? (record.visualizer as Record<string, unknown>) : {};
   const clock = record.clock && typeof record.clock === 'object' ? (record.clock as Record<string, unknown>) : {};
@@ -72,6 +74,19 @@ export const loadSettings = (source: unknown = readDefaultSettingsSource()): Loa
       opacity: numberOr(background.opacity, defaultSettings.background.opacity) ?? defaultSettings.background.opacity,
       blurPx: numberOr(background.blurPx, defaultSettings.background.blurPx) ?? defaultSettings.background.blurPx,
       solidColor: stringOr(background.solidColor, defaultSettings.background.solidColor)
+    },
+    player: {
+      ...defaultSettings.player,
+      visible: booleanOr(player.visible, defaultSettings.player.visible),
+      controlsEnabled: booleanOr(player.controlsEnabled, defaultSettings.player.controlsEnabled),
+      showDevice: booleanOr(player.showDevice, defaultSettings.player.showDevice),
+      showVolume: booleanOr(player.showVolume, defaultSettings.player.showVolume),
+      showShuffleRepeat: booleanOr(player.showShuffleRepeat, defaultSettings.player.showShuffleRepeat)
+    },
+    seekbar: {
+      ...defaultSettings.seekbar,
+      visible: booleanOr(seekbar.visible, defaultSettings.seekbar.visible),
+      style: stringOr(seekbar.style, defaultSettings.seekbar.style) as WallpaperSettings['seekbar']['style']
     },
     lyrics: {
       ...defaultSettings.lyrics,
@@ -118,8 +133,17 @@ export const loadSettings = (source: unknown = readDefaultSettingsSource()): Loa
     },
     clock: {
       ...defaultSettings.clock,
+      enabled: booleanOr(clock.enabled, defaultSettings.clock.enabled),
       hour12: booleanOr(clock.hour12, defaultSettings.clock.hour12),
-      showSeconds: booleanOr(clock.showSeconds, defaultSettings.clock.showSeconds)
+      showSeconds: booleanOr(clock.showSeconds, defaultSettings.clock.showSeconds),
+      showDate: booleanOr(clock.showDate, defaultSettings.clock.showDate),
+      showWeekday: booleanOr(clock.showWeekday, defaultSettings.clock.showWeekday),
+      fontSizePx: numberOr(clock.fontSizePx, defaultSettings.clock.fontSizePx) ?? defaultSettings.clock.fontSizePx,
+      fontWeight: numberOr(clock.fontWeight, defaultSettings.clock.fontWeight) ?? defaultSettings.clock.fontWeight,
+      letterSpacingPx: numberOr(clock.letterSpacingPx, defaultSettings.clock.letterSpacingPx) ?? defaultSettings.clock.letterSpacingPx,
+      opacity: numberOr(clock.opacity, defaultSettings.clock.opacity) ?? defaultSettings.clock.opacity,
+      colorMode: stringOr(clock.colorMode, defaultSettings.clock.colorMode) as WallpaperSettings['clock']['colorMode'],
+      fixedColor: stringOr(clock.fixedColor, defaultSettings.clock.fixedColor)
     },
     transitions: {
       ...defaultSettings.transitions,

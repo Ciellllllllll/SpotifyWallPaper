@@ -185,6 +185,45 @@ localStorage.setItem(
 location.reload();
 ```
 
+Player controls are passive-safe: the display works without Premium or credentials, while Spotify playback operations are
+disabled unless Spotify credentials and a controllable device are available. Control failures such as Premium or
+restricted-device errors are shown as safe status text.
+
+```js
+localStorage.setItem(
+  'spotify-wallpaper-settings',
+  JSON.stringify({
+    player: {
+      visible: true,
+      controlsEnabled: true,
+      showDevice: true,
+      showVolume: true,
+      showShuffleRepeat: true
+    },
+    seekbar: {
+      visible: true,
+      style: 'line'
+    },
+    clock: {
+      enabled: true,
+      hour12: false,
+      showSeconds: false,
+      showDate: true,
+      showWeekday: true,
+      fontSizePx: 34,
+      fontWeight: 700,
+      letterSpacingPx: 0,
+      opacity: 0.9,
+      colorMode: 'auto',
+      fixedColor: '#f6f7fb'
+    }
+  })
+);
+location.reload();
+```
+
+When clock seconds are disabled, the wallpaper updates the clock at the next minute boundary instead of every second.
+
 Build all JavaScript workspaces:
 
 ```sh

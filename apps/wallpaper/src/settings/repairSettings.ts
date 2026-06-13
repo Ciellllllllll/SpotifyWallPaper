@@ -25,6 +25,8 @@ const visualizerModes: WallpaperSettings['visualizer']['mode'][] = ['album-ring'
 const visualizerColorModes: WallpaperSettings['visualizer']['colorMode'][] = ['theme', 'accent', 'white'];
 const visualizerMirrorModes: WallpaperSettings['visualizer']['mirrorMode'][] = ['none', 'mirror'];
 const lyricModes: WallpaperSettings['lyrics']['mode'][] = ['current', 'context'];
+const seekbarStyles: WallpaperSettings['seekbar']['style'][] = ['line', 'album-ring'];
+const clockColorModes: WallpaperSettings['clock']['colorMode'][] = ['auto', 'fixed'];
 const transitionPresets: WallpaperSettings['transitions']['preset'][] = [
   'fade',
   'crossfade',
@@ -93,6 +95,21 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
       preset,
       items
     },
+    player: {
+      ...defaultSettings.player,
+      ...input.player,
+      visible: booleanOr(input.player?.visible, defaultSettings.player.visible),
+      controlsEnabled: booleanOr(input.player?.controlsEnabled, defaultSettings.player.controlsEnabled),
+      showDevice: booleanOr(input.player?.showDevice, defaultSettings.player.showDevice),
+      showVolume: booleanOr(input.player?.showVolume, defaultSettings.player.showVolume),
+      showShuffleRepeat: booleanOr(input.player?.showShuffleRepeat, defaultSettings.player.showShuffleRepeat)
+    },
+    seekbar: {
+      ...defaultSettings.seekbar,
+      ...input.seekbar,
+      visible: booleanOr(input.seekbar?.visible, defaultSettings.seekbar.visible),
+      style: oneOf(input.seekbar?.style, seekbarStyles, defaultSettings.seekbar.style)
+    },
     lyrics: {
       ...defaultSettings.lyrics,
       enabled: booleanOr(input.lyrics?.enabled, defaultSettings.lyrics.enabled),
@@ -147,7 +164,18 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
     },
     clock: {
       ...defaultSettings.clock,
-      ...input.clock
+      ...input.clock,
+      enabled: booleanOr(input.clock?.enabled, defaultSettings.clock.enabled),
+      hour12: booleanOr(input.clock?.hour12, defaultSettings.clock.hour12),
+      showSeconds: booleanOr(input.clock?.showSeconds, defaultSettings.clock.showSeconds),
+      showDate: booleanOr(input.clock?.showDate, defaultSettings.clock.showDate),
+      showWeekday: booleanOr(input.clock?.showWeekday, defaultSettings.clock.showWeekday),
+      fontSizePx: numberInRange(input.clock?.fontSizePx, 12, 180, defaultSettings.clock.fontSizePx),
+      fontWeight: Math.round(numberInRange(input.clock?.fontWeight, 100, 900, defaultSettings.clock.fontWeight) / 100) * 100,
+      letterSpacingPx: numberInRange(input.clock?.letterSpacingPx, 0, 12, defaultSettings.clock.letterSpacingPx),
+      opacity: numberInRange(input.clock?.opacity, 0, 1, defaultSettings.clock.opacity),
+      colorMode: oneOf(input.clock?.colorMode, clockColorModes, defaultSettings.clock.colorMode),
+      fixedColor: isHexColor(input.clock?.fixedColor) ? input.clock.fixedColor : defaultSettings.clock.fixedColor
     },
     transitions: {
       ...defaultSettings.transitions,
@@ -173,8 +201,11 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
   repaired ||= input.theme?.textColor !== repairedSettings.theme.textColor;
   repaired ||= input.theme?.customPrimaryColor !== repairedSettings.theme.customPrimaryColor;
   repaired ||= input.theme?.autoReadability !== repairedSettings.theme.autoReadability;
+  repaired ||= JSON.stringify({ ...defaultSettings.player, ...input.player }) !== JSON.stringify(repairedSettings.player);
+  repaired ||= JSON.stringify({ ...defaultSettings.seekbar, ...input.seekbar }) !== JSON.stringify(repairedSettings.seekbar);
   repaired ||= JSON.stringify({ ...defaultSettings.lyrics, ...input.lyrics }) !== JSON.stringify(repairedSettings.lyrics);
   repaired ||= JSON.stringify({ ...defaultSettings.visualizer, ...input.visualizer }) !== JSON.stringify(repairedSettings.visualizer);
+  repaired ||= JSON.stringify({ ...defaultSettings.clock, ...input.clock }) !== JSON.stringify(repairedSettings.clock);
   repaired ||= JSON.stringify({ ...defaultSettings.transitions, ...input.transitions }) !== JSON.stringify(repairedSettings.transitions);
 
   return {

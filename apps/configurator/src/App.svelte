@@ -38,8 +38,8 @@
     background: { mode: 'album-blur', opacity: 0.72, blurPx: 26, solidColor: '#111318' },
     albumArt: { visible: true },
     text: { visible: true },
-    player: { visible: true },
-    seekbar: { visible: true },
+    player: { visible: true, controlsEnabled: true, showDevice: true, showVolume: true, showShuffleRepeat: true },
+    seekbar: { visible: true, style: 'line' },
     lyrics: {
       enabled: false,
       sourceText: '',
@@ -84,7 +84,19 @@
       noiseGate: 0.03,
       idleAnimation: true
     },
-    clock: { enabled: true, hour12: false, showSeconds: false, showDate: false, showWeekday: false },
+    clock: {
+      enabled: true,
+      hour12: false,
+      showSeconds: false,
+      showDate: false,
+      showWeekday: false,
+      fontSizePx: 34,
+      fontWeight: 700,
+      letterSpacingPx: 0,
+      opacity: 0.9,
+      colorMode: 'auto',
+      fixedColor: '#f6f7fb'
+    },
     transitions: {
       enabled: false,
       preset: 'fade',

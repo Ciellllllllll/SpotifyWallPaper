@@ -172,6 +172,60 @@ describe('Wallpaper Engine property adapter', () => {
     });
   });
 
+  it('applies player, seekbar, and clock settings from pasted settings JSON', () => {
+    const result = parseWallpaperProperties({
+      settings_json: {
+        value: JSON.stringify({
+          player: {
+            visible: true,
+            controlsEnabled: false,
+            showDevice: false,
+            showVolume: true,
+            showShuffleRepeat: false
+          },
+          seekbar: {
+            visible: true,
+            style: 'album-ring'
+          },
+          clock: {
+            enabled: true,
+            hour12: true,
+            showSeconds: true,
+            showDate: true,
+            showWeekday: true,
+            fontSizePx: 48,
+            fontWeight: 800,
+            letterSpacingPx: 2,
+            opacity: 0.8,
+            colorMode: 'fixed',
+            fixedColor: '#abcdef'
+          }
+        })
+      }
+    });
+    const merged = applySettingsPatch(defaultSettings, result.patch);
+
+    expect(merged.player).toMatchObject({
+      controlsEnabled: false,
+      showDevice: false,
+      showVolume: true,
+      showShuffleRepeat: false
+    });
+    expect(merged.seekbar.style).toBe('album-ring');
+    expect(merged.clock).toMatchObject({
+      hour12: true,
+      showSeconds: true,
+      showDate: true,
+      showWeekday: true,
+      fontSizePx: 48,
+      fontWeight: 800,
+      letterSpacingPx: 2,
+      opacity: 0.8,
+      colorMode: 'fixed',
+      fixedColor: '#abcdef'
+    });
+  });
+
   it('falls back safely for malformed settings JSON without exposing token-like values in warnings', () => {
     const result = parseWallpaperProperties({
       settings_json: { value: '{secret-refresh-token' }

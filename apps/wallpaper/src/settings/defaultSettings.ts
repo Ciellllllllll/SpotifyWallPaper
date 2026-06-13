@@ -31,10 +31,15 @@ export const defaultSettings: WallpaperSettings = {
     visible: true
   },
   player: {
-    visible: true
+    visible: true,
+    controlsEnabled: true,
+    showDevice: true,
+    showVolume: true,
+    showShuffleRepeat: true
   },
   seekbar: {
-    visible: true
+    visible: true,
+    style: 'line'
   },
   lyrics: {
     enabled: false,
@@ -85,7 +90,13 @@ export const defaultSettings: WallpaperSettings = {
     hour12: false,
     showSeconds: false,
     showDate: false,
-    showWeekday: false
+    showWeekday: false,
+    fontSizePx: 34,
+    fontWeight: 700,
+    letterSpacingPx: 0,
+    opacity: 0.9,
+    colorMode: 'auto',
+    fixedColor: '#f6f7fb'
   },
   transitions: {
     enabled: false,
