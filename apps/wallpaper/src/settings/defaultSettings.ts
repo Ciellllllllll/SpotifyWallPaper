@@ -88,7 +88,16 @@ export const defaultSettings: WallpaperSettings = {
     showWeekday: false
   },
   transitions: {
-    enabled: false
+    enabled: false,
+    preset: 'fade',
+    durationMs: 700,
+    easing: 'ease-out',
+    background: true,
+    albumArt: true,
+    text: true,
+    lyrics: true,
+    visualizer: false,
+    reduceMotion: false
   },
   performance: {
     mode: 'standard'

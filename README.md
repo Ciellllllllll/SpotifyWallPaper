@@ -161,6 +161,30 @@ localStorage.setItem(
 location.reload();
 ```
 
+Track-change transitions retain the previous track display until the configured duration finishes. Reduce motion resolves
+aggressive presets to a fade:
+
+```js
+localStorage.setItem(
+  'spotify-wallpaper-settings',
+  JSON.stringify({
+    transitions: {
+      enabled: true,
+      preset: 'slide-left',
+      durationMs: 700,
+      easing: 'ease-out',
+      background: true,
+      albumArt: true,
+      text: true,
+      lyrics: true,
+      visualizer: false,
+      reduceMotion: false
+    }
+  })
+);
+location.reload();
+```
+
 Build all JavaScript workspaces:
 
 ```sh

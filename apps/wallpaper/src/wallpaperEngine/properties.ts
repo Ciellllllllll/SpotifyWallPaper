@@ -140,6 +140,7 @@ const patchFromSettings = (patch: SettingsPatch, settings: WallpaperSettings): v
   patch.background = { ...patch.background, ...settings.background };
   patch.lyrics = { ...patch.lyrics, ...settings.lyrics };
   patch.visualizer = { ...patch.visualizer, ...settings.visualizer };
+  patch.transitions = { ...patch.transitions, ...settings.transitions };
   patch.performance = { ...patch.performance, ...settings.performance };
   patch.debug = { ...patch.debug, ...settings.debug };
 };

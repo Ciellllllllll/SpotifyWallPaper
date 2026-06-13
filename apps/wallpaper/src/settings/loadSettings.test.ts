@@ -171,4 +171,37 @@ describe('loadSettings', () => {
       }
     });
   });
+
+  it('loads and repairs transition settings', () => {
+    const loaded = loadSettings(
+      JSON.stringify({
+        transitions: {
+          enabled: true,
+          preset: 'slide-left',
+          durationMs: 10_000,
+          easing: 'ease-in-out',
+          background: false,
+          albumArt: true,
+          text: false,
+          lyrics: true,
+          visualizer: true,
+          reduceMotion: true
+        }
+      })
+    );
+
+    expect(loaded.warning).toContain('repaired');
+    expect(loaded.settings.transitions).toMatchObject({
+      enabled: true,
+      preset: 'slide-left',
+      durationMs: 5000,
+      easing: 'ease-in-out',
+      background: false,
+      albumArt: true,
+      text: false,
+      lyrics: true,
+      visualizer: true,
+      reduceMotion: true
+    });
+  });
 });

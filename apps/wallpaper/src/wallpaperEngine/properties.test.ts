@@ -139,6 +139,39 @@ describe('Wallpaper Engine property adapter', () => {
     });
   });
 
+  it('applies transition settings from pasted settings JSON', () => {
+    const result = parseWallpaperProperties({
+      settings_json: {
+        value: JSON.stringify({
+          transitions: {
+            enabled: true,
+            preset: 'blur-fade',
+            durationMs: 900,
+            easing: 'ease-in-out',
+            background: true,
+            albumArt: false,
+            text: true,
+            lyrics: false,
+            visualizer: true,
+            reduceMotion: true
+          }
+        })
+      }
+    });
+    const merged = applySettingsPatch(defaultSettings, result.patch);
+
+    expect(merged.transitions).toMatchObject({
+      enabled: true,
+      preset: 'blur-fade',
+      durationMs: 900,
+      easing: 'ease-in-out',
+      albumArt: false,
+      lyrics: false,
+      visualizer: true,
+      reduceMotion: true
+    });
+  });
+
   it('falls back safely for malformed settings JSON without exposing token-like values in warnings', () => {
     const result = parseWallpaperProperties({
       settings_json: { value: '{secret-refresh-token' }

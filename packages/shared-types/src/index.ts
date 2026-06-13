@@ -4,6 +4,9 @@ export type PlaybackItemType = 'track' | 'episode' | 'none';
 
 export type SpotifyRepeatState = 'off' | 'track' | 'context';
 
+export type TransitionPreset = 'fade' | 'crossfade' | 'slide-left' | 'zoom-in' | 'blur-fade';
+export type TransitionEasing = 'linear' | 'ease' | 'ease-out' | 'ease-in-out';
+
 export type SpotifyErrorKind =
   | 'unauthorized'
   | 'forbidden'
@@ -174,6 +177,15 @@ export interface WallpaperSettings {
   };
   transitions: {
     enabled: boolean;
+    preset: TransitionPreset;
+    durationMs: number;
+    easing: TransitionEasing;
+    background: boolean;
+    albumArt: boolean;
+    text: boolean;
+    lyrics: boolean;
+    visualizer: boolean;
+    reduceMotion: boolean;
   };
   performance: {
     mode: 'low-power' | 'standard' | 'high-effect';

@@ -35,6 +35,7 @@ export const loadSettings = (source: unknown = readDefaultSettingsSource()): Loa
   const lyrics = record.lyrics && typeof record.lyrics === 'object' ? (record.lyrics as Record<string, unknown>) : {};
   const visualizer = record.visualizer && typeof record.visualizer === 'object' ? (record.visualizer as Record<string, unknown>) : {};
   const clock = record.clock && typeof record.clock === 'object' ? (record.clock as Record<string, unknown>) : {};
+  const transitions = record.transitions && typeof record.transitions === 'object' ? (record.transitions as Record<string, unknown>) : {};
   const performance = record.performance && typeof record.performance === 'object' ? (record.performance as Record<string, unknown>) : {};
   const debug = record.debug && typeof record.debug === 'object' ? (record.debug as Record<string, unknown>) : {};
   const preset = isLayoutPresetName(layout.preset) ? layout.preset : defaultLayoutPreset;
@@ -119,6 +120,20 @@ export const loadSettings = (source: unknown = readDefaultSettingsSource()): Loa
       ...defaultSettings.clock,
       hour12: booleanOr(clock.hour12, defaultSettings.clock.hour12),
       showSeconds: booleanOr(clock.showSeconds, defaultSettings.clock.showSeconds)
+    },
+    transitions: {
+      ...defaultSettings.transitions,
+      enabled: booleanOr(transitions.enabled, defaultSettings.transitions.enabled),
+      preset: stringOr(transitions.preset, defaultSettings.transitions.preset) as WallpaperSettings['transitions']['preset'],
+      durationMs:
+        numberOr(transitions.durationMs, defaultSettings.transitions.durationMs) ?? defaultSettings.transitions.durationMs,
+      easing: stringOr(transitions.easing, defaultSettings.transitions.easing) as WallpaperSettings['transitions']['easing'],
+      background: booleanOr(transitions.background, defaultSettings.transitions.background),
+      albumArt: booleanOr(transitions.albumArt, defaultSettings.transitions.albumArt),
+      text: booleanOr(transitions.text, defaultSettings.transitions.text),
+      lyrics: booleanOr(transitions.lyrics, defaultSettings.transitions.lyrics),
+      visualizer: booleanOr(transitions.visualizer, defaultSettings.transitions.visualizer),
+      reduceMotion: booleanOr(transitions.reduceMotion, defaultSettings.transitions.reduceMotion)
     },
     performance: {
       ...defaultSettings.performance,

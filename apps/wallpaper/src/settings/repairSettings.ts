@@ -25,6 +25,14 @@ const visualizerModes: WallpaperSettings['visualizer']['mode'][] = ['album-ring'
 const visualizerColorModes: WallpaperSettings['visualizer']['colorMode'][] = ['theme', 'accent', 'white'];
 const visualizerMirrorModes: WallpaperSettings['visualizer']['mirrorMode'][] = ['none', 'mirror'];
 const lyricModes: WallpaperSettings['lyrics']['mode'][] = ['current', 'context'];
+const transitionPresets: WallpaperSettings['transitions']['preset'][] = [
+  'fade',
+  'crossfade',
+  'slide-left',
+  'zoom-in',
+  'blur-fade'
+];
+const transitionEasings: WallpaperSettings['transitions']['easing'][] = ['linear', 'ease', 'ease-out', 'ease-in-out'];
 
 export interface RepairResult {
   settings: WallpaperSettings;
@@ -140,6 +148,19 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
     clock: {
       ...defaultSettings.clock,
       ...input.clock
+    },
+    transitions: {
+      ...defaultSettings.transitions,
+      enabled: booleanOr(input.transitions?.enabled, defaultSettings.transitions.enabled),
+      preset: oneOf(input.transitions?.preset, transitionPresets, defaultSettings.transitions.preset),
+      durationMs: Math.round(numberInRange(input.transitions?.durationMs, 120, 5000, defaultSettings.transitions.durationMs)),
+      easing: oneOf(input.transitions?.easing, transitionEasings, defaultSettings.transitions.easing),
+      background: booleanOr(input.transitions?.background, defaultSettings.transitions.background),
+      albumArt: booleanOr(input.transitions?.albumArt, defaultSettings.transitions.albumArt),
+      text: booleanOr(input.transitions?.text, defaultSettings.transitions.text),
+      lyrics: booleanOr(input.transitions?.lyrics, defaultSettings.transitions.lyrics),
+      visualizer: booleanOr(input.transitions?.visualizer, defaultSettings.transitions.visualizer),
+      reduceMotion: booleanOr(input.transitions?.reduceMotion, defaultSettings.transitions.reduceMotion)
     }
   };
 
@@ -154,6 +175,7 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
   repaired ||= input.theme?.autoReadability !== repairedSettings.theme.autoReadability;
   repaired ||= JSON.stringify({ ...defaultSettings.lyrics, ...input.lyrics }) !== JSON.stringify(repairedSettings.lyrics);
   repaired ||= JSON.stringify({ ...defaultSettings.visualizer, ...input.visualizer }) !== JSON.stringify(repairedSettings.visualizer);
+  repaired ||= JSON.stringify({ ...defaultSettings.transitions, ...input.transitions }) !== JSON.stringify(repairedSettings.transitions);
 
   return {
     settings: repairedSettings,

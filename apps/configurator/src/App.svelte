@@ -85,7 +85,18 @@
       idleAnimation: true
     },
     clock: { enabled: true, hour12: false, showSeconds: false, showDate: false, showWeekday: false },
-    transitions: { enabled: false },
+    transitions: {
+      enabled: false,
+      preset: 'fade',
+      durationMs: 700,
+      easing: 'ease-out',
+      background: true,
+      albumArt: true,
+      text: true,
+      lyrics: true,
+      visualizer: false,
+      reduceMotion: false
+    },
     performance: { mode: 'standard' },
     rainmeter: { enabled: false },
     debug: { enabled: false }

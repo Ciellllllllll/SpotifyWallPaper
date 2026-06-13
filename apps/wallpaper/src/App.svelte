@@ -12,6 +12,8 @@
   import { buildBackgroundStyle, buildThemeCssVariables } from './theme/background';
   import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from './theme/colors';
   import { extractAlbumTheme } from './theme/extractAlbumTheme';
+  import TransitionOverlay from './transitions/TransitionOverlay.svelte';
+  import { createTransitionState, type TrackTransitionState } from './transitions/model';
   import VisualizerLayer from './visualizer/VisualizerLayer.svelte';
   import { idleVisualizerFrame, shapeVisualizerFrame } from './visualizer/model';
   import { startAudioBridge } from './wallpaperEngine/audio';
@@ -27,6 +29,7 @@
   let settingsSource = 'defaults/browser';
   let visualizerFrame: VisualizerFrame | null = null;
   let previousVisualizerFrame: VisualizerFrame | null = null;
+  let transitionState: TrackTransitionState | null = null;
   let theme: WallpaperTheme = fallbackThemeFromSeed(mockPlayback.id ?? mockPlayback.title);
   let themeSeed = mockPlayback.id ?? mockPlayback.title;
   let themeImageUrl = '';
@@ -40,6 +43,7 @@
   let progressInterval: number | null = null;
   let visualizerIdleInterval: number | null = null;
   let pollingTimeout: number | null = null;
+  let transitionTimeout: number | null = null;
   let stopAudioBridge: (() => void) | null = null;
   let lastAudioFrameAtMs = 0;
   let pollingRunId = 0;
@@ -94,9 +98,38 @@
   const replacePlayback = (next: NormalizedPlayback) => {
     if (playback.id !== next.id || playback.itemType !== next.itemType) {
       previousPlayback = playback;
+      startTrackTransition(playback, next);
     }
 
     playback = next;
+  };
+
+  const clearTransition = () => {
+    if (transitionTimeout !== null) {
+      window.clearTimeout(transitionTimeout);
+      transitionTimeout = null;
+    }
+    transitionState = null;
+  };
+
+  const startTrackTransition = (previous: NormalizedPlayback, current: NormalizedPlayback) => {
+    if (transitionTimeout !== null) {
+      window.clearTimeout(transitionTimeout);
+      transitionTimeout = null;
+    }
+
+    transitionState = createTransitionState(previous, current, settings);
+    if (!transitionState) {
+      return;
+    }
+
+    const startedAtMs = transitionState.startedAtMs;
+    transitionTimeout = window.setTimeout(() => {
+      if (transitionState?.startedAtMs === startedAtMs) {
+        transitionState = null;
+        transitionTimeout = null;
+      }
+    }, transitionState.durationMs);
   };
 
   const updateTheme = (imageUrl: string, seed: string) => {
@@ -190,6 +223,9 @@
     settingsWarning = warning;
     settingsSource = source;
     debugOpen = settings.debug.enabled;
+    if (!settings.transitions.enabled) {
+      clearTransition();
+    }
     if (!settings.visualizer.enabled) {
       clearVisualizerFrame();
     }
@@ -259,6 +295,7 @@
     if (progressInterval !== null) {
       window.clearInterval(progressInterval);
     }
+    clearTransition();
     if (visualizerIdleInterval !== null) {
       window.clearInterval(visualizerIdleInterval);
     }
@@ -310,6 +347,8 @@
     <div class="layout-item clock" style={layoutStyle(layoutItems.clock)} aria-label="Clock">{clock}</div>
   {/if}
 
+  <TransitionOverlay state={transitionState} {settings} {theme} />
+
   <button class="debug-toggle" type="button" aria-pressed={debugOpen} on:click={() => (debugOpen = !debugOpen)}>
     Debug
   </button>
@@ -323,6 +362,7 @@
       <div>Preset: {settings.layout.preset}</div>
       <div>Theme: {theme.source}</div>
       <div>Previous item: {previousPlayback ? previousPlayback.title : 'none'}</div>
+      <div>Transition: {transitionState ? transitionState.resolvedPreset : 'idle'}</div>
       <div>Visualizer: {settings.visualizer.enabled ? `${settings.visualizer.mode}/${visualizerFrame?.source ?? 'idle'}` : 'disabled'}</div>
       <div>Lyrics: {settings.lyrics.enabled ? `${lyricsState.status}/${parsedLyrics.lines.length}` : 'disabled'}</div>
       <div>Performance: {settings.performance.mode}</div>
