@@ -14,7 +14,7 @@ export interface LyricDisplayState {
 
 export const parseLrc = (input: string): LrcParseResult => {
   let offsetMs = 0;
-  const lines: LyricLine[] = [];
+  const parsedLines: LyricLine[] = [];
 
   for (const rawLine of input.split(/\r?\n/)) {
     let rest = rawLine.trim();
@@ -42,10 +42,11 @@ export const parseLrc = (input: string): LrcParseResult => {
     }
 
     for (const timestamp of timestamps) {
-      lines.push({ timeMs: timestamp + offsetMs, text: rest });
+      parsedLines.push({ timeMs: timestamp, text: rest });
     }
   }
 
+  const lines = parsedLines.map((line) => ({ ...line, timeMs: line.timeMs + offsetMs }));
   lines.sort((a, b) => a.timeMs - b.timeMs);
   return { offsetMs, lines };
 };

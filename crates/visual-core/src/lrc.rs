@@ -12,7 +12,7 @@ pub struct LrcParseResult {
 
 pub fn parse_lrc(input: &str) -> LrcParseResult {
     let mut offset_ms = 0;
-    let mut lines = Vec::new();
+    let mut parsed_lines = Vec::new();
 
     for raw_line in input.lines() {
         let mut rest = raw_line.trim();
@@ -36,13 +36,20 @@ pub fn parse_lrc(input: &str) -> LrcParseResult {
         }
 
         for timestamp in timestamps {
-            lines.push(LyricLine {
-                time_ms: timestamp + offset_ms,
+            parsed_lines.push(LyricLine {
+                time_ms: timestamp,
                 text: rest.to_string(),
             });
         }
     }
 
+    let mut lines: Vec<LyricLine> = parsed_lines
+        .into_iter()
+        .map(|line| LyricLine {
+            time_ms: line.time_ms + offset_ms,
+            text: line.text,
+        })
+        .collect();
     lines.sort_by_key(|line| line.time_ms);
     LrcParseResult { offset_ms, lines }
 }
@@ -81,6 +88,26 @@ mod tests {
                 LyricLine {
                     time_ms: 2600,
                     text: "".to_string()
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn applies_offset_regardless_of_metadata_position() {
+        let parsed = parse_lrc("[00:01.00]First\n[offset:250]\n[00:02.00]Second");
+
+        assert_eq!(parsed.offset_ms, 250);
+        assert_eq!(
+            parsed.lines,
+            vec![
+                LyricLine {
+                    time_ms: 1250,
+                    text: "First".to_string()
+                },
+                LyricLine {
+                    time_ms: 2250,
+                    text: "Second".to_string()
                 }
             ]
         );

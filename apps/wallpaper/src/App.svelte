@@ -274,7 +274,7 @@
 
   <VisualizerLayer frame={visualizerFrame} {settings} {theme} albumItem={layoutItems.albumArt} />
 
-  <LyricsLayer {settings} state={lyricsState} lines={parsedLyrics.lines} />
+  <LyricsLayer {settings} state={lyricsState} />
 
   {#if settings.albumArt.visible && layoutItems.albumArt.enabled}
     <div class="layout-item album-frame" style={layoutStyle(layoutItems.albumArt)}>

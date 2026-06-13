@@ -1,14 +1,17 @@
 <script lang="ts">
-  import type { LyricLine, WallpaperSettings } from '@spotify-wallpaper/shared-types';
+  import type { WallpaperSettings } from '@spotify-wallpaper/shared-types';
   import { layoutStyle } from '../layout/style';
   import type { LyricDisplayState } from './lrc';
 
   export let settings: WallpaperSettings;
   export let state: LyricDisplayState;
-  export let lines: LyricLine[];
 
   $: lyricsItem = settings.layout.items.lyrics;
-  $: showLayer = settings.lyrics.enabled && lyricsItem.enabled && state.status !== 'disabled';
+  $: showLayer =
+    settings.lyrics.enabled &&
+    lyricsItem.enabled &&
+    (state.status === 'active' ||
+      (settings.lyrics.showMissingState && (state.status === 'missing' || state.status === 'before-first-line')));
   $: missingText =
     state.status === 'missing'
       ? 'Lyrics unavailable'
@@ -32,8 +35,6 @@
       {#if state.next}
         <p class="lyric surrounding">{state.next.text}</p>
       {/if}
-    {:else if lines.length > 0}
-      <p class="lyric surrounding">{lines[0].text}</p>
     {/if}
   </section>
 {/if}
