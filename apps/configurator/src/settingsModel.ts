@@ -14,6 +14,8 @@ export interface ConfiguratorDraft {
   clockEnabled: boolean;
   clockShowSeconds: boolean;
   playerControlsEnabled: boolean;
+  rainmeterEnabled: boolean;
+  rainmeterOutputPath: string;
   performanceMode: WallpaperSettings['performance']['mode'];
   debugEnabled: boolean;
 }
@@ -64,6 +66,8 @@ export const defaultDraft: ConfiguratorDraft = {
   clockEnabled: true,
   clockShowSeconds: false,
   playerControlsEnabled: true,
+  rainmeterEnabled: false,
+  rainmeterOutputPath: '',
   performanceMode: 'standard',
   debugEnabled: false
 };
@@ -184,7 +188,10 @@ export const buildSettings = (draft: ConfiguratorDraft): WallpaperSettings => ({
     mode: draft.performanceMode
   },
   rainmeter: {
-    enabled: false
+    enabled: draft.rainmeterEnabled,
+    outputPath: draft.rainmeterOutputPath.trim(),
+    outputMode: 'json',
+    stoppedUpdateIntervalMs: 10_000
   },
   debug: {
     enabled: draft.debugEnabled
@@ -215,6 +222,8 @@ export const importSettingsJson = (source: string): { draft: ConfiguratorDraft; 
         clockEnabled: booleanOr(parsed.clock?.enabled, defaultDraft.clockEnabled),
         clockShowSeconds: booleanOr(parsed.clock?.showSeconds, defaultDraft.clockShowSeconds),
         playerControlsEnabled: booleanOr(parsed.player?.controlsEnabled, defaultDraft.playerControlsEnabled),
+        rainmeterEnabled: booleanOr(parsed.rainmeter?.enabled, defaultDraft.rainmeterEnabled),
+        rainmeterOutputPath: stringOr(parsed.rainmeter?.outputPath, defaultDraft.rainmeterOutputPath),
         performanceMode: oneOf(parsed.performance?.mode, ['low-power', 'standard', 'high-effect'] as const, defaultDraft.performanceMode),
         debugEnabled: booleanOr(parsed.debug?.enabled, defaultDraft.debugEnabled)
       },

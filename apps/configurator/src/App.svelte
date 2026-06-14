@@ -7,20 +7,60 @@
     layoutPresetOptions,
     type ConfiguratorDraft
   } from './settingsModel';
+  import { buildRainmeterOutput, exportRainmeterJson } from './rainmeter/rainmeterExport';
+  import { writeRainmeterJson } from './tauriCommands';
 
   let draft: ConfiguratorDraft = { ...defaultDraft };
   let importSource = '';
   let importWarning: string | null = null;
   let copyStatus = '';
+  let rainmeterStatus = '';
 
   $: settings = buildSettings(draft);
   $: settingsJson = exportSettingsJson(draft);
+  $: rainmeterJson = exportRainmeterJson(
+    buildRainmeterOutput(
+      {
+        source: 'mock',
+        itemType: 'track',
+        id: 'mock-track',
+        uri: 'spotify:track:mock-track',
+        title: 'Afterglow Atlas',
+        artists: ['Nami Kuroda', 'The Static Lights'],
+        albumName: 'Mock Signals',
+        imageUrls: [],
+        albumImageUrl: '',
+        durationMs: 200000,
+        progressMs: 84000,
+        isPlaying: settings.player.controlsEnabled,
+        device: null,
+        deviceName: 'Browser Mock',
+        shuffleState: false,
+        repeatState: 'off',
+        volumePercent: 72,
+        externalUrl: null,
+        fetchedAt: '2026-06-14T00:00:00.000Z'
+      },
+      {
+        primaryColor: '#93cab3',
+        secondaryColor: '#496a8f',
+        accentColor: '#f2c66a',
+        readableTextColor: '#f6f7fb'
+      },
+      {
+        albumArtLocalPath: 'D:\\SpotifyWallPaper\\cache\\album.jpg',
+        timestamp: '2026-06-14T00:00:00.000Z'
+      }
+    )
+  );
   $: previewClasses = ['mock-wallpaper', `preset-${draft.preset.toLowerCase().replaceAll(' ', '-')}`].join(' ');
   $: exportSummary = draft.includeRefreshToken && draft.spotifyRefreshToken.trim() ? 'includes refresh token' : 'token excluded';
+  $: rainmeterSummary = settings.rainmeter.enabled ? 'Rainmeter JSON enabled' : 'Rainmeter off';
 
   const update = <K extends keyof ConfiguratorDraft>(key: K, value: ConfiguratorDraft[K]) => {
     draft = { ...draft, [key]: value };
     copyStatus = '';
+    rainmeterStatus = '';
   };
 
   const importSettings = () => {
@@ -37,6 +77,16 @@
     } catch {
       copyStatus = 'Clipboard unavailable';
     }
+  };
+
+  const writeRainmeter = async () => {
+    if (!settings.rainmeter.enabled) {
+      rainmeterStatus = 'Rainmeter export is disabled';
+      return;
+    }
+
+    const result = await writeRainmeterJson(settings.rainmeter.outputPath, rainmeterJson);
+    rainmeterStatus = result.ok ? 'Rainmeter JSON written' : result.message;
   };
 </script>
 
@@ -156,6 +206,26 @@
           <span>Debug overlay</span>
         </label>
       </fieldset>
+
+      <fieldset>
+        <legend>Rainmeter</legend>
+        <label class="check-row">
+          <input
+            type="checkbox"
+            checked={draft.rainmeterEnabled}
+            on:change={(event) => update('rainmeterEnabled', event.currentTarget.checked)}
+          />
+          <span>Export JSON</span>
+        </label>
+        <label>
+          <span>Output path</span>
+          <input
+            value={draft.rainmeterOutputPath}
+            placeholder="D:\Rainmeter\Skins\SpotifyWallPaper\NowPlaying.json"
+            on:input={(event) => update('rainmeterOutputPath', event.currentTarget.value)}
+          />
+        </label>
+      </fieldset>
     </form>
 
     <section class="preview-pane" aria-label="Mock wallpaper preview">
@@ -177,6 +247,15 @@
         <span>{copyStatus}</span>
       </div>
       <textarea readonly value={settingsJson} aria-label="Generated settings JSON"></textarea>
+
+      <div class="export-actions">
+        <span>{rainmeterSummary}</span>
+      </div>
+      <div class="export-actions">
+        <button type="button" disabled={!settings.rainmeter.enabled} on:click={writeRainmeter}>Write Rainmeter</button>
+        <span>{rainmeterStatus}</span>
+      </div>
+      <textarea class="rainmeter-preview" readonly value={rainmeterJson} aria-label="Rainmeter JSON preview"></textarea>
     </section>
 
     <section class="import-pane" aria-label="Import settings">
@@ -447,6 +526,10 @@
     min-height: 280px;
     resize: vertical;
     font: 0.86rem/1.45 "Cascadia Mono", Consolas, monospace;
+  }
+
+  .rainmeter-preview {
+    min-height: 220px;
   }
 
   .import-pane {

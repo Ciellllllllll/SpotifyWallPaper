@@ -27,6 +27,7 @@ const visualizerMirrorModes: WallpaperSettings['visualizer']['mirrorMode'][] = [
 const lyricModes: WallpaperSettings['lyrics']['mode'][] = ['current', 'context'];
 const seekbarStyles: WallpaperSettings['seekbar']['style'][] = ['line', 'album-ring'];
 const clockColorModes: WallpaperSettings['clock']['colorMode'][] = ['auto', 'fixed'];
+const rainmeterOutputModes: WallpaperSettings['rainmeter']['outputMode'][] = ['json'];
 const transitionPresets: WallpaperSettings['transitions']['preset'][] = [
   'fade',
   'crossfade',
@@ -189,6 +190,21 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
       lyrics: booleanOr(input.transitions?.lyrics, defaultSettings.transitions.lyrics),
       visualizer: booleanOr(input.transitions?.visualizer, defaultSettings.transitions.visualizer),
       reduceMotion: booleanOr(input.transitions?.reduceMotion, defaultSettings.transitions.reduceMotion)
+    },
+    rainmeter: {
+      ...defaultSettings.rainmeter,
+      ...input.rainmeter,
+      enabled: booleanOr(input.rainmeter?.enabled, defaultSettings.rainmeter.enabled),
+      outputPath: typeof input.rainmeter?.outputPath === 'string' ? input.rainmeter.outputPath : defaultSettings.rainmeter.outputPath,
+      outputMode: oneOf(input.rainmeter?.outputMode, rainmeterOutputModes, defaultSettings.rainmeter.outputMode),
+      stoppedUpdateIntervalMs: Math.round(
+        numberInRange(
+          input.rainmeter?.stoppedUpdateIntervalMs,
+          1000,
+          60_000,
+          defaultSettings.rainmeter.stoppedUpdateIntervalMs
+        )
+      )
     }
   };
 
@@ -207,6 +223,7 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
   repaired ||= JSON.stringify({ ...defaultSettings.visualizer, ...input.visualizer }) !== JSON.stringify(repairedSettings.visualizer);
   repaired ||= JSON.stringify({ ...defaultSettings.clock, ...input.clock }) !== JSON.stringify(repairedSettings.clock);
   repaired ||= JSON.stringify({ ...defaultSettings.transitions, ...input.transitions }) !== JSON.stringify(repairedSettings.transitions);
+  repaired ||= JSON.stringify({ ...defaultSettings.rainmeter, ...input.rainmeter }) !== JSON.stringify(repairedSettings.rainmeter);
 
   return {
     settings: repairedSettings,

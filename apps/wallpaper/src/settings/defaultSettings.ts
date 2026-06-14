@@ -114,7 +114,10 @@ export const defaultSettings: WallpaperSettings = {
     mode: 'standard'
   },
   rainmeter: {
-    enabled: false
+    enabled: false,
+    outputPath: '',
+    outputMode: 'json',
+    stoppedUpdateIntervalMs: 10_000
   },
   debug: {
     enabled: false

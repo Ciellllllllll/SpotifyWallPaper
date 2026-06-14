@@ -252,6 +252,31 @@ The configurator can edit the first milestone settings, preview the mock layout,
 Wallpaper Engine settings JSON. Refresh Token export is disabled by default and must be explicitly enabled in the
 configurator before the token appears in generated JSON.
 
+### Optional Rainmeter JSON
+
+Rainmeter export is optional and belongs to the configurator/companion side, not the Web Wallpaper runtime. The wallpaper
+continues to run if Rainmeter output is disabled or if file output fails.
+
+The Rainmeter payload is JSON only in this phase and contains display-safe playback/theme fields:
+
+- `title`
+- `artists`
+- `albumName`
+- `albumArtLocalPath`
+- `progressMs`
+- `durationMs`
+- `progressRatio`
+- `isPlaying`
+- `primaryColor`
+- `secondaryColor`
+- `accentColor`
+- `readableTextColor`
+- `timestamp`
+- `playbackSource`
+
+Spotify Access Token, Refresh Token, authorization codes, client secrets, and OAuth callback URLs must not be written to
+Rainmeter output. The Tauri command rejects payloads that contain sensitive credential field names before writing files.
+
 The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 
 - `spotify_client_id`

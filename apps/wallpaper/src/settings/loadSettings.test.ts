@@ -257,4 +257,25 @@ describe('loadSettings', () => {
       fixedColor: '#112233'
     });
   });
+
+  it('loads and repairs Rainmeter settings without requiring the configurator', () => {
+    const loaded = loadSettings(
+      JSON.stringify({
+        rainmeter: {
+          enabled: true,
+          outputPath: 'D:\\Rainmeter\\NowPlaying.json',
+          outputMode: 'xml',
+          stoppedUpdateIntervalMs: 250
+        }
+      })
+    );
+
+    expect(loaded.warning).toContain('repaired');
+    expect(loaded.settings.rainmeter).toEqual({
+      enabled: true,
+      outputPath: 'D:\\Rainmeter\\NowPlaying.json',
+      outputMode: 'json',
+      stoppedUpdateIntervalMs: 1000
+    });
+  });
 });

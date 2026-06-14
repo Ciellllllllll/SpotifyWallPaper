@@ -39,6 +39,7 @@ export const loadSettings = (source: unknown = readDefaultSettingsSource()): Loa
   const clock = record.clock && typeof record.clock === 'object' ? (record.clock as Record<string, unknown>) : {};
   const transitions = record.transitions && typeof record.transitions === 'object' ? (record.transitions as Record<string, unknown>) : {};
   const performance = record.performance && typeof record.performance === 'object' ? (record.performance as Record<string, unknown>) : {};
+  const rainmeter = record.rainmeter && typeof record.rainmeter === 'object' ? (record.rainmeter as Record<string, unknown>) : {};
   const debug = record.debug && typeof record.debug === 'object' ? (record.debug as Record<string, unknown>) : {};
   const preset = isLayoutPresetName(layout.preset) ? layout.preset : defaultLayoutPreset;
 
@@ -165,6 +166,15 @@ export const loadSettings = (source: unknown = readDefaultSettingsSource()): Loa
         performance.mode === 'low-power' || performance.mode === 'standard' || performance.mode === 'high-effect'
           ? performance.mode
           : defaultSettings.performance.mode
+    },
+    rainmeter: {
+      ...defaultSettings.rainmeter,
+      enabled: booleanOr(rainmeter.enabled, defaultSettings.rainmeter.enabled),
+      outputPath: stringOr(rainmeter.outputPath, defaultSettings.rainmeter.outputPath),
+      outputMode: stringOr(rainmeter.outputMode, defaultSettings.rainmeter.outputMode) as WallpaperSettings['rainmeter']['outputMode'],
+      stoppedUpdateIntervalMs:
+        numberOr(rainmeter.stoppedUpdateIntervalMs, defaultSettings.rainmeter.stoppedUpdateIntervalMs) ??
+        defaultSettings.rainmeter.stoppedUpdateIntervalMs
     },
     debug: {
       ...defaultSettings.debug,

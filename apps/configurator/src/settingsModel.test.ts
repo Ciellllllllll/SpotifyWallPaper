@@ -35,7 +35,9 @@ describe('configurator settings model', () => {
       performanceMode: 'low-power',
       lyricsEnabled: true,
       clockShowSeconds: true,
-      playerControlsEnabled: false
+      playerControlsEnabled: false,
+      rainmeterEnabled: true,
+      rainmeterOutputPath: 'D:\\Rainmeter\\NowPlaying.json'
     });
 
     const imported = importSettingsJson(source);
@@ -46,7 +48,9 @@ describe('configurator settings model', () => {
       performanceMode: 'low-power',
       lyricsEnabled: true,
       clockShowSeconds: true,
-      playerControlsEnabled: false
+      playerControlsEnabled: false,
+      rainmeterEnabled: true,
+      rainmeterOutputPath: 'D:\\Rainmeter\\NowPlaying.json'
     });
   });
 
@@ -98,6 +102,10 @@ describe('configurator settings model', () => {
           showSeconds: 'yes'
         },
         player: { controlsEnabled: 'yes' },
+        rainmeter: {
+          enabled: 'yes',
+          outputPath: []
+        },
         debug: { enabled: 'yes' }
       })
     );
@@ -111,7 +119,23 @@ describe('configurator settings model', () => {
     expect(exported.clock.enabled).toBe(defaultDraft.clockEnabled);
     expect(exported.clock.showSeconds).toBe(defaultDraft.clockShowSeconds);
     expect(exported.player.controlsEnabled).toBe(defaultDraft.playerControlsEnabled);
+    expect(exported.rainmeter.enabled).toBe(defaultDraft.rainmeterEnabled);
+    expect(exported.rainmeter.outputPath).toBe(defaultDraft.rainmeterOutputPath);
     expect(exported.debug.enabled).toBe(defaultDraft.debugEnabled);
+  });
+
+  it('exports Rainmeter settings without Spotify token material', () => {
+    const json = exportSettingsJson({
+      ...defaultDraft,
+      spotifyRefreshToken: 'secret-refresh-token',
+      rainmeterEnabled: true,
+      rainmeterOutputPath: 'D:\\Rainmeter\\NowPlaying.json'
+    });
+
+    expect(json).toContain('"rainmeter"');
+    expect(json).toContain('"outputMode": "json"');
+    expect(json).toContain('D:\\\\Rainmeter\\\\NowPlaying.json');
+    expect(json).not.toContain('secret-refresh-token');
   });
 
   it('falls back safely for malformed import JSON', () => {
