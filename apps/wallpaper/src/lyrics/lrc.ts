@@ -1,4 +1,5 @@
 import type { LyricLine } from '@spotify-wallpaper/shared-types';
+import { parseLrcWithCore } from '../wasm/visualCore';
 
 export interface LrcParseResult {
   offsetMs: number;
@@ -12,7 +13,10 @@ export interface LyricDisplayState {
   next: LyricLine | null;
 }
 
-export const parseLrc = (input: string): LrcParseResult => {
+export const parseLrc = (input: string): LrcParseResult =>
+  parseLrcWithCore(input, () => parseLrcFallback(input));
+
+const parseLrcFallback = (input: string): LrcParseResult => {
   let offsetMs = 0;
   const parsedLines: LyricLine[] = [];
 

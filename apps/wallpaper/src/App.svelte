@@ -18,6 +18,7 @@
   import { idleVisualizerFrame, shapeVisualizerFrame } from './visualizer/model';
   import { startAudioBridge } from './wallpaperEngine/audio';
   import { applySettingsPatch, registerWallpaperPropertyListener } from './wallpaperEngine/properties';
+  import { initVisualCore, visualCoreStatus } from './wasm/visualCore';
   import type { SpotifyPlaybackCommand } from './spotify/types';
   import type { VisualizerFrame } from '@spotify-wallpaper/shared-types';
 
@@ -392,6 +393,7 @@
   };
 
   onMount(() => {
+    initVisualCore();
     const loaded = loadSettings();
     applyRuntimeSettings(loaded.settings, loaded.warning ? 'fallback defaults' : 'defaults/browser', loaded.warning);
     startProgressTicker();
@@ -574,6 +576,7 @@
       <div>Previous item: {previousPlayback ? previousPlayback.title : 'none'}</div>
       <div>Transition: {transitionState ? transitionState.resolvedPreset : 'idle'}</div>
       <div>Visualizer: {settings.visualizer.enabled ? `${settings.visualizer.mode}/${visualizerFrame?.source ?? 'idle'}` : 'disabled'}</div>
+      <div>Visual core: {visualCoreStatus()}</div>
       <div>Lyrics: {settings.lyrics.enabled ? `${lyricsState.status}/${parsedLyrics.lines.length}` : 'disabled'}</div>
       <div>Performance: {settings.performance.mode}</div>
       <div>Audio peak: {visualizerFrame ? visualizerFrame.peak.toFixed(2) : '0.00'}</div>

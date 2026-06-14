@@ -3,9 +3,9 @@ target/
 dist/
 apps/*/dist/
 packages/*/dist/
+apps/configurator/src-tauri/gen/
 .codex-*.log
 artifacts/
 AGENTS.md
-docs/
 CLAUDE.md
 .claude/h5i.md

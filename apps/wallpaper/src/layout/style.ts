@@ -1,6 +1,21 @@
 import type { LayoutAnchor, LayoutItem } from '@spotify-wallpaper/shared-types';
+import { layoutRectWithCore } from '../wasm/visualCore';
 
 export const layoutStyle = (item: LayoutItem): string => {
+  const coreRect = layoutRectWithCore(item);
+  if (coreRect) {
+    return [
+      `left: ${coreRect.x}px`,
+      `top: ${coreRect.y}px`,
+      `width: ${coreRect.width}px`,
+      `height: ${coreRect.height}px`,
+      `opacity: ${item.opacity}`,
+      `z-index: ${item.zIndex}`,
+      `transform: scale(${item.scale}) rotate(${item.rotation}deg)`,
+      'transform-origin: center'
+    ].join('; ');
+  }
+
   const [offsetX, offsetY] = anchorTransform(item.anchor);
   const unit = cssUnit(item.unit);
   const clamp = item.responsive === 'clamp-safe-area';

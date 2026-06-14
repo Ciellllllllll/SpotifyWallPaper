@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "build": "npm run build -w @spotify-wallpaper/shared-types && npm run build -w @spotify-wallpaper/configurator && npm run build -w @spotify-wallpaper/wallpaper",
+    "build:wasm": "wasm-pack build crates/visual-core --target web --out-dir ../../apps/wallpaper/public/wasm",
     "check": "npm run check -w @spotify-wallpaper/shared-types && npm run check -w @spotify-wallpaper/configurator && npm run check -w @spotify-wallpaper/wallpaper",
     "test": "npm run test --workspaces --if-present"
   },

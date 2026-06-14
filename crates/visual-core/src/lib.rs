@@ -3,6 +3,8 @@ pub mod layout;
 pub mod lrc;
 pub mod theme;
 pub mod visualizer;
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 
 pub fn clamp_progress(progress_ms: u32, duration_ms: u32) -> f32 {
     if duration_ms == 0 {

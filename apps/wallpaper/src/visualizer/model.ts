@@ -1,4 +1,5 @@
 import type { VisualizerFrame, WallpaperSettings, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+import { normalizeSamplesWithCore } from '../wasm/visualCore';
 
 export interface EffectiveVisualizerConfig {
   barCount: number;
@@ -33,16 +34,15 @@ export const shapeVisualizerFrame = (
   settings: WallpaperSettings['visualizer']
 ): VisualizerFrame => {
   const safeSamples = frame.samples.length > 0 ? frame.samples : [0];
-  const nextSamples = safeSamples.map((sample, index) => {
+  const weightedSamples = safeSamples.map((sample, index) => {
     const normalized = normalizeSample(sample, settings);
-    const weighted = normalized * bandWeight(index, safeSamples.length, settings);
-    const previousSample = previous?.samples[index] ?? 0;
-    const smoothed = previousSample * settings.smoothing + weighted * (1 - settings.smoothing);
-    const decayed = Math.max(smoothed, previousSample * (1 - settings.decay));
-    return clamp01(decayed);
+    return normalized * bandWeight(index, safeSamples.length, settings);
   });
+  const normalized =
+    normalizeSamplesWithCore({ ...frame, samples: weightedSamples }, previous, settings) ??
+    normalizeSamplesFallback(weightedSamples, previous?.samples ?? [], settings);
 
-  return frameFromSamples(nextSamples, frame.source, frame.timestampMs);
+  return frameFromSamples(normalized.samples.map(clamp01), frame.source, frame.timestampMs);
 };
 
 export const idleVisualizerFrame = (timestampMs: number, settings: WallpaperSettings['visualizer']): VisualizerFrame => {
@@ -106,6 +106,23 @@ const normalizeSample = (sample: number, settings: WallpaperSettings['visualizer
   }
 
   return clamp01((clamped / settings.clampMax) * settings.sensitivity * settings.intensity);
+};
+
+const normalizeSamplesFallback = (
+  current: number[],
+  previous: number[],
+  settings: WallpaperSettings['visualizer']
+): { samples: number[]; peak: number } => {
+  const nextSamples = current.map((sample, index) => {
+    const previousSample = previous[index] ?? 0;
+    const smoothed = previousSample * settings.smoothing + sample * (1 - settings.smoothing);
+    return Math.max(smoothed, previousSample * (1 - settings.decay));
+  });
+
+  return {
+    samples: nextSamples,
+    peak: nextSamples.reduce((max, sample) => Math.max(max, sample), 0)
+  };
 };
 
 const bandWeight = (index: number, length: number, settings: WallpaperSettings['visualizer']): number => {

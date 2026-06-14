@@ -8,13 +8,24 @@
     type ConfiguratorDraft
   } from './settingsModel';
   import { buildRainmeterOutput, exportRainmeterJson } from './rainmeter/rainmeterExport';
-  import { writeRainmeterJson } from './tauriCommands';
+  import {
+    exchangeSpotifyCallback,
+    startRainmeterScheduler,
+    startSpotifyPkceAuth,
+    stopRainmeterScheduler,
+    updateRainmeterScheduler,
+    writeRainmeterJson
+  } from './tauriCommands';
 
   let draft: ConfiguratorDraft = { ...defaultDraft };
   let importSource = '';
   let importWarning: string | null = null;
   let copyStatus = '';
   let rainmeterStatus = '';
+  let spotifyRedirectUri = 'http://127.0.0.1:8899/callback';
+  let spotifyCallbackUrl = '';
+  let oauthStatus = '';
+  let rainmeterSchedulerRunning = false;
 
   $: settings = buildSettings(draft);
   $: settingsJson = exportSettingsJson(draft);
@@ -88,6 +99,59 @@
     const result = await writeRainmeterJson(settings.rainmeter.outputPath, rainmeterJson);
     rainmeterStatus = result.ok ? 'Rainmeter JSON written' : result.message;
   };
+
+  const startSpotifyAuth = async () => {
+    oauthStatus = '';
+    const result = await startSpotifyPkceAuth(draft.spotifyClientId, spotifyRedirectUri);
+    if (!result.ok) {
+      oauthStatus = result.message;
+      return;
+    }
+
+    oauthStatus = 'Spotify authorization opened';
+    window.open(result.authUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const exchangeCallback = async () => {
+    oauthStatus = '';
+    const result = await exchangeSpotifyCallback(draft.spotifyClientId, spotifyCallbackUrl);
+    if (!result.ok) {
+      oauthStatus = result.message;
+      return;
+    }
+
+    update('spotifyRefreshToken', result.refreshToken);
+    update('includeRefreshToken', false);
+    oauthStatus = 'Refresh token saved locally; export still excludes token by default';
+    spotifyCallbackUrl = '';
+  };
+
+  const startScheduler = async () => {
+    const result = await startRainmeterScheduler(
+      settings.rainmeter.outputPath,
+      rainmeterJson,
+      settings.player.controlsEnabled,
+      settings.rainmeter.stoppedUpdateIntervalMs
+    );
+    rainmeterSchedulerRunning = result.ok;
+    rainmeterStatus = result.ok ? 'Rainmeter scheduler running' : result.message;
+  };
+
+  const updateScheduler = async () => {
+    const result = await updateRainmeterScheduler(
+      settings.rainmeter.outputPath,
+      rainmeterJson,
+      settings.player.controlsEnabled,
+      settings.rainmeter.stoppedUpdateIntervalMs
+    );
+    rainmeterStatus = result.ok ? 'Rainmeter scheduler updated' : result.message;
+  };
+
+  const stopScheduler = async () => {
+    const result = await stopRainmeterScheduler();
+    rainmeterSchedulerRunning = false;
+    rainmeterStatus = result.ok ? 'Rainmeter scheduler stopped' : result.message;
+  };
 </script>
 
 <main>
@@ -110,6 +174,26 @@
           <span>Client ID</span>
           <input value={draft.spotifyClientId} on:input={(event) => update('spotifyClientId', event.currentTarget.value)} />
         </label>
+        <label>
+          <span>Redirect URI</span>
+          <input value={spotifyRedirectUri} on:input={(event) => (spotifyRedirectUri = event.currentTarget.value)} />
+        </label>
+        <div class="export-actions">
+          <button type="button" on:click={startSpotifyAuth}>Start Auth</button>
+          <span>{oauthStatus}</span>
+        </div>
+        <label>
+          <span>Callback URL</span>
+          <input
+            type="password"
+            value={spotifyCallbackUrl}
+            autocomplete="off"
+            on:input={(event) => (spotifyCallbackUrl = event.currentTarget.value)}
+          />
+        </label>
+        <div class="export-actions">
+          <button type="button" on:click={exchangeCallback}>Save Token</button>
+        </div>
         <label>
           <span>Refresh token</span>
           <input
@@ -254,6 +338,11 @@
       <div class="export-actions">
         <button type="button" disabled={!settings.rainmeter.enabled} on:click={writeRainmeter}>Write Rainmeter</button>
         <span>{rainmeterStatus}</span>
+      </div>
+      <div class="export-actions">
+        <button type="button" disabled={!settings.rainmeter.enabled} on:click={startScheduler}>Start Scheduler</button>
+        <button type="button" disabled={!rainmeterSchedulerRunning} on:click={updateScheduler}>Update Scheduler</button>
+        <button type="button" disabled={!rainmeterSchedulerRunning} on:click={stopScheduler}>Stop Scheduler</button>
       </div>
       <textarea class="rainmeter-preview" readonly value={rainmeterJson} aria-label="Rainmeter JSON preview"></textarea>
     </section>

@@ -108,6 +108,16 @@ location.reload();
 
 If album color extraction fails, the wallpaper uses a deterministic fallback theme from the current item identity.
 
+Rust/WASM runtime integration is preferred for release builds. Generate the visual core bundle before building the
+Wallpaper Engine artifact:
+
+```sh
+wasm-pack build crates/visual-core --target web --out-dir ../../apps/wallpaper/public/wasm
+npm run build -w @spotify-wallpaper/wallpaper
+```
+
+If the generated WASM files are absent, the wallpaper keeps running with TypeScript fallback logic.
+
 Lyrics use user-provided LRC text only. The wallpaper does not bundle lyrics, scrape lyrics, or call external lyrics
 providers in the current phase:
 
@@ -250,7 +260,8 @@ cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml
 npm audit --audit-level=moderate
 ```
 
-For Wallpaper Engine import, build the project and select `apps/wallpaper/dist` as the Web Wallpaper folder.
+For Wallpaper Engine import, build the project and select `apps/wallpaper/dist` as the Web Wallpaper folder. The build
+copies `apps/wallpaper/public/project.json` into the distribution folder.
 
 ## Optional configurator
 
@@ -268,9 +279,9 @@ Run the Tauri shell:
 npm run tauri:dev -w @spotify-wallpaper/configurator
 ```
 
-The configurator can edit the first milestone settings, preview the mock layout, import existing settings JSON, and export
-Wallpaper Engine settings JSON. Refresh Token export is disabled by default and must be explicitly enabled in the
-configurator before the token appears in generated JSON.
+The configurator can edit the first milestone settings, preview the mock layout, import existing settings JSON, export
+Wallpaper Engine settings JSON, and assist Spotify OAuth PKCE in the Tauri shell. Refresh Token export is disabled by
+default and must be explicitly enabled in the configurator before the token appears in generated JSON.
 
 ### Optional Rainmeter JSON
 
@@ -296,6 +307,8 @@ The Rainmeter payload is JSON only in this phase and contains display-safe playb
 
 Spotify Access Token, Refresh Token, authorization codes, client secrets, and OAuth callback URLs must not be written to
 Rainmeter output. The Tauri command rejects payloads that contain sensitive credential field names before writing files.
+Use the scheduler controls in the configurator for repeated writes: about 1 second while playing, and
+`rainmeter.stoppedUpdateIntervalMs` while stopped.
 
 The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 

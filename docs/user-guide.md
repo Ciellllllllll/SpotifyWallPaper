@@ -67,7 +67,8 @@ Never put Spotify tokens in URLs, screenshots, logs, Rainmeter output, or commit
 
 2. In Wallpaper Engine, create or update a Web Wallpaper.
 3. Select `apps/wallpaper/dist` as the output folder.
-4. Configure user properties as needed.
+4. Confirm `project.json` is present in that folder.
+5. Configure user properties as needed.
 
 Supported user property keys:
 
@@ -81,6 +82,17 @@ Supported user property keys:
 - `debug_enabled`
 
 If Wallpaper Engine APIs are absent, the same build still works in a browser using mock settings and mock playback.
+
+## Rust/WASM Visual Core
+
+The wallpaper can use the Rust visual core at runtime for LRC parsing, visualizer normalization, readability calculation, and percent layout rectangle calculation. Generate the WASM bundle before packaging when Rust runtime integration is required:
+
+```sh
+wasm-pack build crates/visual-core --target web --out-dir ../../apps/wallpaper/public/wasm
+npm run build -w @spotify-wallpaper/wallpaper
+```
+
+If the WASM bundle is not present, the wallpaper falls back to TypeScript logic and still starts in browser preview and Wallpaper Engine.
 
 ## Optional Configurator
 
@@ -96,7 +108,18 @@ Run the Tauri shell:
 npm run tauri:dev -w @spotify-wallpaper/configurator
 ```
 
-The configurator can edit milestone settings, preview a mock layout, import/export settings JSON, and write optional Rainmeter JSON from the Tauri shell. Refresh Token export is off by default and must be explicitly enabled before a token appears in generated settings JSON.
+The configurator can edit milestone settings, preview a mock layout, import/export settings JSON, help with Spotify OAuth PKCE, and write optional Rainmeter JSON from the Tauri shell. Refresh Token export is off by default and must be explicitly enabled before a token appears in generated settings JSON.
+
+For PKCE setup:
+
+1. Enter the public Spotify Client ID.
+2. Enter a redirect URI that is also registered on the Spotify Developer app.
+3. Click Start Auth.
+4. Complete Spotify authorization in the browser.
+5. Paste the callback URL into the password-style callback field.
+6. Click Save Token.
+
+The configurator stores the Refresh Token in the local draft only. It does not print the token, and exported settings exclude it unless Include token in export is explicitly enabled.
 
 The configurator is optional. The wallpaper runtime must keep working without it.
 
@@ -177,6 +200,10 @@ The current output mode is JSON. The payload contains:
 - `playbackSource`
 
 The Tauri command rejects payloads with Spotify token, client secret, OAuth authorization code, or callback URL field names before writing files.
+
+The Tauri scheduler can write Rainmeter JSON repeatedly. It writes at about 1 second while playback is marked playing and uses `rainmeter.stoppedUpdateIntervalMs` while stopped. Scheduler failures are isolated from the wallpaper runtime.
+
+A minimal Rainmeter reader sample is available at `examples/rainmeter/SpotifyWallPaper/SpotifyWallPaper.ini`. Copy it into a Rainmeter skin folder and set `JsonPath` to the configurator output file if you do not use the default `@Resources/NowPlaying.json` location.
 
 ## Troubleshooting
 

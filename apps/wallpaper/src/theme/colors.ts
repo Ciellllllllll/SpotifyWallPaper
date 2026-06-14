@@ -1,4 +1,5 @@
 import type { WallpaperTheme } from '@spotify-wallpaper/shared-types';
+import { readabilityWithCore } from '../wasm/visualCore';
 
 export interface Rgb {
   r: number;
@@ -45,6 +46,14 @@ export const contrastRatio = (a: Rgb, b: Rgb): number => {
 };
 
 export const readableTextColor = (background: Rgb): { color: string; contrast: number } => {
+  const core = readabilityWithCore(background.r, background.g, background.b);
+  if (core) {
+    return {
+      color: rgbToHex(core.text),
+      contrast: core.contrastRatio
+    };
+  }
+
   const white = { r: 255, g: 255, b: 255 };
   const black = { r: 0, g: 0, b: 0 };
   const whiteContrast = contrastRatio(background, white);

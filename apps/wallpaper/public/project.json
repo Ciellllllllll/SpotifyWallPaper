@@ -1,0 +1,69 @@
+{
+  "description": "Spotify-linked Web Wallpaper with mock fallback, configurable layout, lyrics, visualizer, and optional Spotify playback integration.",
+  "file": "index.html",
+  "general": {
+    "properties": {
+      "spotify_client_id": {
+        "text": "Spotify Client ID",
+        "type": "text",
+        "value": ""
+      },
+      "spotify_refresh_token": {
+        "text": "Spotify Refresh Token",
+        "type": "text",
+        "value": ""
+      },
+      "settings_json": {
+        "text": "Settings JSON",
+        "type": "textarea",
+        "value": ""
+      },
+      "selected_preset": {
+        "text": "Layout Preset",
+        "type": "combo",
+        "value": "Left Dock",
+        "options": [
+          { "label": "Minimal", "value": "Minimal" },
+          { "label": "Center Album", "value": "Center Album" },
+          { "label": "Lyrics Focus", "value": "Lyrics Focus" },
+          { "label": "Visualizer Heavy", "value": "Visualizer Heavy" },
+          { "label": "Rainmeter Hybrid", "value": "Rainmeter Hybrid" },
+          { "label": "Left Dock", "value": "Left Dock" },
+          { "label": "Bottom Player", "value": "Bottom Player" },
+          { "label": "Clock Focus", "value": "Clock Focus" },
+          { "label": "Album Ring", "value": "Album Ring" },
+          { "label": "Ambient Background", "value": "Ambient Background" }
+        ]
+      },
+      "visualizer_enabled": {
+        "text": "Visualizer Enabled",
+        "type": "bool",
+        "value": true
+      },
+      "lyrics_enabled": {
+        "text": "Lyrics Enabled",
+        "type": "bool",
+        "value": false
+      },
+      "performance_mode": {
+        "text": "Performance Mode",
+        "type": "combo",
+        "value": "standard",
+        "options": [
+          { "label": "Low Power", "value": "low-power" },
+          { "label": "Standard", "value": "standard" },
+          { "label": "High Effect", "value": "high-effect" }
+        ]
+      },
+      "debug_enabled": {
+        "text": "Debug Enabled",
+        "type": "bool",
+        "value": false
+      }
+    }
+  },
+  "preview": "mock/album-placeholder.svg",
+  "tags": ["spotify", "music", "web", "wallpaper engine"],
+  "title": "Spotify Wallpaper",
+  "type": "web"
+}
