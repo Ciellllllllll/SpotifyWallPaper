@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "spotify": {
+    "clientId": "",
+    "hasRefreshToken": false,
+    "pollIntervalPlayingMs": 1000,
+    "pollIntervalPausedMs": 3000
+  },
+  "layout": {
+    "preset": "Minimal"
+  },
+  "theme": {
+    "mode": "album",
+    "textColor": "#f6f7fb",
+    "autoReadability": true
+  },
+  "background": {
+    "mode": "album-blur",
+    "opacity": 0.72,
+    "blurPx": 18,
+    "solidColor": "#111318"
+  },
+  "albumArt": {
+    "visible": true
+  },
+  "text": {
+    "visible": true
+  },
+  "player": {
+    "visible": true,
+    "controlsEnabled": false,
+    "showDevice": false,
+    "showVolume": false,
+    "showShuffleRepeat": false
+  },
+  "seekbar": {
+    "visible": true,
+    "style": "line"
+  },
+  "lyrics": {
+    "enabled": false,
+    "sourceText": "",
+    "mode": "current",
+    "offsetMs": 0,
+    "showMissingState": true
+  },
+  "visualizer": {
+    "enabled": false,
+    "mode": "album-ring",
+    "intensity": 0.5,
+    "sensitivity": 1,
+    "smoothing": 0.35,
+    "decay": 0.22,
+    "bassWeight": 1.2,
+    "midWeight": 1,
+    "trebleWeight": 0.82,
+    "barCount": 32,
+    "lineWidth": 3,
+    "radius": 1.18,
+    "gap": 10,
+    "rotationSpeed": 0.06,
+    "particleCount": 0,
+    "particleLife": 0,
+    "glowStrength": 0.3,
+    "colorMode": "theme",
+    "mirrorMode": "mirror",
+    "clampMax": 1,
+    "noiseGate": 0.03,
+    "idleAnimation": true
+  },
+  "clock": {
+    "enabled": true,
+    "hour12": false,
+    "showSeconds": false,
+    "showDate": false,
+    "showWeekday": false,
+    "fontSizePx": 34,
+    "fontWeight": 700,
+    "letterSpacingPx": 0,
+    "opacity": 0.9,
+    "colorMode": "auto",
+    "fixedColor": "#f6f7fb"
+  },
+  "transitions": {
+    "enabled": false,
+    "preset": "fade",
+    "durationMs": 700,
+    "easing": "ease-out",
+    "background": true,
+    "albumArt": true,
+    "text": true,
+    "lyrics": true,
+    "visualizer": false,
+    "reduceMotion": true
+  },
+  "performance": {
+    "mode": "low-power"
+  },
+  "rainmeter": {
+    "enabled": false,
+    "outputPath": "",
+    "outputMode": "json",
+    "stoppedUpdateIntervalMs": 10000
+  },
+  "debug": {
+    "enabled": false
+  }
+}

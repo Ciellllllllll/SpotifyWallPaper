@@ -1,0 +1,14 @@
+{
+  "status": 429,
+  "headers": {
+    "retry-after": "5"
+  },
+  "body": {
+    "error": {
+      "status": 429,
+      "message": "API rate limit exceeded"
+    }
+  },
+  "expectedKind": "rate_limited",
+  "expectedRetryAfterMs": 5000
+}

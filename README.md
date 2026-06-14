@@ -1,6 +1,13 @@
 # Spotify Wallpaper
 
-Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It currently has a browser-previewable mock wallpaper plus the Spotify MVP foundation for token refresh, live polling, playback normalization, and safe error handling.
+Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-previewable mock wallpaper plus Spotify playback polling, settings customization, visualizer, LRC lyrics, transitions, player controls, an optional Tauri configurator, and optional Rainmeter JSON export.
+
+## Guides
+
+- `docs/user-guide.md` covers setup, Spotify Developer configuration, Wallpaper Engine import, settings, lyrics, Rainmeter, and troubleshooting.
+- `docs/qa-checklist.md` covers manual and automated release QA.
+- `docs/release-notes-v0.0.1.md` lists the current milestone scope and known gaps.
+- `examples/settings/` contains token-free sample settings JSON.
 
 ## Development
 
@@ -228,6 +235,19 @@ Build all JavaScript workspaces:
 
 ```sh
 npm run build
+```
+
+Run the main automated QA gates:
+
+```sh
+npm run test --workspaces --if-present
+npm run check
+npm run build
+cargo check --workspace
+cargo test --workspace
+cargo check --manifest-path apps/configurator/src-tauri/Cargo.toml
+cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml
+npm audit --audit-level=moderate
 ```
 
 For Wallpaper Engine import, build the project and select `apps/wallpaper/dist` as the Web Wallpaper folder.
