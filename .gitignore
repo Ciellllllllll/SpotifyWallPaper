@@ -7,5 +7,6 @@ apps/configurator/src-tauri/gen/
 .codex-*.log
 artifacts/
 AGENTS.md
+docs/
 CLAUDE.md
 .claude/h5i.md

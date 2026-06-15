@@ -2,11 +2,10 @@
 
 Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-previewable mock wallpaper plus Spotify playback polling, settings customization, visualizer, LRC lyrics, transitions, player controls, an optional Tauri configurator, and optional Rainmeter JSON export.
 
-## Guides
+## Guides And Repository Notes
 
-- `docs/user-guide.md` covers setup, Spotify Developer configuration, Wallpaper Engine import, settings, lyrics, Rainmeter, and troubleshooting.
-- `docs/qa-checklist.md` covers manual and automated release QA.
-- `docs/release-notes-v0.0.1.md` lists the current milestone scope and known gaps.
+- `docs/` is intentionally local-only and ignored by Git.
+- This README carries the release-candidate setup and QA notes that must remain available from GitHub.
 - `examples/settings/` contains token-free sample settings JSON.
 
 ## Development
@@ -112,11 +111,24 @@ Rust/WASM runtime integration is preferred for release builds. Generate the visu
 Wallpaper Engine artifact:
 
 ```sh
+rustup target add wasm32-unknown-unknown
+cargo check -p spotify-wallpaper-visual-core --target wasm32-unknown-unknown
+cargo install wasm-pack
 wasm-pack build crates/visual-core --target web --out-dir ../../apps/wallpaper/public/wasm
 npm run build -w @spotify-wallpaper/wallpaper
 ```
 
 If the generated WASM files are absent, the wallpaper keeps running with TypeScript fallback logic.
+
+Rust/TypeScript runtime boundary:
+
+| Concern | Source of truth | Runtime fallback | Notes |
+| --- | --- | --- | --- |
+| LRC parse and LRC offset application | Rust/WASM visual core | TypeScript parser | Wallpaper calls Rust through `parseLrcWithCore` when the WASM bundle is loaded. |
+| Visualizer smoothing, decay, and normalized peak | Rust/WASM visual core | TypeScript normalizer | Rendering-specific bar/path generation stays in TypeScript. |
+| Theme readability and contrast | Rust/WASM visual core | TypeScript contrast helper | Browser album pixel extraction stays in TypeScript because it uses Image and Canvas APIs. |
+| Percent layout rectangle | Rust/WASM visual core | TypeScript CSS transform style | Non-percent units and CSS string construction stay in TypeScript. |
+| Full nested settings validation | TypeScript | None | Keep TypeScript as source of truth until the Rust schema crate models the full nested app settings object. |
 
 Lyrics use user-provided LRC text only. The wallpaper does not bundle lyrics, scrape lyrics, or call external lyrics
 providers in the current phase:
@@ -255,6 +267,8 @@ npm run check
 npm run build
 cargo check --workspace
 cargo test --workspace
+rustup target add wasm32-unknown-unknown
+cargo check -p spotify-wallpaper-visual-core --target wasm32-unknown-unknown
 cargo check --manifest-path apps/configurator/src-tauri/Cargo.toml
 cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml
 npm audit --audit-level=moderate
@@ -262,6 +276,35 @@ npm audit --audit-level=moderate
 
 For Wallpaper Engine import, build the project and select `apps/wallpaper/dist` as the Web Wallpaper folder. The build
 copies `apps/wallpaper/public/project.json` into the distribution folder.
+
+Wallpaper Engine manual QA before release candidate:
+
+| Check | Expected result |
+| --- | --- |
+| Import `apps/wallpaper/dist` as a Web Wallpaper | Wallpaper starts without Tauri, Spotify, or Rainmeter. |
+| `settings_json` | Valid JSON applies settings; malformed JSON falls back safely and reports a debug warning. |
+| `spotify_client_id` | Client ID reaches Spotify polling settings without being logged. |
+| `spotify_refresh_token` | Refresh Token enables Spotify polling and debug only shows configured/not configured. |
+| `lyrics_enabled` | Toggles the lyrics layer without breaking layout. |
+| `visualizer_enabled` | Enables/disables visualizer rendering and clears visualizer state when disabled. |
+| `performance_mode` | Accepts `low-power`, `standard`, and `high-effect`; invalid values keep safe defaults. |
+| `debug_enabled` | Toggles the debug panel without exposing token values. |
+| Wallpaper Engine audio listener | Real data uses `wallpaper-engine`; unavailable data falls back to mock or idle visualizer state. |
+
+Spotify real-account QA before release candidate:
+
+| Condition | Expected behavior |
+| --- | --- |
+| Valid account with current playback | Current item, progress, device, shuffle/repeat, and volume display. |
+| Spotify Premium and unrestricted device | play/pause/next/previous/seek/volume/shuffle/repeat commands work or show a non-fatal Spotify status. |
+| Non-Premium account | Passive display still works; restricted playback operations fail gracefully. |
+| Restricted device | Controls are disabled or report a safe non-fatal status. |
+| 401 unauthorized | Shows authorization missing/expired status and keeps mock-safe UI alive. |
+| 403 forbidden | Shows account/device denied status and keeps passive display stable. |
+| 429 rate limit | Respects retry delay when available and does not poll per frame. |
+| Network error | Shows request failure status and uses backoff/fallback behavior. |
+
+Do not capture screenshots, logs, or sample files containing Access Tokens, Refresh Tokens, authorization codes, full OAuth callback URLs, or Client Secrets.
 
 ## Optional configurator
 
@@ -309,6 +352,9 @@ Spotify Access Token, Refresh Token, authorization codes, client secrets, and OA
 Rainmeter output. The Tauri command rejects payloads that contain sensitive credential field names before writing files.
 Use the scheduler controls in the configurator for repeated writes: about 1 second while playing, and
 `rainmeter.stoppedUpdateIntervalMs` while stopped.
+
+The sample Rainmeter skin is `examples/rainmeter/SpotifyWallPaper/SpotifyWallPaper.ini`. It reads a JSON file through
+`JsonPath`; set that variable to the configurator output path or place `NowPlaying.json` in the skin resources folder.
 
 The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 

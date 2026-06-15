@@ -22,6 +22,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
 
       - name: Install npm dependencies
         run: npm ci
@@ -40,6 +42,9 @@ jobs:
 
       - name: Rust workspace tests
         run: cargo test --workspace
+
+      - name: Rust WASM target check
+        run: cargo check -p spotify-wallpaper-visual-core --target wasm32-unknown-unknown
 
       - name: Tauri backend check
         run: cargo check --manifest-path apps/configurator/src-tauri/Cargo.toml
