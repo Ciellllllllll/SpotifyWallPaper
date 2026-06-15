@@ -3,6 +3,7 @@ target/
 dist/
 apps/*/dist/
 packages/*/dist/
+apps/wallpaper/public/wasm/
 apps/configurator/src-tauri/gen/
 .codex-*.log
 artifacts/

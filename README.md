@@ -4,9 +4,25 @@ Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-
 
 ## Guides And Repository Notes
 
-- `docs/` is intentionally local-only and ignored by Git.
+- `docs/` is intentionally local-only and ignored by Git because it contains development specs and phase reports that are not part of the public release package.
 - This README carries the release-candidate setup and QA notes that must remain available from GitHub.
 - `examples/settings/` contains token-free sample settings JSON.
+
+## Technical Stack
+
+- Wallpaper app: Svelte, TypeScript, Vite, Wallpaper Engine Web Wallpaper APIs.
+- Shared model types: TypeScript workspace package.
+- Visual core: Rust compiled to WebAssembly for pure layout, lyrics, readability, and visualizer helpers.
+- Optional configurator: Svelte frontend with Tauri/Rust backend.
+- Optional Rainmeter output: configurator-side JSON writer and scheduler.
+
+## Requirements
+
+- Node.js 22 or newer.
+- Rust stable toolchain.
+- `wasm32-unknown-unknown` Rust target for WASM verification and release packaging.
+- `wasm-pack` for generating the runtime WASM bundle.
+- Wallpaper Engine for real Web Wallpaper QA.
 
 ## Development
 
@@ -119,6 +135,8 @@ npm run build -w @spotify-wallpaper/wallpaper
 ```
 
 If the generated WASM files are absent, the wallpaper keeps running with TypeScript fallback logic.
+The generated `apps/wallpaper/public/wasm/` files are build artifacts and are ignored by Git. Regenerate them with the
+commands above before producing a Wallpaper Engine release build.
 
 Rust/TypeScript runtime boundary:
 
@@ -273,6 +291,10 @@ cargo check --manifest-path apps/configurator/src-tauri/Cargo.toml
 cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml
 npm audit --audit-level=moderate
 ```
+
+CI runs the same npm and cargo gates, including the wasm32 visual-core target check. It does not run `wasm-pack build`
+because the generated WASM files are release artifacts that are intentionally not committed; run the release packaging
+commands locally before importing into Wallpaper Engine.
 
 For Wallpaper Engine import, build the project and select `apps/wallpaper/dist` as the Web Wallpaper folder. The build
 copies `apps/wallpaper/public/project.json` into the distribution folder.
