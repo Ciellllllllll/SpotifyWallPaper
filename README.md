@@ -304,14 +304,17 @@ Wallpaper Engine manual QA before release candidate:
 | Check | Expected result |
 | --- | --- |
 | Import `apps/wallpaper/dist` as a Web Wallpaper | Wallpaper starts without Tauri, Spotify, or Rainmeter. |
-| `settings_json` | Valid JSON applies settings; malformed JSON falls back safely and reports a debug warning. |
-| `spotify_client_id` | Client ID reaches Spotify polling settings without being logged. |
-| `spotify_refresh_token` | Refresh Token enables Spotify polling and debug only shows configured/not configured. |
+| `settings_json` | Entered as single-line JSON; valid JSON applies settings; empty or malformed JSON falls back safely and reports a debug warning. |
+| `spotify_client_id` | Empty and dummy values can be entered; Client ID reaches Spotify polling settings without being logged. |
+| `spotify_refresh_token` | Empty and dummy values can be entered; debug only shows configured/not configured. Do not use real Refresh Tokens for public QA screenshots or logs because the input field can be visible. |
 | `lyrics_enabled` | Toggles the lyrics layer without breaking layout. |
 | `visualizer_enabled` | Enables/disables visualizer rendering and clears visualizer state when disabled. |
 | `performance_mode` | Accepts `low-power`, `standard`, and `high-effect`; invalid values keep safe defaults. |
 | `debug_enabled` | Toggles the debug panel without exposing token values. |
 | Wallpaper Engine audio listener | Real data uses `wallpaper-engine`; unavailable data falls back to mock or idle visualizer state. |
+
+RC-2 Wallpaper Engine acceptance should be based on UI property editing and applying the wallpaper to an actual display.
+`play-in-window` or other CLI property injection checks are useful diagnostics only and are not required for RC-2 pass/fail.
 
 Spotify real-account QA before release candidate:
 
@@ -388,6 +391,10 @@ The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 - `lyrics_enabled`
 - `performance_mode`
 - `debug_enabled`
+
+`spotify_client_id`, `spotify_refresh_token`, and `settings_json` are Wallpaper Engine `textinput` properties. Paste
+`settings_json` as single-line JSON because Wallpaper Engine Web Wallpaper user properties do not provide a textarea
+type.
 
 Check Rust crates:
 

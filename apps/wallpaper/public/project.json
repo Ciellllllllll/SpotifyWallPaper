@@ -5,17 +5,17 @@
     "properties": {
       "spotify_client_id": {
         "text": "Spotify Client ID",
-        "type": "text",
+        "type": "textinput",
         "value": ""
       },
       "spotify_refresh_token": {
         "text": "Spotify Refresh Token",
-        "type": "text",
+        "type": "textinput",
         "value": ""
       },
       "settings_json": {
         "text": "Settings JSON",
-        "type": "textarea",
+        "type": "textinput",
         "value": ""
       },
       "selected_preset": {
