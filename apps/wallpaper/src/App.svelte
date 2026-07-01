@@ -126,6 +126,23 @@
     !controlBusy;
   $: controlStatusText = controlError?.message ?? (playback.device?.isRestricted ? 'Current Spotify device is restricted.' : '');
 
+  const playbackButtonIcon = (kind: 'previous' | 'play' | 'pause' | 'next' | 'shuffle' | 'repeat'): string => {
+    switch (kind) {
+      case 'previous':
+        return 'M19 6 L10 12 L19 18 Z M8 6 H5 V18 H8 Z';
+      case 'play':
+        return 'M8 5 L19 12 L8 19 Z';
+      case 'pause':
+        return 'M7 5 H10 V19 H7 Z M14 5 H17 V19 H14 Z';
+      case 'next':
+        return 'M5 6 L14 12 L5 18 Z M16 6 H19 V18 H16 Z';
+      case 'shuffle':
+        return 'M4 7 H7.5 C10.5 7 11.8 17 16 17 H20 M17 14 L20 17 L17 20 M4 17 H7.5 C9 17 10 14 11 12 M15 7 H20 M17 4 L20 7 L17 10';
+      case 'repeat':
+        return 'M7 7 H17 C19 7 20 8.2 20 10 V11 M17 4 L20 7 L17 10 M17 17 H7 C5 17 4 15.8 4 14 V13 M7 20 L4 17 L7 14';
+    }
+  };
+
   $: {
     const nextSeed = playback.id ?? playback.albumName ?? playback.title;
     if (playback.albumImageUrl !== themeImageUrl || nextSeed !== themeSeed || settings.theme.mode === 'custom') {
@@ -432,7 +449,9 @@
 
   {#if settings.albumArt.visible && layoutItems.albumArt.enabled}
     <div class="layout-item album-frame" style={layoutStyle(layoutItems.albumArt)}>
-      <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
+      <div class:album-spinning={playback.isPlaying} class="album-disc">
+        <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
+      </div>
       {#if settings.seekbar.visible && settings.seekbar.style === 'album-ring'}
         <svg class="album-progress-ring" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="album-progress-track" cx="50" cy="50" r="47"></circle>
@@ -464,44 +483,57 @@
             <span>{playback.volumePercent}%</span>
           {/if}
         </div>
-        {#if settings.player.controlsEnabled}
+        {#if settings.player.controlsEnabled || settings.player.showShuffleRepeat}
           <div class="player-controls" aria-label="Spotify playback controls">
-            <button type="button" disabled={!canControlPlayback} aria-label="Previous track" on:click={() => void runPlaybackCommand({ type: 'previous' })}>
-              Prev
+            {#if settings.player.showShuffleRepeat}
+              <button
+                class="icon-control line-control"
+                type="button"
+                class:active-control={playback.shuffleState === true}
+                disabled={!canControlPlayback || playback.shuffleState === null}
+                aria-label="Toggle shuffle"
+                on:click={() => void runPlaybackCommand({ type: 'shuffle', state: playback.shuffleState !== true })}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d={playbackButtonIcon('shuffle')} />
+                </svg>
+              </button>
+            {/if}
+            <button class="icon-control" type="button" disabled={!canControlPlayback} aria-label="Previous track" on:click={() => void runPlaybackCommand({ type: 'previous' })}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d={playbackButtonIcon('previous')} />
+              </svg>
             </button>
             <button
+              class="icon-control"
               type="button"
               disabled={!canControlPlayback}
               aria-label={playback.isPlaying ? 'Pause playback' : 'Resume playback'}
               on:click={() => void runPlaybackCommand({ type: playback.isPlaying ? 'pause' : 'play' })}
             >
-              {playback.isPlaying ? 'Pause' : 'Play'}
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d={playbackButtonIcon(playback.isPlaying ? 'pause' : 'play')} />
+              </svg>
             </button>
-            <button type="button" disabled={!canControlPlayback} aria-label="Next track" on:click={() => void runPlaybackCommand({ type: 'next' })}>
-              Next
+            <button class="icon-control" type="button" disabled={!canControlPlayback} aria-label="Next track" on:click={() => void runPlaybackCommand({ type: 'next' })}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d={playbackButtonIcon('next')} />
+              </svg>
             </button>
-          </div>
-        {/if}
-        {#if settings.player.showShuffleRepeat}
-          <div class="player-controls secondary-controls" aria-label="Spotify playback modes">
-            <button
-              type="button"
-              class:active-control={playback.shuffleState === true}
-              disabled={!canControlPlayback || playback.shuffleState === null}
-              aria-label="Toggle shuffle"
-              on:click={() => void runPlaybackCommand({ type: 'shuffle', state: playback.shuffleState !== true })}
-            >
-              Shuffle
-            </button>
-            <button
-              type="button"
-              class:active-control={playback.repeatState === 'context'}
-              disabled={!canControlPlayback || playback.repeatState === null}
-              aria-label="Repeat context"
-              on:click={() => void runPlaybackCommand({ type: 'repeat', state: playback.repeatState === 'context' ? 'off' : 'context' })}
-            >
-              Repeat
-            </button>
+            {#if settings.player.showShuffleRepeat}
+              <button
+                class="icon-control line-control"
+                type="button"
+                class:active-control={playback.repeatState === 'context'}
+                disabled={!canControlPlayback || playback.repeatState === null}
+                aria-label="Repeat context"
+                on:click={() => void runPlaybackCommand({ type: 'repeat', state: playback.repeatState === 'context' ? 'off' : 'context' })}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d={playbackButtonIcon('repeat')} />
+                </svg>
+              </button>
+            {/if}
           </div>
         {/if}
         {#if settings.player.showVolume && playback.volumePercent !== null}
@@ -600,7 +632,7 @@
   .album-backdrop {
     position: absolute;
     inset: -8vh -8vw;
-    background-image: linear-gradient(rgb(12 14 18 / 38%), rgb(12 14 18 / 72%)), url('/mock/album-placeholder.svg');
+    background-image: linear-gradient(rgb(12 14 18 / 38%), rgb(12 14 18 / 72%)), url('../mock/album-placeholder.svg');
     background-size: cover;
     background-position: center;
     filter: blur(26px) saturate(1.2);
@@ -614,11 +646,25 @@
 
   .album-frame {
     aspect-ratio: 1;
-    border: 1px solid rgb(255 255 255 / 18%);
-    border-radius: 8px;
+    border-radius: 50%;
+    overflow: visible;
+    filter: drop-shadow(0 28px 80px rgb(0 0 0 / 42%));
+    animation: album-enter 780ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .album-disc {
+    position: relative;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 18%);
+    border-radius: 50%;
     background: rgb(255 255 255 / 8%);
-    box-shadow: 0 28px 80px rgb(0 0 0 / 42%);
+    transform-origin: center;
+    transition:
+      filter 420ms ease,
+      scale 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
   }
 
   .album-art {
@@ -628,11 +674,15 @@
     object-fit: cover;
   }
 
+  .album-spinning {
+    animation: album-spin 22s linear infinite;
+  }
+
   .album-progress-ring {
     position: absolute;
-    inset: 6px;
-    width: calc(100% - 12px);
-    height: calc(100% - 12px);
+    inset: 0;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
     transform: rotate(-90deg);
   }
@@ -655,12 +705,33 @@
   }
 
   .track-panel {
+    position: relative;
     min-width: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
     color: var(--theme-text, #f6f7fb);
     text-shadow: 0 2px 18px rgb(0 0 0 / calc(var(--theme-shadow-strength, 0.7) * 0.72));
+    animation: text-enter 680ms 90ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .track-panel::before {
+    content: '';
+    position: absolute;
+    left: -48px;
+    top: 13%;
+    width: 2px;
+    height: 74%;
+    border-radius: 999px;
+    background: linear-gradient(
+      180deg,
+      transparent,
+      color-mix(in srgb, var(--theme-accent, #f8d778) 72%, white 18%),
+      rgb(255 255 255 / 28%),
+      transparent
+    );
+    box-shadow: 0 0 22px color-mix(in srgb, var(--theme-accent, #f8d778) 48%, transparent);
+    opacity: 0.96;
   }
 
   .eyebrow {
@@ -713,23 +784,57 @@
 
   .player-controls {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
     margin-top: 12px;
   }
 
-  .secondary-controls {
-    margin-top: 8px;
-  }
-
   .player-controls button {
-    min-width: 64px;
-    height: 34px;
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    min-width: 44px;
+    height: 38px;
     border: 1px solid rgb(255 255 255 / 18%);
     border-radius: 8px;
     color: var(--theme-text, #f6f7fb);
     background: rgb(15 17 22 / 46%);
     cursor: pointer;
+    transition:
+      translate 180ms ease,
+      scale 180ms ease,
+      border-color 220ms ease,
+      background 220ms ease,
+      opacity 220ms ease;
+  }
+
+  .player-controls button svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .player-controls button:not(:disabled):hover {
+    translate: 0 -1px;
+    border-color: color-mix(in srgb, var(--theme-accent, #f8d778) 56%, white 10%);
+    background: rgb(255 255 255 / 12%);
+  }
+
+  .player-controls button:not(:disabled):active {
+    scale: 0.94;
+  }
+
+  .player-controls button:not(:disabled):hover svg {
+    transform: scale(1.08);
+  }
+
+  .line-control svg {
+    fill: none;
   }
 
   .player-controls button:disabled {
@@ -746,8 +851,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    width: min(100%, 320px);
-    margin-top: 12px;
+    width: min(100%, 340px);
+    margin-top: 14px;
     color: rgb(246 247 251 / 70%);
     font-size: 0.82rem;
   }
@@ -769,6 +874,7 @@
     height: 100%;
     border-radius: inherit;
     background: linear-gradient(90deg, var(--theme-primary, #9ee2bd), var(--theme-accent, #f8d778));
+    transition: width 380ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .seekbar-input {
@@ -798,9 +904,10 @@
 
   .status-line {
     width: min(100%, 420px);
-    margin: 14px 0 0;
+    margin: 10px 0 0;
     color: rgb(246 247 251 / 74%);
     font-size: 0.88rem;
+    line-height: 1.45;
   }
 
   .clock {
@@ -822,17 +929,29 @@
 
   .debug-toggle {
     position: absolute;
-    top: 18px;
-    right: 18px;
+    top: 22px;
+    right: 28px;
     z-index: 4;
-    min-width: 72px;
-    height: 36px;
+    width: 64px;
+    height: 34px;
+    padding: 0 10px;
+    overflow: hidden;
     border: 1px solid rgb(255 255 255 / 18%);
     border-radius: 8px;
     color: #f6f7fb;
     background: rgb(15 17 22 / 58%);
     backdrop-filter: blur(10px);
     cursor: pointer;
+    transition:
+      translate 180ms ease,
+      border-color 220ms ease,
+      background 220ms ease;
+  }
+
+  .debug-toggle:hover {
+    translate: 0 -1px;
+    border-color: rgb(255 255 255 / 32%);
+    background: rgb(15 17 22 / 72%);
   }
 
   .debug-panel {
@@ -846,6 +965,42 @@
     line-height: 1.7;
   }
 
+  @keyframes album-spin {
+    from {
+      rotate: 0deg;
+    }
+
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  @keyframes album-enter {
+    from {
+      opacity: 0;
+      scale: 0.94;
+      filter: drop-shadow(0 12px 38px rgb(0 0 0 / 20%));
+    }
+
+    to {
+      opacity: 1;
+      scale: 1;
+      filter: drop-shadow(0 28px 80px rgb(0 0 0 / 42%));
+    }
+  }
+
+  @keyframes text-enter {
+    from {
+      opacity: 0;
+      translate: 18px 0;
+    }
+
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
   @media (max-width: 720px) {
     .wallpaper {
       min-height: 620px;
@@ -853,6 +1008,17 @@
 
     h1 {
       font-size: clamp(2.4rem, 13vw, 4.8rem);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .album-spinning {
+      animation: none;
+    }
+
+    .album-frame,
+    .track-panel {
+      animation: none;
     }
   }
 </style>

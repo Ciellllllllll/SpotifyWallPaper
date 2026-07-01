@@ -15,7 +15,7 @@
   $: color = visualizerColor(settings.visualizer.colorMode, theme);
   $: mode = settings.visualizer.mode;
   $: ringOpacity = Math.min(0.86, 0.2 + activeFrame.peak * 0.72);
-  $: ringRadius = 60 + settings.visualizer.gap / 10;
+  $: ringRadius = mode === 'album-ring' ? 92 - settings.visualizer.lineWidth : 60 + settings.visualizer.gap / 10;
   $: spinDurationSeconds = 18 / Math.max(Math.abs(config.rotationSpeed), 0.08);
   $: anchorStyle = `${layoutStyle(albumItem)} --visualizer-color: ${color}; --visualizer-glow: ${config.glowStrength}; --visualizer-scale: ${settings.visualizer.radius}; --visualizer-spin-duration: ${spinDurationSeconds}s;`;
 </script>
@@ -29,7 +29,7 @@
     </div>
   {:else}
     <div class="layout-item visualizer-anchor" aria-hidden="true" style={anchorStyle}>
-      <svg class:slow-spin={settings.visualizer.idleAnimation} viewBox="-100 -100 200 200" role="presentation">
+      <svg class:slow-spin={settings.visualizer.idleAnimation && mode !== 'album-ring'} viewBox="-100 -100 200 200" role="presentation">
         {#if mode === 'album-ring'}
           <circle
             class="ring-base"
@@ -67,18 +67,22 @@
 <style>
   .visualizer-anchor {
     position: absolute;
+    overflow: hidden;
+    border-radius: 50%;
     pointer-events: none;
-    display: grid;
-    place-items: center;
+    z-index: 3;
     filter:
       drop-shadow(0 0 calc(18px * var(--visualizer-glow, 0.5)) var(--visualizer-color))
-      drop-shadow(0 18px 40px rgb(0 0 0 / 34%));
+      drop-shadow(0 16px 34px rgb(0 0 0 / 30%));
   }
 
   .visualizer-anchor svg {
-    width: calc((100% + 160px) * var(--visualizer-scale, 1.1));
-    height: calc((100% + 160px) * var(--visualizer-scale, 1.1));
-    overflow: visible;
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
   }
 
   .slow-spin {
@@ -94,12 +98,15 @@
   }
 
   .ring-base {
-    opacity: 0.18;
+    opacity: 0.22;
   }
 
   .ring-active {
-    transform: rotate(-90deg);
-    transform-origin: center;
+    transform: none;
+    transition:
+      stroke-dasharray 420ms cubic-bezier(0.22, 1, 0.36, 1),
+      stroke-width 420ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 420ms ease;
   }
 
   .visualizer-wave {
