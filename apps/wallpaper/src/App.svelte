@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import './app.css';
-  import type { NormalizedPlayback, SpotifyPlaybackError, WallpaperSettings, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+  import type { LayoutItem, NormalizedPlayback, SpotifyPlaybackError, WallpaperSettings, WallpaperTheme } from '@spotify-wallpaper/shared-types';
   import LyricsLayer from './lyrics/LyricsLayer.svelte';
   import { lyricDisplayState, parseLrc } from './lyrics/lrc';
   import { mockPlayback } from './mock/mockPlayback';
@@ -40,6 +40,7 @@
   let spotifySession: SpotifyPlaybackSession | null = null;
   let controlError: SpotifyPlaybackError | null = null;
   let controlBusy = false;
+  let displayMode: 'album-only' | 'album-details' = 'album-only';
 
   let now = new Date();
   let progressNowMs = Date.now();
@@ -110,6 +111,24 @@
   $: albumBackground = buildBackgroundStyle(settings, theme, playback.albumImageUrl);
   $: themeVariables = `${buildThemeCssVariables(theme)}; --theme-text: ${activeTextColor}`;
   $: layoutItems = settings.layout.items;
+  $: showAlbumDetails = displayMode === 'album-details';
+  $: albumOnlyAlbumItem = {
+    ...layoutItems.albumArt,
+    x: 50,
+    y: 48,
+    anchor: 'center',
+    zIndex: 2
+  } satisfies LayoutItem;
+  $: activeAlbumItem = showAlbumDetails ? layoutItems.albumArt : albumOnlyAlbumItem;
+  $: albumOnlySeekbarItem = {
+    ...layoutItems.seekbar,
+    x: 50,
+    y: 70.5,
+    anchor: 'center',
+    width: Math.min(440, albumOnlyAlbumItem.width + 40),
+    zIndex: 3
+  } satisfies LayoutItem;
+  $: activeSeekbarItem = showAlbumDetails ? layoutItems.seekbar : albumOnlySeekbarItem;
   $: parsedLyrics = parseLrc(settings.lyrics.sourceText);
   $: lyricsState = lyricDisplayState(
     parsedLyrics.lines,
@@ -438,18 +457,31 @@
   });
 </script>
 
-<main class="wallpaper" aria-label="Spotify wallpaper mock preview" style={themeVariables}>
+<main
+  class="wallpaper"
+  class:album-only-mode={!showAlbumDetails}
+  class:album-details-mode={showAlbumDetails}
+  aria-label="Spotify wallpaper mock preview"
+  style={themeVariables}
+>
   <div class="album-backdrop" aria-hidden="true" style={albumBackground}></div>
 
-  <VisualizerLayer frame={visualizerFrame} {settings} {theme} albumItem={layoutItems.albumArt} />
+  <VisualizerLayer frame={visualizerFrame} {settings} {theme} albumItem={activeAlbumItem} />
 
-  <LyricsLayer {settings} state={lyricsState} />
+  {#if showAlbumDetails}
+    <LyricsLayer {settings} state={lyricsState} />
+  {/if}
 
-  {#if settings.albumArt.visible && layoutItems.albumArt.enabled}
-    <div class="layout-item album-frame" style={layoutStyle(layoutItems.albumArt)}>
+  {#if settings.albumArt.visible && activeAlbumItem.enabled}
+    <div class="layout-item album-frame" style={layoutStyle(activeAlbumItem)}>
       <div class:album-spinning={playback.isPlaying} class="album-disc">
         <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
       </div>
+      {#if !showAlbumDetails}
+        <button class="details-toggle" type="button" aria-label="Show album details" on:click={() => (displayMode = 'album-details')}>
+          &gt;
+        </button>
+      {/if}
       {#if settings.seekbar.visible && settings.seekbar.style === 'album-ring'}
         <svg class="album-progress-ring" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="album-progress-track" cx="50" cy="50" r="47"></circle>
@@ -465,7 +497,7 @@
     </div>
   {/if}
 
-  {#if settings.text.visible && layoutItems.trackText.enabled}
+  {#if showAlbumDetails && settings.text.visible && layoutItems.trackText.enabled}
     <section class="layout-item track-panel" style={layoutStyle(layoutItems.trackText)}>
       <p class="eyebrow">{playback.isPlaying ? 'Playing' : 'Paused'}</p>
       <h1>{playback.title}</h1>
@@ -548,8 +580,8 @@
     </section>
   {/if}
 
-  {#if settings.seekbar.visible && settings.seekbar.style === 'line' && layoutItems.seekbar.enabled}
-    <section class="layout-item seekbar-panel" style={layoutStyle(layoutItems.seekbar)} aria-label="Playback progress">
+  {#if settings.seekbar.visible && settings.seekbar.style === 'line' && activeSeekbarItem.enabled}
+    <section class="layout-item seekbar-panel" style={layoutStyle(activeSeekbarItem)} aria-label="Playback progress">
       <input
         class="seekbar-input"
         type="range"
@@ -570,7 +602,7 @@
     </section>
   {/if}
 
-  {#if settings.clock.enabled && layoutItems.clock.enabled}
+  {#if showAlbumDetails && settings.clock.enabled && layoutItems.clock.enabled}
     <div class="layout-item clock" style={clockStyle} aria-label="Clock">
       <span>{clock}</span>
       {#if clockDate}
@@ -635,6 +667,13 @@
     overflow: visible;
     filter: drop-shadow(0 28px 80px rgb(0 0 0 / 42%));
     animation: album-enter 780ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transition:
+      left 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      top 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      width 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      height 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      filter 420ms ease;
   }
 
   .album-disc {
@@ -661,6 +700,42 @@
 
   .album-spinning {
     animation: album-spin 22s linear infinite;
+  }
+
+  .details-toggle {
+    position: absolute;
+    top: 7%;
+    right: 3%;
+    z-index: 4;
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border: 1px solid rgb(255 255 255 / 18%);
+    border-radius: 999px;
+    color: rgb(246 247 251 / 88%);
+    background: rgb(10 12 16 / 38%);
+    box-shadow: 0 16px 34px rgb(0 0 0 / 26%);
+    backdrop-filter: blur(14px);
+    cursor: pointer;
+    font-size: 1.6rem;
+    font-weight: 500;
+    line-height: 1;
+    transition:
+      opacity 220ms ease,
+      transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 220ms ease,
+      background 220ms ease;
+  }
+
+  .details-toggle:hover {
+    transform: translateX(2px) scale(1.04);
+    border-color: color-mix(in srgb, var(--theme-accent, #f8d778) 46%, white 12%);
+    background: rgb(255 255 255 / 12%);
+  }
+
+  .details-toggle:active {
+    transform: translateX(2px) scale(0.96);
   }
 
   .album-progress-ring {
@@ -699,6 +774,9 @@
     color: var(--theme-text, #f6f7fb);
     text-shadow: 0 2px 18px rgb(0 0 0 / calc(var(--theme-shadow-strength, 0.7) * 0.72));
     animation: text-enter 680ms 90ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transition:
+      opacity 360ms ease,
+      transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .track-panel::before {
@@ -880,6 +958,16 @@
     background: rgb(255 255 255 / 16%);
   }
 
+  .seekbar-panel {
+    transition:
+      left 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      top 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      width 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      height 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 320ms ease;
+  }
+
   .seekbar-fill {
     height: 100%;
     border-radius: inherit;
@@ -1004,6 +1092,13 @@
     .album-frame,
     .track-panel {
       animation: none;
+    }
+
+    .album-frame,
+    .seekbar-panel,
+    .details-toggle,
+    .track-panel {
+      transition: none;
     }
   }
 </style>
