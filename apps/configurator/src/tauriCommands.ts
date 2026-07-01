@@ -8,8 +8,14 @@ export type SpotifyOAuthResult =
   | { ok: true; refreshToken: string; expiresIn: number | null }
   | { ok: false; reason: 'unavailable' | 'invalid' | 'failed'; message: string };
 
+export type SpotifyAuthorizeResult = SpotifyOAuthResult;
+
 export type SpotifyAuthStartResult =
   | { ok: true; authUrl: string; state: string }
+  | { ok: false; reason: 'unavailable' | 'invalid' | 'failed'; message: string };
+
+export type ExternalOpenResult =
+  | { ok: true }
   | { ok: false; reason: 'unavailable' | 'invalid' | 'failed'; message: string };
 
 export const writeRainmeterJson = async (outputPath: string, payloadJson: string): Promise<RainmeterWriteResult> => {
@@ -46,6 +52,42 @@ export const startSpotifyPkceAuth = async (clientId: string, redirectUri: string
       redirectUri: redirectUri.trim()
     });
     return { ok: true, authUrl: response.auth_url, state: response.state };
+  } catch (error) {
+    return commandError(error);
+  }
+};
+
+export const authorizeSpotifyPkce = async (
+  clientId: string,
+  redirectUri: string
+): Promise<SpotifyAuthorizeResult> => {
+  if (!clientId.trim() || !redirectUri.trim()) {
+    return { ok: false, reason: 'invalid', message: 'Client ID and redirect URI are required.' };
+  }
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const response = await invoke<{ refresh_token: string; expires_in?: number }>('authorize_spotify_pkce', {
+      clientId: clientId.trim(),
+      redirectUri: redirectUri.trim()
+    });
+    return { ok: true, refreshToken: response.refresh_token, expiresIn: response.expires_in ?? null };
+  } catch (error) {
+    return commandError(error);
+  }
+};
+
+export const openExternalUrl = async (url: string): Promise<ExternalOpenResult> => {
+  if (!url.trim()) {
+    return { ok: false, reason: 'invalid', message: 'Authorization URL is unavailable.' };
+  }
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('open_external_url', {
+      url: url.trim()
+    });
+    return { ok: true };
   } catch (error) {
     return commandError(error);
   }

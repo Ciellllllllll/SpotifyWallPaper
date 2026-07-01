@@ -36,7 +36,7 @@ export const initVisualCore = (): void => {
   }
 
   loadStarted = true;
-  void dynamicImport('/wasm/spotify_wallpaper_visual_core.js')
+  void dynamicImport(visualCoreModuleUrl())
     .then(async (module: VisualCoreModule) => {
       if (module.default) {
         await module.default();
@@ -52,6 +52,11 @@ const dynamicImport = (specifier: string): Promise<VisualCoreModule> => {
   const loader = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<VisualCoreModule>;
   return loader(specifier);
 };
+
+const visualCoreModuleUrl = (): string =>
+  import.meta.url.includes('/src/')
+    ? '/wasm/spotify_wallpaper_visual_core.js'
+    : new URL('../wasm/spotify_wallpaper_visual_core.js', import.meta.url).href;
 
 export const visualCoreStatus = (): 'wasm' | 'typescript-fallback' => (coreModule ? 'wasm' : 'typescript-fallback');
 

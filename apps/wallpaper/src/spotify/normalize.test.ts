@@ -65,7 +65,7 @@ describe('normalizeSpotifyPlayback', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.value.playback.albumImageUrl).toBe('/mock/album-placeholder.svg');
+    expect(result.value.playback.albumImageUrl).toBe('mock/album-placeholder.svg');
     expect(result.value.playback.progressMs).toBe(0);
   });
 });

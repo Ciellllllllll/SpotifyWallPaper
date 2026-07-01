@@ -40,6 +40,36 @@ npm run dev -w @spotify-wallpaper/wallpaper
 
 Open `http://127.0.0.1:5173/`. Without Spotify settings, the wallpaper stays in browser mock mode.
 
+Spotify Refresh Tokens can be generated with the static GitHub Pages auth page. The page uses PKCE in the browser,
+does not use a Client Secret, and does not store Refresh Tokens in localStorage, sessionStorage, cookies, GitHub, or
+any backend service.
+
+```sh
+npm run dev -w @spotify-wallpaper/spotify-auth
+```
+
+For GitHub Pages, build and publish `apps/spotify-auth/dist` under `/spotify-auth/`:
+
+```sh
+npm run build -w @spotify-wallpaper/spotify-auth
+```
+
+To prefill your public Spotify Client ID in the auth page, build with:
+
+```sh
+$env:VITE_SPOTIFY_CLIENT_ID='your-public-client-id'
+npm run build -w @spotify-wallpaper/spotify-auth
+```
+
+Register this Redirect URI in the Spotify Developer Dashboard, replacing owner and repo with your Pages URL:
+
+```text
+https://<owner>.github.io/<repo>/spotify-auth/callback
+```
+
+Open the auth page, authorize Spotify, copy the displayed Refresh Token, then paste it into Wallpaper Engine's
+`spotify_refresh_token` property. Do not share screenshots or recordings that show the token.
+
 For local Spotify MVP testing, explicitly provide settings JSON in the browser console and reload:
 
 ```js
@@ -387,8 +417,28 @@ The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 - `spotify_refresh_token`
 - `settings_json`
 - `selected_preset`
+- `background_mode`
+- `theme_mode`
+- `album_art_visible`
+- `track_text_visible`
+- `player_visible`
+- `player_controls_enabled`
+- `player_show_device`
+- `player_show_volume`
+- `player_show_shuffle_repeat`
+- `seekbar_visible`
+- `seekbar_style`
 - `visualizer_enabled`
+- `visualizer_mode`
 - `lyrics_enabled`
+- `lyrics_mode`
+- `transitions_enabled`
+- `transition_preset`
+- `clock_enabled`
+- `clock_hour12`
+- `clock_show_seconds`
+- `clock_show_date`
+- `clock_show_weekday`
 - `performance_mode`
 - `debug_enabled`
 

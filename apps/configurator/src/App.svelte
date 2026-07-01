@@ -9,7 +9,9 @@
   } from './settingsModel';
   import { buildRainmeterOutput, exportRainmeterJson } from './rainmeter/rainmeterExport';
   import {
+    authorizeSpotifyPkce,
     exchangeSpotifyCallback,
+    openExternalUrl,
     startRainmeterScheduler,
     startSpotifyPkceAuth,
     stopRainmeterScheduler,
@@ -24,6 +26,7 @@
   let rainmeterStatus = '';
   let spotifyRedirectUri = 'http://127.0.0.1:8899/callback';
   let spotifyCallbackUrl = '';
+  let spotifyAuthUrl = '';
   let oauthStatus = '';
   let rainmeterSchedulerRunning = false;
 
@@ -101,15 +104,33 @@
   };
 
   const startSpotifyAuth = async () => {
-    oauthStatus = '';
-    const result = await startSpotifyPkceAuth(draft.spotifyClientId, spotifyRedirectUri);
-    if (!result.ok) {
-      oauthStatus = result.message;
+    oauthStatus = 'Opening browser; waiting for Spotify authorization...';
+    spotifyAuthUrl = '';
+    const automatic = await authorizeSpotifyPkce(draft.spotifyClientId, spotifyRedirectUri);
+    if (automatic.ok) {
+      update('spotifyRefreshToken', automatic.refreshToken);
+      update('includeRefreshToken', false);
+      oauthStatus = 'Refresh token saved locally; export still excludes token by default';
       return;
     }
 
-    oauthStatus = 'Spotify authorization opened';
-    window.open(result.authUrl, '_blank', 'noopener,noreferrer');
+    const result = await startSpotifyPkceAuth(draft.spotifyClientId, spotifyRedirectUri);
+    if (!result.ok) {
+      oauthStatus = automatic.message;
+      return;
+    }
+
+    spotifyAuthUrl = result.authUrl;
+    const opened = await openExternalUrl(result.authUrl);
+    if (opened.ok) {
+      oauthStatus = 'Spotify authorization opened';
+      return;
+    }
+
+    const popup = window.open(result.authUrl, '_blank', 'noopener,noreferrer');
+    oauthStatus = popup
+      ? `${automatic.message} Manual authorization opened.`
+      : `${automatic.message} Copy the authorization URL below and open it in your browser.`;
   };
 
   const exchangeCallback = async () => {
@@ -182,6 +203,12 @@
           <button type="button" on:click={startSpotifyAuth}>Start Auth</button>
           <span>{oauthStatus}</span>
         </div>
+        {#if spotifyAuthUrl}
+          <label>
+            <span>Authorization URL</span>
+            <input readonly type="password" value={spotifyAuthUrl} autocomplete="off" />
+          </label>
+        {/if}
         <label>
           <span>Callback URL</span>
           <input

@@ -2,7 +2,7 @@ import type { NormalizedPlayback, PlaybackDeviceState, SpotifyPlaybackError } fr
 import { itemNullError } from './errors';
 import type { SpotifyDevice, SpotifyImage, SpotifyPlaybackResponse, SpotifyResult } from './types';
 
-const FALLBACK_ALBUM_IMAGE = '/mock/album-placeholder.svg';
+const FALLBACK_ALBUM_IMAGE = 'mock/album-placeholder.svg';
 
 export const normalizeSpotifyPlayback = (
   raw: SpotifyPlaybackResponse,

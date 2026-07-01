@@ -41,6 +41,8 @@
   let controlError: SpotifyPlaybackError | null = null;
   let controlBusy = false;
   let displayMode: 'album-only' | 'album-details' = 'album-only';
+  let detailHoverUiVisible = false;
+  let detailHoverHideTimeout: number | null = null;
 
   let now = new Date();
   let progressNowMs = Date.now();
@@ -81,6 +83,8 @@
       )
     : playback.progressMs;
   $: progressPercent = playback.durationMs > 0 ? Math.min(100, (displayedProgressMs / playback.durationMs) * 100) : 0;
+  $: displayedProgressTime = playback.durationMs > 0 ? formatTime(displayedProgressMs) : '--:--';
+  $: displayedDurationTime = playback.durationMs > 0 ? formatTime(playback.durationMs) : '--:--';
   $: artists = playback.artists.join(', ');
   $: clock = now.toLocaleTimeString([], {
     hour: '2-digit',
@@ -129,6 +133,9 @@
     zIndex: 3
   } satisfies LayoutItem;
   $: activeSeekbarItem = showAlbumDetails ? layoutItems.seekbar : albumOnlySeekbarItem;
+  $: seekbarPanelStyle = `${layoutStyle(activeSeekbarItem)}${
+    showAlbumDetails && !detailHoverUiVisible ? '; opacity: 0; pointer-events: none' : ''
+  }`;
   $: parsedLyrics = parseLrc(settings.lyrics.sourceText);
   $: lyricsState = lyricDisplayState(
     parsedLyrics.lines,
@@ -367,6 +374,24 @@
     void runPlaybackCommand({ type: 'volume', volumePercent });
   };
 
+  const showDetailHoverUi = () => {
+    if (detailHoverHideTimeout !== null) {
+      window.clearTimeout(detailHoverHideTimeout);
+      detailHoverHideTimeout = null;
+    }
+    detailHoverUiVisible = true;
+  };
+
+  const hideDetailHoverUi = () => {
+    if (detailHoverHideTimeout !== null) {
+      window.clearTimeout(detailHoverHideTimeout);
+    }
+    detailHoverHideTimeout = window.setTimeout(() => {
+      detailHoverUiVisible = false;
+      detailHoverHideTimeout = null;
+    }, 140);
+  };
+
   const applyRuntimeSettings = (nextSettings: WallpaperSettings, source: string, warning: string | null) => {
     settings = nextSettings;
     settingsWarning = warning;
@@ -446,6 +471,9 @@
     if (progressInterval !== null) {
       window.clearInterval(progressInterval);
     }
+    if (detailHoverHideTimeout !== null) {
+      window.clearTimeout(detailHoverHideTimeout);
+    }
     clearTransition();
     if (visualizerIdleInterval !== null) {
       window.clearInterval(visualizerIdleInterval);
@@ -461,6 +489,7 @@
   class="wallpaper"
   class:album-only-mode={!showAlbumDetails}
   class:album-details-mode={showAlbumDetails}
+  class:detail-hover-ui-visible={detailHoverUiVisible}
   aria-label="Spotify wallpaper mock preview"
   style={themeVariables}
 >
@@ -473,7 +502,16 @@
   {/if}
 
   {#if settings.albumArt.visible && activeAlbumItem.enabled}
-    <div class="layout-item album-frame" style={layoutStyle(activeAlbumItem)}>
+    <div
+      class="layout-item album-frame"
+      style={layoutStyle(activeAlbumItem)}
+      role="group"
+      aria-label="Album art and playback controls"
+      on:mouseenter={showDetailHoverUi}
+      on:mouseleave={hideDetailHoverUi}
+      on:focusin={showDetailHoverUi}
+      on:focusout={hideDetailHoverUi}
+    >
       <div class:album-spinning={playback.isPlaying} class="album-disc">
         <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
       </div>
@@ -498,93 +536,141 @@
   {/if}
 
   {#if showAlbumDetails && settings.text.visible && layoutItems.trackText.enabled}
-    <section class="layout-item track-panel" style={layoutStyle(layoutItems.trackText)}>
+    <section
+      class="layout-item track-panel"
+      style={layoutStyle(layoutItems.trackText)}
+      role="group"
+      aria-label="Track details"
+      on:mouseenter={showDetailHoverUi}
+      on:mouseleave={hideDetailHoverUi}
+      on:focusin={showDetailHoverUi}
+      on:focusout={hideDetailHoverUi}
+    >
       <button class="details-toggle details-close-toggle" type="button" aria-label="Show album only" on:click={() => (displayMode = 'album-only')}>
         ×
       </button>
-      <p class="eyebrow">{playback.isPlaying ? 'Playing' : 'Paused'}</p>
+      <p class="eyebrow">{playback.isPlaying ? 'Now Playing' : 'Paused'}</p>
       <h1>{playback.title}</h1>
       <p class="artists">{artists}</p>
       <p class="album">{playback.albumName}</p>
-      {#if settings.player.visible}
-        <div class="hover-controls">
-          {#if settings.player.controlsEnabled || settings.player.showShuffleRepeat}
-            <div class="player-controls" aria-label="Spotify playback controls">
-              {#if settings.player.showShuffleRepeat}
-                <button
-                  class="icon-control line-control"
-                  type="button"
-                  class:active-control={playback.shuffleState === true}
-                  disabled={!canControlPlayback || playback.shuffleState === null}
-                  aria-label="Toggle shuffle"
-                  on:click={() => void runPlaybackCommand({ type: 'shuffle', state: playback.shuffleState !== true })}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d={playbackButtonIcon('shuffle')} />
-                  </svg>
-                </button>
-              {/if}
-              <button class="icon-control" type="button" disabled={!canControlPlayback} aria-label="Previous track" on:click={() => void runPlaybackCommand({ type: 'previous' })}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d={playbackButtonIcon('previous')} />
-                </svg>
-              </button>
-              <button
-                class="icon-control"
-                type="button"
-                disabled={!canControlPlayback}
-                aria-label={playback.isPlaying ? 'Pause playback' : 'Resume playback'}
-                on:click={() => void runPlaybackCommand({ type: playback.isPlaying ? 'pause' : 'play' })}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d={playbackButtonIcon(playback.isPlaying ? 'pause' : 'play')} />
-                </svg>
-              </button>
-              <button class="icon-control" type="button" disabled={!canControlPlayback} aria-label="Next track" on:click={() => void runPlaybackCommand({ type: 'next' })}>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d={playbackButtonIcon('next')} />
-                </svg>
-              </button>
-              {#if settings.player.showShuffleRepeat}
-                <button
-                  class="icon-control line-control"
-                  type="button"
-                  class:active-control={playback.repeatState === 'context'}
-                  disabled={!canControlPlayback || playback.repeatState === null}
-                  aria-label="Repeat context"
-                  on:click={() => void runPlaybackCommand({ type: 'repeat', state: playback.repeatState === 'context' ? 'off' : 'context' })}
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d={playbackButtonIcon('repeat')} />
-                  </svg>
-                </button>
-              {/if}
-            </div>
+    </section>
+  {/if}
+
+  {#if showAlbumDetails && settings.player.visible}
+    <section
+      class="control-dock"
+      role="group"
+      aria-label="Playback control dock"
+      on:mouseenter={showDetailHoverUi}
+      on:mouseleave={hideDetailHoverUi}
+      on:focusin={showDetailHoverUi}
+      on:focusout={hideDetailHoverUi}
+    >
+      {#if settings.player.controlsEnabled || settings.player.showShuffleRepeat}
+        <div class="player-controls" aria-label="Spotify playback controls">
+          {#if settings.player.showShuffleRepeat}
+            <button
+              class="icon-control line-control"
+              type="button"
+              class:active-control={playback.shuffleState === true}
+              disabled={!canControlPlayback || playback.shuffleState === null}
+              aria-label="Toggle shuffle"
+              on:click={() => void runPlaybackCommand({ type: 'shuffle', state: playback.shuffleState !== true })}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d={playbackButtonIcon('shuffle')} />
+              </svg>
+            </button>
           {/if}
-          {#if settings.player.showVolume && playback.volumePercent !== null}
-            <label class="volume-control">
-              <span>Volume</span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={playback.volumePercent}
-                disabled={!canControlPlayback}
-                aria-label="Spotify volume"
-                on:change={(event) => setVolume(event.currentTarget.value)}
-              />
-            </label>
+          <button class="icon-control" type="button" disabled={!canControlPlayback} aria-label="Previous track" on:click={() => void runPlaybackCommand({ type: 'previous' })}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d={playbackButtonIcon('previous')} />
+            </svg>
+          </button>
+          <button
+            class="icon-control"
+            type="button"
+            disabled={!canControlPlayback}
+            aria-label={playback.isPlaying ? 'Pause playback' : 'Resume playback'}
+            on:click={() => void runPlaybackCommand({ type: playback.isPlaying ? 'pause' : 'play' })}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d={playbackButtonIcon(playback.isPlaying ? 'pause' : 'play')} />
+            </svg>
+          </button>
+          <button class="icon-control" type="button" disabled={!canControlPlayback} aria-label="Next track" on:click={() => void runPlaybackCommand({ type: 'next' })}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d={playbackButtonIcon('next')} />
+            </svg>
+          </button>
+          {#if settings.player.showShuffleRepeat}
+            <button
+              class="icon-control line-control"
+              type="button"
+              class:active-control={playback.repeatState === 'context'}
+              disabled={!canControlPlayback || playback.repeatState === null}
+              aria-label="Repeat context"
+              on:click={() => void runPlaybackCommand({ type: 'repeat', state: playback.repeatState === 'context' ? 'off' : 'context' })}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d={playbackButtonIcon('repeat')} />
+              </svg>
+            </button>
           {/if}
-          {#if controlStatusText}
-            <span class="control-status-dot" aria-label={controlStatusText}></span>
-          {/if}
+        </div>
+      {/if}
+      {#if settings.player.showVolume && playback.volumePercent !== null}
+        <label class="volume-control">
+          <span>Volume</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={playback.volumePercent}
+            disabled={!canControlPlayback}
+            aria-label="Spotify volume"
+            on:change={(event) => setVolume(event.currentTarget.value)}
+          />
+        </label>
+      {/if}
+      {#if controlStatusText}
+        <span class="control-status-dot" aria-label={controlStatusText}></span>
+      {/if}
+      {#if settings.seekbar.visible && settings.seekbar.style === 'line' && activeSeekbarItem.enabled}
+        <div class="detail-hover-seekbar" aria-label="Playback progress">
+          <input
+            class="seekbar-input"
+            type="range"
+            min="0"
+            max="100"
+            value={progressPercent}
+            disabled={!canControlPlayback || playback.durationMs <= 0}
+            aria-label="Seek playback position"
+            on:change={(event) => seekToPercent(event.currentTarget.value)}
+          />
+          <div class="seekbar" aria-hidden="true">
+            <div class="seekbar-fill" style={`width: ${progressPercent}%`}></div>
+          </div>
+          <div class="time-row">
+            <span>{displayedProgressTime}</span>
+            <span>{displayedDurationTime}</span>
+          </div>
         </div>
       {/if}
     </section>
   {/if}
 
-  {#if settings.seekbar.visible && settings.seekbar.style === 'line' && activeSeekbarItem.enabled}
-    <section class="layout-item seekbar-panel" style={layoutStyle(activeSeekbarItem)} aria-label="Playback progress">
+  {#if !showAlbumDetails && settings.seekbar.visible && settings.seekbar.style === 'line' && activeSeekbarItem.enabled}
+    <section
+      class="layout-item seekbar-panel"
+      style={seekbarPanelStyle}
+      role="group"
+      aria-label="Playback progress"
+      on:mouseenter={showDetailHoverUi}
+      on:mouseleave={hideDetailHoverUi}
+      on:focusin={showDetailHoverUi}
+      on:focusout={hideDetailHoverUi}
+    >
       <input
         class="seekbar-input"
         type="range"
@@ -599,8 +685,8 @@
         <div class="seekbar-fill" style={`width: ${progressPercent}%`}></div>
       </div>
       <div class="time-row">
-        <span>{formatTime(displayedProgressMs)}</span>
-        <span>{formatTime(playback.durationMs)}</span>
+        <span>{displayedProgressTime}</span>
+        <span>{displayedDurationTime}</span>
       </div>
     </section>
   {/if}
@@ -839,7 +925,7 @@
   }
 
   .eyebrow {
-    margin: 0 0 14px;
+    margin: 0 0 16px;
     color: var(--theme-accent, #96d0b4);
     font-size: clamp(0.78rem, 1.2vw, 0.9rem);
     font-weight: 700;
@@ -851,32 +937,43 @@
     display: block;
     width: 100%;
     max-width: min(100%, 680px);
-    max-height: 2.05em;
+    max-height: 3.05em;
     overflow: hidden;
     overflow-wrap: anywhere;
     word-break: normal;
     white-space: normal;
     font-size: clamp(2.2rem, 4.7vw, 4.6rem);
-    line-height: 1;
+    line-height: 1.04;
     mask-image: linear-gradient(180deg, #000 94%, rgb(0 0 0 / 0) 100%);
+    transition: max-height 240ms ease;
+  }
+
+  .detail-hover-ui-visible h1 {
+    max-height: 2.05em;
   }
 
   .artists {
-    margin: 22px 0 0;
+    margin: 16px 0 0;
     max-width: min(100%, 540px);
     overflow: hidden;
     overflow-wrap: anywhere;
     color: rgb(246 247 251 / 84%);
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
     font-size: clamp(1rem, 1.8vw, 1.35rem);
     font-weight: 600;
+    transition: max-height 240ms ease;
+  }
+
+  .detail-hover-ui-visible .artists {
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   .album {
-    margin: 10px 0 0;
+    margin: 16px 0 0;
     max-width: min(100%, 520px);
     overflow: hidden;
     overflow-wrap: anywhere;
@@ -886,34 +983,36 @@
     white-space: nowrap;
   }
 
-  .hover-controls {
+  .control-dock {
     position: absolute;
-    top: 220px;
-    left: 0;
+    bottom: clamp(180px, 19vh, 230px);
+    left: 50%;
+    z-index: 4;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    align-items: center;
+    gap: 12px;
+    width: min(440px, calc(100vw - 48px));
     opacity: 0;
     pointer-events: none;
-    transform: translateY(8px);
+    transform: translate(-50%, 8px);
     transition:
       opacity 240ms ease,
       transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .track-panel:hover .hover-controls,
-  .track-panel:focus-within .hover-controls {
+  .detail-hover-ui-visible .control-dock {
     opacity: 1;
     pointer-events: auto;
-    transform: translateY(0);
+    transform: translate(-50%, 0);
   }
 
   .player-controls {
     display: flex;
     flex-wrap: nowrap;
+    justify-content: center;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 0;
   }
 
   .player-controls button {
@@ -988,6 +1087,11 @@
   .volume-control input {
     width: 100%;
     accent-color: var(--theme-accent, #f8d778);
+  }
+
+  .detail-hover-seekbar {
+    position: relative;
+    width: min(100%, 440px);
   }
 
   .seekbar {
