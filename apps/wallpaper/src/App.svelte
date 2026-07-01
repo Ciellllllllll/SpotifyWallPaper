@@ -477,11 +477,15 @@
       <div class:album-spinning={playback.isPlaying} class="album-disc">
         <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
       </div>
-      {#if !showAlbumDetails}
-        <button class="details-toggle" type="button" aria-label="Show album details" on:click={() => (displayMode = 'album-details')}>
-          &gt;
-        </button>
-      {/if}
+      <button
+        class="details-toggle"
+        class:details-toggle-back={showAlbumDetails}
+        type="button"
+        aria-label={showAlbumDetails ? 'Show album only' : 'Show album details'}
+        on:click={() => (displayMode = showAlbumDetails ? 'album-only' : 'album-details')}
+      >
+        {showAlbumDetails ? '<' : '>'}
+      </button>
       {#if settings.seekbar.visible && settings.seekbar.style === 'album-ring'}
         <svg class="album-progress-ring" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="album-progress-track" cx="50" cy="50" r="47"></circle>
@@ -729,48 +733,38 @@
     background: transparent;
     box-shadow: none;
     cursor: pointer;
-    font-size: 1.6rem;
-    font-weight: 500;
+    font-size: clamp(2rem, 5vw, 3.8rem);
+    font-weight: 300;
     isolation: isolate;
     line-height: 1;
     pointer-events: auto;
+    text-shadow: 0 10px 24px rgb(0 0 0 / 42%);
     transition:
+      color 220ms ease,
       opacity 220ms ease,
       transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .details-toggle::before {
-    content: '';
-    position: absolute;
-    inset: 13px;
-    z-index: -1;
-    border: 1px solid rgb(255 255 255 / 18%);
-    border-radius: 999px;
-    background: rgb(10 12 16 / 38%);
-    box-shadow: 0 16px 34px rgb(0 0 0 / 26%);
-    backdrop-filter: blur(14px);
-    transition:
-      transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 220ms ease,
-      background 220ms ease;
+  .details-toggle-back {
+    right: auto;
+    left: calc(3% - 13px);
   }
 
   .details-toggle:hover {
-    transform: translateX(2px);
-  }
-
-  .details-toggle:hover::before {
-    transform: scale(1.04);
-    border-color: color-mix(in srgb, var(--theme-accent, #f8d778) 46%, white 12%);
-    background: rgb(255 255 255 / 12%);
+    color: color-mix(in srgb, var(--theme-accent, #f8d778) 62%, white 28%);
+    transform: translateX(2px) scale(1.06);
   }
 
   .details-toggle:active {
-    transform: translateX(2px);
+    transform: translateX(2px) scale(0.94);
   }
 
-  .details-toggle:active::before {
-    transform: scale(0.96);
+  .details-toggle-back:hover {
+    transform: translateX(-2px) scale(1.06);
+  }
+
+  .details-toggle-back:active {
+    transform: translateX(-2px) scale(0.94);
   }
 
   .album-progress-ring {
@@ -1133,7 +1127,6 @@
     .album-frame,
     .seekbar-panel,
     .details-toggle,
-    .details-toggle::before,
     .track-panel {
       transition: none;
     }
