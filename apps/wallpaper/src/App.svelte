@@ -477,15 +477,11 @@
       <div class:album-spinning={playback.isPlaying} class="album-disc">
         <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
       </div>
-      <button
-        class="details-toggle"
-        class:details-toggle-back={showAlbumDetails}
-        type="button"
-        aria-label={showAlbumDetails ? 'Show album only' : 'Show album details'}
-        on:click={() => (displayMode = showAlbumDetails ? 'album-only' : 'album-details')}
-      >
-        {showAlbumDetails ? '<' : '>'}
-      </button>
+      {#if !showAlbumDetails}
+        <button class="details-toggle" type="button" aria-label="Show album details" on:click={() => (displayMode = 'album-details')}>
+          &gt;
+        </button>
+      {/if}
       {#if settings.seekbar.visible && settings.seekbar.style === 'album-ring'}
         <svg class="album-progress-ring" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="album-progress-track" cx="50" cy="50" r="47"></circle>
@@ -503,6 +499,9 @@
 
   {#if showAlbumDetails && settings.text.visible && layoutItems.trackText.enabled}
     <section class="layout-item track-panel" style={layoutStyle(layoutItems.trackText)}>
+      <button class="details-toggle details-close-toggle" type="button" aria-label="Show album only" on:click={() => (displayMode = 'album-only')}>
+        ×
+      </button>
       <p class="eyebrow">{playback.isPlaying ? 'Playing' : 'Paused'}</p>
       <h1>{playback.title}</h1>
       <p class="artists">{artists}</p>
@@ -749,9 +748,17 @@
   }
 
   .album-frame:hover .details-toggle,
+  .track-panel:hover .details-close-toggle,
   .details-toggle:focus-visible {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  .details-close-toggle {
+    top: 0;
+    right: 0;
+    z-index: 14;
+    font-size: clamp(1.8rem, 3.1vw, 2.7rem);
   }
 
   .details-toggle:hover {
@@ -763,12 +770,12 @@
     transform: translateX(2px) scale(0.94);
   }
 
-  .details-toggle-back:hover {
-    transform: translateX(2px) scale(1.06);
+  .details-close-toggle:hover {
+    transform: scale(1.06);
   }
 
-  .details-toggle-back:active {
-    transform: translateX(2px) scale(0.94);
+  .details-close-toggle:active {
+    transform: scale(0.94);
   }
 
   .album-progress-ring {
