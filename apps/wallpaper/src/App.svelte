@@ -639,6 +639,8 @@
 
 <style>
   .wallpaper {
+    --ease-out-circ: cubic-bezier(0, 0.55, 0.45, 1);
+
     position: relative;
     width: 100vw;
     height: 100vh;
@@ -672,11 +674,11 @@
     filter: drop-shadow(0 28px 80px rgb(0 0 0 / 42%));
     animation: album-enter 780ms cubic-bezier(0.22, 1, 0.36, 1) both;
     transition:
-      left 560ms cubic-bezier(0.22, 1, 0.36, 1),
-      top 560ms cubic-bezier(0.22, 1, 0.36, 1),
-      width 560ms cubic-bezier(0.22, 1, 0.36, 1),
-      height 560ms cubic-bezier(0.22, 1, 0.36, 1),
-      transform 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      left 560ms var(--ease-out-circ),
+      top 560ms var(--ease-out-circ),
+      width 560ms var(--ease-out-circ),
+      height 560ms var(--ease-out-circ),
+      transform 560ms var(--ease-out-circ),
       filter 420ms ease;
   }
 
@@ -807,7 +809,7 @@
     animation: text-enter 680ms 90ms cubic-bezier(0.22, 1, 0.36, 1) both;
     transition:
       opacity 360ms ease,
-      transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+      transform 520ms var(--ease-out-circ);
   }
 
   .track-panel::before {
@@ -991,11 +993,11 @@
 
   .seekbar-panel {
     transition:
-      left 560ms cubic-bezier(0.22, 1, 0.36, 1),
-      top 560ms cubic-bezier(0.22, 1, 0.36, 1),
-      width 560ms cubic-bezier(0.22, 1, 0.36, 1),
-      height 560ms cubic-bezier(0.22, 1, 0.36, 1),
-      transform 560ms cubic-bezier(0.22, 1, 0.36, 1),
+      left 560ms var(--ease-out-circ),
+      top 560ms var(--ease-out-circ),
+      width 560ms var(--ease-out-circ),
+      height 560ms var(--ease-out-circ),
+      transform 560ms var(--ease-out-circ),
       opacity 320ms ease;
   }
 
