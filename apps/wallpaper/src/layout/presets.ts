@@ -21,7 +21,7 @@ const item = (partial: Partial<LayoutItem>): LayoutItem => ({
 
 const leftDockItems: Record<LayoutItemKey, LayoutItem> = {
   albumArt: item({ x: 27, y: 50, anchor: 'center-left', width: 360, height: 360, zIndex: 2 }),
-  trackText: item({ x: 52.5, y: 48, anchor: 'center-left', width: 620, height: 300, zIndex: 3 }),
+  trackText: item({ x: 52.5, y: 48, anchor: 'center-left', width: 760, height: 300, zIndex: 3 }),
   seekbar: item({ x: 52.5, y: 73, anchor: 'center-left', width: 440, height: 44, zIndex: 3 }),
   lyrics: item({ x: 68, y: 50, anchor: 'center', width: 560, height: 240, zIndex: 3 }),
   clock: item({

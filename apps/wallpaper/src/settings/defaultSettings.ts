@@ -20,8 +20,8 @@ export const defaultSettings: WallpaperSettings = {
   },
   background: {
     mode: 'album-blur',
-    opacity: 0.72,
-    blurPx: 26,
+    opacity: 0.62,
+    blurPx: 30,
     solidColor: '#111318'
   },
   albumArt: {

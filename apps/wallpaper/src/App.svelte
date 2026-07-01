@@ -43,7 +43,6 @@
 
   let now = new Date();
   let progressNowMs = Date.now();
-  let debugOpen = settings.debug.enabled;
   let clockInterval: number | null = null;
   let progressInterval: number | null = null;
   let visualizerIdleInterval: number | null = null;
@@ -353,7 +352,6 @@
     settings = nextSettings;
     settingsWarning = warning;
     settingsSource = source;
-    debugOpen = settings.debug.enabled;
     if (!settings.transitions.enabled) {
       clearTransition();
     }
@@ -474,88 +472,78 @@
       <p class="artists">{artists}</p>
       <p class="album">{playback.albumName}</p>
       {#if settings.player.visible}
-        <div class="player-meta">
-          <span>{playback.isPlaying ? 'Playing' : 'Paused'}</span>
-          {#if settings.player.showDevice && playback.deviceName}
-            <span>{playback.deviceName}</span>
+        <div class="hover-controls">
+          {#if settings.player.controlsEnabled || settings.player.showShuffleRepeat}
+            <div class="player-controls" aria-label="Spotify playback controls">
+              {#if settings.player.showShuffleRepeat}
+                <button
+                  class="icon-control line-control"
+                  type="button"
+                  class:active-control={playback.shuffleState === true}
+                  disabled={!canControlPlayback || playback.shuffleState === null}
+                  aria-label="Toggle shuffle"
+                  on:click={() => void runPlaybackCommand({ type: 'shuffle', state: playback.shuffleState !== true })}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d={playbackButtonIcon('shuffle')} />
+                  </svg>
+                </button>
+              {/if}
+              <button class="icon-control" type="button" disabled={!canControlPlayback} aria-label="Previous track" on:click={() => void runPlaybackCommand({ type: 'previous' })}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d={playbackButtonIcon('previous')} />
+                </svg>
+              </button>
+              <button
+                class="icon-control"
+                type="button"
+                disabled={!canControlPlayback}
+                aria-label={playback.isPlaying ? 'Pause playback' : 'Resume playback'}
+                on:click={() => void runPlaybackCommand({ type: playback.isPlaying ? 'pause' : 'play' })}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d={playbackButtonIcon(playback.isPlaying ? 'pause' : 'play')} />
+                </svg>
+              </button>
+              <button class="icon-control" type="button" disabled={!canControlPlayback} aria-label="Next track" on:click={() => void runPlaybackCommand({ type: 'next' })}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d={playbackButtonIcon('next')} />
+                </svg>
+              </button>
+              {#if settings.player.showShuffleRepeat}
+                <button
+                  class="icon-control line-control"
+                  type="button"
+                  class:active-control={playback.repeatState === 'context'}
+                  disabled={!canControlPlayback || playback.repeatState === null}
+                  aria-label="Repeat context"
+                  on:click={() => void runPlaybackCommand({ type: 'repeat', state: playback.repeatState === 'context' ? 'off' : 'context' })}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d={playbackButtonIcon('repeat')} />
+                  </svg>
+                </button>
+              {/if}
+            </div>
           {/if}
           {#if settings.player.showVolume && playback.volumePercent !== null}
-            <span>{playback.volumePercent}%</span>
+            <label class="volume-control">
+              <span>Volume</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={playback.volumePercent}
+                disabled={!canControlPlayback}
+                aria-label="Spotify volume"
+                on:change={(event) => setVolume(event.currentTarget.value)}
+              />
+            </label>
+          {/if}
+          {#if controlStatusText}
+            <span class="control-status-dot" aria-label={controlStatusText}></span>
           {/if}
         </div>
-        {#if settings.player.controlsEnabled || settings.player.showShuffleRepeat}
-          <div class="player-controls" aria-label="Spotify playback controls">
-            {#if settings.player.showShuffleRepeat}
-              <button
-                class="icon-control line-control"
-                type="button"
-                class:active-control={playback.shuffleState === true}
-                disabled={!canControlPlayback || playback.shuffleState === null}
-                aria-label="Toggle shuffle"
-                on:click={() => void runPlaybackCommand({ type: 'shuffle', state: playback.shuffleState !== true })}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d={playbackButtonIcon('shuffle')} />
-                </svg>
-              </button>
-            {/if}
-            <button class="icon-control" type="button" disabled={!canControlPlayback} aria-label="Previous track" on:click={() => void runPlaybackCommand({ type: 'previous' })}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d={playbackButtonIcon('previous')} />
-              </svg>
-            </button>
-            <button
-              class="icon-control"
-              type="button"
-              disabled={!canControlPlayback}
-              aria-label={playback.isPlaying ? 'Pause playback' : 'Resume playback'}
-              on:click={() => void runPlaybackCommand({ type: playback.isPlaying ? 'pause' : 'play' })}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d={playbackButtonIcon(playback.isPlaying ? 'pause' : 'play')} />
-              </svg>
-            </button>
-            <button class="icon-control" type="button" disabled={!canControlPlayback} aria-label="Next track" on:click={() => void runPlaybackCommand({ type: 'next' })}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d={playbackButtonIcon('next')} />
-              </svg>
-            </button>
-            {#if settings.player.showShuffleRepeat}
-              <button
-                class="icon-control line-control"
-                type="button"
-                class:active-control={playback.repeatState === 'context'}
-                disabled={!canControlPlayback || playback.repeatState === null}
-                aria-label="Repeat context"
-                on:click={() => void runPlaybackCommand({ type: 'repeat', state: playback.repeatState === 'context' ? 'off' : 'context' })}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d={playbackButtonIcon('repeat')} />
-                </svg>
-              </button>
-            {/if}
-          </div>
-        {/if}
-        {#if settings.player.showVolume && playback.volumePercent !== null}
-          <label class="volume-control">
-            <span>Volume</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={playback.volumePercent}
-              disabled={!canControlPlayback}
-              aria-label="Spotify volume"
-              on:change={(event) => setVolume(event.currentTarget.value)}
-            />
-          </label>
-        {/if}
-        {#if controlStatusText}
-          <p class="status-line">{controlStatusText}</p>
-        {/if}
-      {/if}
-      {#if spotifyError}
-        <p class="status-line">{spotifyError.message}</p>
       {/if}
     </section>
   {/if}
@@ -593,11 +581,7 @@
 
   <TransitionOverlay state={transitionState} {settings} {theme} />
 
-  <button class="debug-toggle" type="button" aria-pressed={debugOpen} on:click={() => (debugOpen = !debugOpen)}>
-    Debug
-  </button>
-
-  {#if debugOpen}
+  {#if settings.debug.enabled}
     <aside class="layout-item debug-panel" style={layoutStyle(layoutItems.debug)} aria-label="Debug overlay">
       <div>Mode: {playbackMode}</div>
       <div>Spotify token: {settings.spotify.hasRefreshToken ? 'configured' : 'not configured'}</div>
@@ -625,19 +609,20 @@
     min-height: 540px;
     overflow: hidden;
     background:
-      radial-gradient(circle at 18% 24%, rgb(110 155 180 / 42%), transparent 34%),
-      linear-gradient(135deg, var(--theme-dark, #17191e) 0%, #22262d 45%, #111318 100%);
+      radial-gradient(circle at 18% 24%, rgb(96 130 144 / 26%), transparent 32%),
+      radial-gradient(circle at 78% 8%, rgb(154 132 75 / 14%), transparent 28%),
+      linear-gradient(135deg, var(--theme-dark, #15171c) 0%, #1d2127 45%, #0f1116 100%);
   }
 
   .album-backdrop {
     position: absolute;
     inset: -8vh -8vw;
-    background-image: linear-gradient(rgb(12 14 18 / 38%), rgb(12 14 18 / 72%)), url('../mock/album-placeholder.svg');
+    background-image: linear-gradient(rgb(8 10 14 / 56%), rgb(8 10 14 / 80%)), url('../mock/album-placeholder.svg');
     background-size: cover;
     background-position: center;
-    filter: blur(26px) saturate(1.2);
+    filter: blur(30px) saturate(0.86);
     transform: scale(1.08);
-    opacity: 0.72;
+    opacity: 0.62;
   }
 
   .layout-item {
@@ -710,6 +695,7 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    overflow: visible;
     color: var(--theme-text, #f6f7fb);
     text-shadow: 0 2px 18px rgb(0 0 0 / calc(var(--theme-shadow-strength, 0.7) * 0.72));
     animation: text-enter 680ms 90ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -719,19 +705,19 @@
     content: '';
     position: absolute;
     left: -48px;
-    top: 13%;
-    width: 2px;
-    height: 74%;
+    top: 25%;
+    width: 1px;
+    height: 42%;
     border-radius: 999px;
     background: linear-gradient(
       180deg,
       transparent,
-      color-mix(in srgb, var(--theme-accent, #f8d778) 72%, white 18%),
-      rgb(255 255 255 / 28%),
+      color-mix(in srgb, var(--theme-accent, #f8d778) 34%, white 16%),
+      rgb(255 255 255 / 12%),
       transparent
     );
-    box-shadow: 0 0 22px color-mix(in srgb, var(--theme-accent, #f8d778) 48%, transparent);
-    opacity: 0.96;
+    box-shadow: 0 0 14px color-mix(in srgb, var(--theme-accent, #f8d778) 22%, transparent);
+    opacity: 0.62;
   }
 
   .eyebrow {
@@ -744,42 +730,65 @@
 
   h1 {
     margin: 0;
+    display: block;
+    width: 100%;
+    max-width: min(100%, 680px);
+    max-height: 2.05em;
+    overflow: hidden;
     overflow-wrap: anywhere;
-    font-size: clamp(2.2rem, 7vw, 6rem);
-    line-height: 0.96;
+    word-break: normal;
+    white-space: normal;
+    font-size: clamp(2.2rem, 4.7vw, 4.6rem);
+    line-height: 1;
+    mask-image: linear-gradient(180deg, #000 94%, rgb(0 0 0 / 0) 100%);
   }
 
   .artists {
-    margin: 18px 0 0;
+    margin: 22px 0 0;
+    max-width: min(100%, 540px);
+    overflow: hidden;
     overflow-wrap: anywhere;
-    color: var(--theme-text, #f3f5f9);
-    font-size: clamp(1.1rem, 2.2vw, 1.6rem);
-    font-weight: 650;
+    color: rgb(246 247 251 / 84%);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    font-size: clamp(1rem, 1.8vw, 1.35rem);
+    font-weight: 600;
   }
 
   .album {
-    margin: 8px 0 0;
+    margin: 10px 0 0;
+    max-width: min(100%, 520px);
+    overflow: hidden;
     overflow-wrap: anywhere;
-    color: rgb(246 247 251 / 72%);
+    color: rgb(246 247 251 / 66%);
     font-size: clamp(0.95rem, 1.6vw, 1.12rem);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .player-meta {
+  .hover-controls {
+    position: absolute;
+    top: 220px;
+    left: 0;
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 16px;
-    color: rgb(246 247 251 / 70%);
-    font-size: 0.82rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition:
+      opacity 240ms ease,
+      transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .player-meta span {
-    max-width: 100%;
-    padding: 4px 8px;
-    border: 1px solid rgb(255 255 255 / 14%);
-    border-radius: 8px;
-    background: rgb(15 17 22 / 28%);
-    overflow-wrap: anywhere;
+  .track-panel:hover .hover-controls,
+  .track-panel:focus-within .hover-controls {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
   }
 
   .player-controls {
@@ -795,10 +804,11 @@
     width: 44px;
     min-width: 44px;
     height: 38px;
-    border: 1px solid rgb(255 255 255 / 18%);
+    border: 1px solid rgb(255 255 255 / 14%);
     border-radius: 8px;
     color: var(--theme-text, #f6f7fb);
-    background: rgb(15 17 22 / 46%);
+    background: rgb(10 12 16 / 42%);
+    box-shadow: 0 12px 28px rgb(0 0 0 / 20%);
     cursor: pointer;
     transition:
       translate 180ms ease,
@@ -852,8 +862,8 @@
     align-items: center;
     gap: 10px;
     width: min(100%, 340px);
-    margin-top: 14px;
-    color: rgb(246 247 251 / 70%);
+    margin-top: 0;
+    color: rgb(246 247 251 / 58%);
     font-size: 0.82rem;
   }
 
@@ -864,10 +874,10 @@
 
   .seekbar {
     width: 100%;
-    height: 8px;
+    height: 5px;
     overflow: hidden;
     border-radius: 999px;
-    background: rgb(255 255 255 / 20%);
+    background: rgb(255 255 255 / 16%);
   }
 
   .seekbar-fill {
@@ -879,7 +889,7 @@
 
   .seekbar-input {
     position: absolute;
-    inset: -8px 0 auto;
+    inset: -10px 0 auto;
     z-index: 1;
     width: 100%;
     height: 24px;
@@ -896,18 +906,19 @@
     display: flex;
     justify-content: space-between;
     width: 100%;
-    margin-top: 10px;
-    color: rgb(246 247 251 / 70%);
-    font-size: 0.88rem;
+    margin-top: 12px;
+    color: rgb(246 247 251 / 58%);
+    font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
   }
 
-  .status-line {
-    width: min(100%, 420px);
-    margin: 10px 0 0;
-    color: rgb(246 247 251 / 74%);
-    font-size: 0.88rem;
-    line-height: 1.45;
+  .control-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--theme-accent, #f8d778) 70%, white 8%);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--theme-accent, #f8d778) 46%, transparent);
+    opacity: 0.62;
   }
 
   .clock {
@@ -917,7 +928,8 @@
     justify-content: flex-end;
     font-variant-numeric: tabular-nums;
     line-height: 1.05;
-    text-shadow: 0 2px 18px rgb(0 0 0 / 42%);
+    opacity: 0.78;
+    text-shadow: 0 2px 18px rgb(0 0 0 / 34%);
   }
 
   .clock small {
@@ -925,33 +937,6 @@
     font-size: 0.42em;
     font-weight: 600;
     opacity: 0.72;
-  }
-
-  .debug-toggle {
-    position: absolute;
-    top: 22px;
-    right: 28px;
-    z-index: 4;
-    width: 64px;
-    height: 34px;
-    padding: 0 10px;
-    overflow: hidden;
-    border: 1px solid rgb(255 255 255 / 18%);
-    border-radius: 8px;
-    color: #f6f7fb;
-    background: rgb(15 17 22 / 58%);
-    backdrop-filter: blur(10px);
-    cursor: pointer;
-    transition:
-      translate 180ms ease,
-      border-color 220ms ease,
-      background 220ms ease;
-  }
-
-  .debug-toggle:hover {
-    translate: 0 -1px;
-    border-color: rgb(255 255 255 / 32%);
-    background: rgb(15 17 22 / 72%);
   }
 
   .debug-panel {

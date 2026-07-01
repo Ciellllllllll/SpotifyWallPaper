@@ -5,9 +5,10 @@ export const buildBackgroundStyle = (
   theme: WallpaperTheme,
   albumImageUrl: string
 ): string => {
-  const overlay = `linear-gradient(rgb(12 14 18 / ${theme.overlayOpacity}), rgb(12 14 18 / ${Math.min(
-    0.82,
-    theme.overlayOpacity + 0.28
+  const overlayOpacity = Math.min(0.88, theme.overlayOpacity + 0.12);
+  const overlay = `linear-gradient(rgb(8 10 14 / ${overlayOpacity}), rgb(8 10 14 / ${Math.min(
+    0.9,
+    overlayOpacity + 0.24
   )}))`;
 
   if (settings.background.mode === 'solid-color') {
@@ -22,7 +23,7 @@ export const buildBackgroundStyle = (
     `background-image: ${overlay}, url('${albumImageUrl}')`,
     'background-size: cover',
     'background-position: center',
-    `filter: blur(${settings.background.blurPx}px) saturate(1.16)`,
+    `filter: blur(${settings.background.blurPx}px) saturate(0.86)`,
     'transform: scale(1.08)',
     `opacity: ${settings.background.opacity}`
   ].join('; ');

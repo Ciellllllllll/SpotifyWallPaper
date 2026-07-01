@@ -10,8 +10,8 @@ describe('background style generation', () => {
     const style = buildBackgroundStyle(defaultSettings, theme, '/mock/album-placeholder.svg');
 
     expect(style).toContain("url('/mock/album-placeholder.svg')");
-    expect(style).toContain('filter: blur(26px)');
-    expect(style).toContain('opacity: 0.72');
+    expect(style).toContain('filter: blur(30px)');
+    expect(style).toContain('opacity: 0.62');
   });
 
   it('builds album gradient style without album image processing', () => {
@@ -32,7 +32,7 @@ describe('background style generation', () => {
       '/mock/album-placeholder.svg'
     );
 
-    expect(style).toBe('background: #123456; opacity: 0.72');
+    expect(style).toBe('background: #123456; opacity: 0.62');
   });
 
   it('exports theme CSS variables', () => {
