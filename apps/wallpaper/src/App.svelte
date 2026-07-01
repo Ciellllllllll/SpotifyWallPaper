@@ -676,6 +676,18 @@
       filter 420ms ease;
   }
 
+  .album-only-mode .album-frame {
+    z-index: 8 !important;
+  }
+
+  .album-only-mode .album-backdrop,
+  .album-only-mode .album-disc,
+  .album-only-mode :global(.visualizer-anchor),
+  .album-only-mode .seekbar-panel,
+  .album-only-mode .seekbar-input {
+    pointer-events: none;
+  }
+
   .album-disc {
     position: relative;
     width: 100%;
@@ -704,38 +716,61 @@
 
   .details-toggle {
     position: absolute;
-    top: 7%;
-    right: 3%;
-    z-index: 4;
+    top: calc(7% - 13px);
+    right: calc(3% - 13px);
+    z-index: 12;
     display: grid;
     place-items: center;
-    width: 46px;
-    height: 46px;
-    border: 1px solid rgb(255 255 255 / 18%);
-    border-radius: 999px;
+    width: 72px;
+    height: 72px;
+    border: 0;
+    border-radius: 0;
     color: rgb(246 247 251 / 88%);
-    background: rgb(10 12 16 / 38%);
-    box-shadow: 0 16px 34px rgb(0 0 0 / 26%);
-    backdrop-filter: blur(14px);
+    background: transparent;
+    box-shadow: none;
     cursor: pointer;
     font-size: 1.6rem;
     font-weight: 500;
+    isolation: isolate;
     line-height: 1;
+    pointer-events: auto;
     transition:
       opacity 220ms ease,
+      transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .details-toggle::before {
+    content: '';
+    position: absolute;
+    inset: 13px;
+    z-index: -1;
+    border: 1px solid rgb(255 255 255 / 18%);
+    border-radius: 999px;
+    background: rgb(10 12 16 / 38%);
+    box-shadow: 0 16px 34px rgb(0 0 0 / 26%);
+    backdrop-filter: blur(14px);
+    transition:
       transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
       border-color 220ms ease,
       background 220ms ease;
   }
 
   .details-toggle:hover {
-    transform: translateX(2px) scale(1.04);
+    transform: translateX(2px);
+  }
+
+  .details-toggle:hover::before {
+    transform: scale(1.04);
     border-color: color-mix(in srgb, var(--theme-accent, #f8d778) 46%, white 12%);
     background: rgb(255 255 255 / 12%);
   }
 
   .details-toggle:active {
-    transform: translateX(2px) scale(0.96);
+    transform: translateX(2px);
+  }
+
+  .details-toggle:active::before {
+    transform: scale(0.96);
   }
 
   .album-progress-ring {
@@ -1036,6 +1071,7 @@
     backdrop-filter: blur(14px);
     font-size: 0.82rem;
     line-height: 1.7;
+    pointer-events: none;
   }
 
   @keyframes album-spin {
@@ -1097,6 +1133,7 @@
     .album-frame,
     .seekbar-panel,
     .details-toggle,
+    .details-toggle::before,
     .track-panel {
       transition: none;
     }
