@@ -737,7 +737,8 @@
     font-weight: 300;
     isolation: isolate;
     line-height: 1;
-    pointer-events: auto;
+    opacity: 0;
+    pointer-events: none;
     text-shadow: 0 10px 24px rgb(0 0 0 / 42%);
     transition:
       color 220ms ease,
@@ -745,9 +746,10 @@
       transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .details-toggle-back {
-    right: auto;
-    left: calc(3% - 13px);
+  .album-frame:hover .details-toggle,
+  .details-toggle:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .details-toggle:hover {
@@ -760,11 +762,11 @@
   }
 
   .details-toggle-back:hover {
-    transform: translateX(-2px) scale(1.06);
+    transform: translateX(2px) scale(1.06);
   }
 
   .details-toggle-back:active {
-    transform: translateX(-2px) scale(0.94);
+    transform: translateX(2px) scale(0.94);
   }
 
   .album-progress-ring {
