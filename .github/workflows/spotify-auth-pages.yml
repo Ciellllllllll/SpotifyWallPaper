@@ -1,0 +1,70 @@
+name: Spotify Auth Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feature/**
+    paths:
+      - .github/workflows/spotify-auth-pages.yml
+      - apps/spotify-auth/**
+      - package.json
+      - package-lock.json
+      - tsconfig.base.json
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: spotify-auth-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Check auth page
+        run: npm run check -w @spotify-wallpaper/spotify-auth
+
+      - name: Test auth page
+        run: npm run test -w @spotify-wallpaper/spotify-auth
+
+      - name: Build auth page
+        run: npm run build -w @spotify-wallpaper/spotify-auth
+        env:
+          VITE_AUTH_BASE_PATH: /SpotifyWallPaper/spotify-auth/
+          VITE_SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID }}
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/spotify-auth/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
