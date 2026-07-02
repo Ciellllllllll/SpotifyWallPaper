@@ -4,6 +4,7 @@ import {
   buildRedirectUri,
   clearAuthSession,
   codeChallenge,
+  encodeWallpaperEngineToken,
   exchangeCallbackForToken,
   generateCodeVerifier,
   parseCallbackParams,
@@ -38,6 +39,26 @@ describe('spotify auth PKCE', () => {
     expect(buildRedirectUri('https://example.github.io', '/SpotifyWallPaper/spotify-auth/')).toBe(
       'https://example.github.io/SpotifyWallPaper/spotify-auth/callback'
     );
+  });
+
+  it('encodes a single Wallpaper Engine token containing client id and refresh token', () => {
+    const token = encodeWallpaperEngineToken({
+      clientId: ' public-client-id ',
+      refreshToken: ' refresh-token '
+    });
+    const encoded = token.slice('swpt1.'.length);
+    const base64 = encoded.replaceAll('-', '+').replaceAll('_', '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    const json = new TextDecoder().decode(
+      Uint8Array.from(atob(padded), (character) => character.charCodeAt(0))
+    );
+
+    expect(token.startsWith('swpt1.')).toBe(true);
+    expect(JSON.parse(json)).toEqual({
+      v: 1,
+      clientId: 'public-client-id',
+      refreshToken: 'refresh-token'
+    });
   });
 
   it('stores only transient PKCE session values before authorization', async () => {

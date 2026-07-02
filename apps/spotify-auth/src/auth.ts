@@ -6,6 +6,7 @@ const VERIFIER_KEY = `${STORAGE_PREFIX}:code-verifier`;
 const STATE_KEY = `${STORAGE_PREFIX}:state`;
 const CREATED_AT_KEY = `${STORAGE_PREFIX}:created-at`;
 const MAX_AUTH_AGE_MS = 10 * 60 * 1000;
+const WALLPAPER_ENGINE_TOKEN_PREFIX = 'swpt1.';
 
 export const SPOTIFY_SCOPES = [
   'user-read-currently-playing',
@@ -35,8 +36,22 @@ export interface AuthStorage {
   removeItem(key: string): void;
 }
 
+export interface WallpaperEngineTokenPayload {
+  clientId: string;
+  refreshToken: string;
+}
+
 export const buildRedirectUri = (origin: string, basePath: string): string =>
   new URL('callback', new URL(ensureTrailingSlash(basePath), origin)).toString();
+
+export const encodeWallpaperEngineToken = ({ clientId, refreshToken }: WallpaperEngineTokenPayload): string => {
+  const payload = JSON.stringify({
+    v: 1,
+    clientId: clientId.trim(),
+    refreshToken: refreshToken.trim()
+  });
+  return `${WALLPAPER_ENGINE_TOKEN_PREFIX}${base64UrlEncode(new TextEncoder().encode(payload))}`;
+};
 
 export const buildAuthorizeUrl = async (
   config: AuthConfig,

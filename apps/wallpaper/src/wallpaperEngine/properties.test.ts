@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { defaultSettings } from '../settings/defaultSettings';
 import { applySettingsPatch, parseWallpaperProperties } from './properties';
 
+const encodeWallpaperEngineToken = (clientId: string, refreshToken: string): string => {
+  const json = JSON.stringify({ v: 1, clientId, refreshToken });
+  let binary = '';
+  for (const byte of new TextEncoder().encode(json)) {
+    binary += String.fromCharCode(byte);
+  }
+  return `swpt1.${btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')}`;
+};
+
 describe('Wallpaper Engine property adapter', () => {
   it('parses basic Wallpaper Engine properties into a settings patch', () => {
     const result = parseWallpaperProperties({
@@ -89,6 +98,33 @@ describe('Wallpaper Engine property adapter', () => {
     expect(merged.spotify.clientId).toBe('json-client');
     expect(merged.spotify.refreshToken).toBe('json-refresh-token');
     expect(merged.debug.enabled).toBe(true);
+  });
+
+  it('accepts a single Wallpaper Engine token in the refresh token property', () => {
+    const result = parseWallpaperProperties({
+      spotify_refresh_token: { value: encodeWallpaperEngineToken('bundled-client-id', 'bundled-refresh-token') }
+    });
+
+    expect(result.warning).toBeNull();
+    expect(result.patch.spotify).toEqual({
+      clientId: 'bundled-client-id',
+      refreshToken: 'bundled-refresh-token',
+      hasRefreshToken: true
+    });
+  });
+
+  it('does not treat malformed Wallpaper Engine token bundles as raw refresh tokens', () => {
+    const result = parseWallpaperProperties({
+      spotify_client_id: { value: 'client-id' },
+      spotify_refresh_token: { value: 'swpt1.not-valid-base64' }
+    });
+
+    expect(result.warning).toBeNull();
+    expect(result.patch.spotify).toEqual({
+      clientId: 'client-id',
+      refreshToken: '',
+      hasRefreshToken: false
+    });
   });
 
   it('applies background and theme settings from pasted settings JSON', () => {

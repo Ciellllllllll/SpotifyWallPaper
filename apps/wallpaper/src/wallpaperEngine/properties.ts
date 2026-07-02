@@ -2,6 +2,7 @@ import type { WallpaperSettings } from '@spotify-wallpaper/shared-types';
 import { clonePresetItems, isLayoutPresetName } from '../layout/presets';
 import { loadSettings } from '../settings/loadSettings';
 import { repairSettings } from '../settings/repairSettings';
+import { isWallpaperEngineSpotifyToken, parseWallpaperEngineSpotifyToken } from '../spotify/wallpaperEngineToken';
 import type { SettingsPatch, WallpaperEngineProperties, WallpaperPropertyResult } from './types';
 
 export const parseWallpaperProperties = (properties: WallpaperEngineProperties): WallpaperPropertyResult => {
@@ -43,7 +44,22 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
     warning = loaded.warning;
   }
 
-  if (clientId !== undefined || refreshToken !== undefined) {
+  const bundledToken = refreshToken !== undefined ? parseWallpaperEngineSpotifyToken(refreshToken) : null;
+  if (bundledToken) {
+    patch.spotify = {
+      ...patch.spotify,
+      clientId: bundledToken.clientId,
+      refreshToken: bundledToken.refreshToken,
+      hasRefreshToken: true
+    };
+  } else if (refreshToken !== undefined && isWallpaperEngineSpotifyToken(refreshToken)) {
+    patch.spotify = {
+      ...patch.spotify,
+      ...(clientId !== undefined ? { clientId } : {}),
+      refreshToken: '',
+      hasRefreshToken: false
+    };
+  } else if (clientId !== undefined || refreshToken !== undefined) {
     patch.spotify = {
       ...patch.spotify,
       ...(clientId !== undefined ? { clientId } : {}),

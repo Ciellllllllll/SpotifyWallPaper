@@ -42,7 +42,8 @@ Resource-intensive commands should run through `h5i capture run`.
   - `performance_mode`
   - `debug_enabled`
 - Confirm `settings_json` is editable as single-line JSON with valid JSON, an empty value, and malformed JSON; malformed JSON must not crash the wallpaper.
-- Confirm `spotify_client_id` and `spotify_refresh_token` accept empty and dummy values. Use dummy values for public QA because the Refresh Token field can be visible.
+- Confirm `spotify_client_id` and `spotify_refresh_token` accept empty and dummy values. Use dummy values for public QA because the token field can be visible.
+- Confirm `spotify_refresh_token` accepts a dummy `swpt1.` Wallpaper Engine Token bundle and applies the bundled Client ID and Refresh Token without requiring `spotify_client_id`.
 - Treat `play-in-window` or CLI `applyProperties` checks as diagnostics only; RC-2 pass/fail requires Wallpaper Engine UI editing and applying the wallpaper to an actual display.
 - Confirm browser fallback still works after Wallpaper Engine changes.
 - Post-v0.0.1 Codex status: not executed in this environment because Wallpaper Engine is not available. Must be completed on a Windows machine with Wallpaper Engine installed.

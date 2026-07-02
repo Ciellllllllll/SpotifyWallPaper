@@ -79,6 +79,16 @@ h2 {
   line-height: 1.55;
 }
 
+.managed-client {
+  border: 1px solid #c8ead8;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #17452b;
+  background: #edf9f2;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 label {
   display: grid;
   gap: 7px;

@@ -9,7 +9,7 @@
         "value": ""
       },
       "spotify_refresh_token": {
-        "text": "Spotify Refresh Token",
+        "text": "Spotify Token / Refresh Token",
         "type": "textinput",
         "value": ""
       },

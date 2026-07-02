@@ -1,6 +1,7 @@
 import {
   buildAuthorizeUrl,
   buildRedirectUri,
+  encodeWallpaperEngineToken,
   exchangeCallbackForToken,
   sanitizeErrorMessage,
   storedClientId
@@ -15,7 +16,7 @@ if (!app) {
 const configuredClientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID ?? '';
 const basePath = import.meta.env.BASE_URL;
 const redirectUri = buildRedirectUri(window.location.origin, basePath);
-let refreshTokenInMemory = '';
+let wallpaperEngineTokenInMemory = '';
 
 const isCallbackRoute = (): boolean => {
   const normalizedPath = window.location.pathname.replace(/\/$/, '');
@@ -29,17 +30,22 @@ const clientIdFromUrl = (): string => {
 };
 
 const renderHome = (): void => {
-  const clientId = clientIdFromUrl();
+  const clientId = clientIdFromUrl().trim();
+  const hasPrefilledClientId = clientId.length > 0;
   app.innerHTML = `
     <section class="shell">
       <div class="panel">
         <p class="eyebrow">Spotify Wallpaper</p>
         <h1>Spotify authorization</h1>
-        <p class="lead">Authorize Spotify and copy the Refresh Token into Wallpaper Engine.</p>
-        <label>
-          <span>Spotify Client ID</span>
-          <input id="client-id" value="${escapeHtml(clientId)}" autocomplete="off" spellcheck="false" />
-        </label>
+        <p class="lead">Authorize Spotify and copy the generated Wallpaper Engine Token into the wallpaper token property.</p>
+        ${
+          hasPrefilledClientId
+            ? '<p class="managed-client">Client ID is already configured for this authorization page.</p>'
+            : `<label>
+                <span>Spotify Client ID</span>
+                <input id="client-id" value="" autocomplete="off" spellcheck="false" />
+              </label>`
+        }
         <label>
           <span>Spotify Redirect URI</span>
           <input id="redirect-uri" value="${escapeHtml(redirectUri)}" readonly spellcheck="false" />
@@ -51,8 +57,9 @@ const renderHome = (): void => {
       <aside class="notice">
         <h2>Security notes</h2>
         <p>This page uses Spotify PKCE and does not use a Client Secret.</p>
-        <p>Refresh Tokens are only shown in this browser tab. They are not stored in localStorage, cookies, GitHub, or any server.</p>
-        <p>Do not share screenshots or recordings that show your token.</p>
+        <p>The Wallpaper Engine Token contains your public Client ID and Spotify Refresh Token so the wallpaper can be configured with one paste.</p>
+        <p>Tokens are only shown in this browser tab. They are not stored in localStorage, cookies, GitHub, or any server.</p>
+        <p>Do not share screenshots or recordings that show the token.</p>
       </aside>
     </section>
   `;
@@ -70,7 +77,7 @@ const renderHome = (): void => {
   document.querySelector<HTMLButtonElement>('#authorize')?.addEventListener('click', async () => {
     const status = document.querySelector<HTMLParagraphElement>('#status');
     const input = document.querySelector<HTMLInputElement>('#client-id');
-    const nextClientId = input?.value.trim() ?? '';
+    const nextClientId = (input?.value ?? clientId).trim();
     if (!nextClientId) {
       setStatus(status, 'Client ID is required.');
       return;
@@ -106,12 +113,12 @@ const renderCallback = async (): Promise<void> => {
   const result = await exchangeCallbackForToken(window.location.href, clientId, redirectUri);
   window.history.replaceState({}, document.title, new URL(basePath, window.location.origin).toString());
   if (!result.ok) {
-    refreshTokenInMemory = '';
+    wallpaperEngineTokenInMemory = '';
     renderError(result.message);
     return;
   }
 
-  refreshTokenInMemory = result.refreshToken;
+  wallpaperEngineTokenInMemory = encodeWallpaperEngineToken({ clientId, refreshToken: result.refreshToken });
   renderToken();
 };
 
@@ -120,28 +127,28 @@ const renderToken = (): void => {
     <section class="shell single">
       <div class="panel">
         <p class="eyebrow">Spotify Wallpaper</p>
-        <h1>Refresh Token ready</h1>
-        <p class="lead">Copy this token into Wallpaper Engine's <strong>Spotify Refresh Token</strong> property.</p>
+        <h1>Wallpaper Engine Token ready</h1>
+        <p class="lead">Copy this token into Wallpaper Engine's <strong>Spotify Token</strong> property.</p>
         <label>
-          <span>Refresh Token</span>
-          <textarea id="refresh-token" readonly spellcheck="false"></textarea>
+          <span>Wallpaper Engine Token</span>
+          <textarea id="wallpaper-token" readonly spellcheck="false"></textarea>
         </label>
-        <button id="copy-token" type="button">Copy Refresh Token</button>
+        <button id="copy-token" type="button">Copy Token</button>
         <p id="status" class="status" role="status">The token will disappear if this page is reloaded.</p>
       </div>
     </section>
   `;
 
-  const textarea = document.querySelector<HTMLTextAreaElement>('#refresh-token');
+  const textarea = document.querySelector<HTMLTextAreaElement>('#wallpaper-token');
   if (textarea) {
-    textarea.value = refreshTokenInMemory;
+    textarea.value = wallpaperEngineTokenInMemory;
   }
 
   document.querySelector<HTMLButtonElement>('#copy-token')?.addEventListener('click', async () => {
     const status = document.querySelector<HTMLParagraphElement>('#status');
     try {
-      await navigator.clipboard.writeText(refreshTokenInMemory);
-      setStatus(status, 'Refresh Token copied. Paste it into Wallpaper Engine.');
+      await navigator.clipboard.writeText(wallpaperEngineTokenInMemory);
+      setStatus(status, 'Token copied. Paste it into Wallpaper Engine.');
     } catch {
       setStatus(status, 'Clipboard was unavailable. Select the token and copy it manually.');
     }
