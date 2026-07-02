@@ -2,6 +2,7 @@
   "description": "Spotify-linked Web Wallpaper with mock fallback, configurable layout, lyrics, visualizer, and optional Spotify playback integration.",
   "file": "index.html",
   "general": {
+    "supportsaudioprocessing": true,
     "properties": {
       "spotify_client_id": {
         "text": "Spotify Client ID",

@@ -100,6 +100,57 @@ describe('Wallpaper Engine property adapter', () => {
     expect(merged.debug.enabled).toBe(true);
   });
 
+  it('keeps existing Spotify token when settings JSON has no token fields', () => {
+    const result = parseWallpaperProperties({
+      settings_json: {
+        value: JSON.stringify({
+          spotify: {
+            hasRefreshToken: true
+          },
+          debug: {
+            enabled: true
+          }
+        })
+      }
+    });
+    const merged = applySettingsPatch(
+      {
+        ...defaultSettings,
+        spotify: {
+          ...defaultSettings.spotify,
+          clientId: 'existing-client',
+          refreshToken: 'existing-refresh-token',
+          hasRefreshToken: true
+        }
+      },
+      result.patch
+    );
+
+    expect(merged.spotify.clientId).toBe('existing-client');
+    expect(merged.spotify.refreshToken).toBe('existing-refresh-token');
+    expect(merged.spotify.hasRefreshToken).toBe(true);
+    expect(merged.debug.enabled).toBe(true);
+  });
+
+  it('lets explicit Spotify token properties override settings JSON token fields', () => {
+    const result = parseWallpaperProperties({
+      settings_json: {
+        value: JSON.stringify({
+          spotify: {
+            clientId: 'json-client',
+            refreshToken: 'json-refresh-token'
+          }
+        })
+      },
+      spotify_refresh_token: { value: encodeWallpaperEngineToken('property-client', 'property-refresh-token') }
+    });
+    const merged = applySettingsPatch(defaultSettings, result.patch);
+
+    expect(merged.spotify.clientId).toBe('property-client');
+    expect(merged.spotify.refreshToken).toBe('property-refresh-token');
+    expect(merged.spotify.hasRefreshToken).toBe(true);
+  });
+
   it('accepts a single Wallpaper Engine token in the refresh token property', () => {
     const result = parseWallpaperProperties({
       spotify_refresh_token: { value: encodeWallpaperEngineToken('bundled-client-id', 'bundled-refresh-token') }

@@ -19,6 +19,7 @@ type WallpaperProperty = {
 
 type WallpaperProject = {
   general?: {
+    supportsaudioprocessing?: unknown;
     properties?: Record<string, WallpaperProperty>;
   };
 };
@@ -48,5 +49,9 @@ describe('Wallpaper Engine project.json', () => {
     expect(properties.spotify_client_id?.type).toBe('textinput');
     expect(properties.spotify_refresh_token?.type).toBe('textinput');
     expect(properties.settings_json?.type).toBe('textinput');
+  });
+
+  it('enables Wallpaper Engine audio processing for the visualizer', () => {
+    expect(loadProjectJson().general?.supportsaudioprocessing).toBe(true);
   });
 });

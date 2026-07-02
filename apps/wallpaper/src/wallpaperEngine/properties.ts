@@ -250,7 +250,17 @@ export const registerWallpaperPropertyListener = (
 };
 
 const patchFromSettings = (patch: SettingsPatch, settings: WallpaperSettings): void => {
-  patch.spotify = { ...patch.spotify, ...settings.spotify };
+  const spotifyPatch: Partial<WallpaperSettings['spotify']> = {};
+  if (settings.spotify.clientId) {
+    spotifyPatch.clientId = settings.spotify.clientId;
+  }
+  if (settings.spotify.refreshToken) {
+    spotifyPatch.refreshToken = settings.spotify.refreshToken;
+    spotifyPatch.hasRefreshToken = true;
+  }
+  if (Object.keys(spotifyPatch).length > 0) {
+    patch.spotify = { ...patch.spotify, ...spotifyPatch };
+  }
   patch.layout = { ...patch.layout, ...settings.layout };
   patch.theme = { ...patch.theme, ...settings.theme };
   patch.background = { ...patch.background, ...settings.background };
