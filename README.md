@@ -1,6 +1,6 @@
 # Spotify Wallpaper
 
-Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-previewable mock wallpaper plus Spotify playback polling, settings customization, visualizer, LRC lyrics, transitions, player controls, an optional Tauri configurator, and optional Rainmeter JSON export.
+Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-previewable mock wallpaper plus Spotify playback polling, Wallpaper Engine property customization, a static GitHub Pages Spotify authorization helper, visualizer, LRC lyrics, transitions, player controls, an optional Tauri configurator, and optional Rainmeter JSON export.
 
 ## Guides And Repository Notes
 
@@ -11,10 +11,28 @@ Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-
 ## Technical Stack
 
 - Wallpaper app: Svelte, TypeScript, Vite, Wallpaper Engine Web Wallpaper APIs.
+- Spotify auth page: static Vite + TypeScript app for GitHub Pages using Authorization Code with PKCE.
 - Shared model types: TypeScript workspace package.
 - Visual core: Rust compiled to WebAssembly for pure layout, lyrics, readability, and visualizer helpers.
 - Optional configurator: Svelte frontend with Tauri/Rust backend.
 - Optional Rainmeter output: configurator-side JSON writer and scheduler.
+
+## Current Design
+
+The runtime wallpaper is the main product. It must work as a Wallpaper Engine Web Wallpaper and in a normal browser
+preview without requiring Tauri, Rainmeter, or a live Spotify connection.
+
+Spotify authorization is intentionally split from the wallpaper runtime:
+
+- The Web Wallpaper accepts a public Spotify Client ID and Refresh Token through Wallpaper Engine properties.
+- The static `@spotify-wallpaper/spotify-auth` page helps users obtain a Refresh Token with PKCE.
+- The auth page is designed for GitHub Pages and does not use a server, Client Secret, database, Worker, KV store, or token logging.
+- The auth page stores only transient PKCE session values in `sessionStorage`: Client ID, `code_verifier`, `state`, and creation time.
+- Refresh Tokens are held only in page memory and the visible textarea used for copy. Reloading the auth page clears them.
+- The optional Tauri configurator remains available as a companion path, but it is not required for the wallpaper runtime.
+
+Wallpaper Engine properties are now the normal settings surface for common modules. `settings_json` remains available for
+advanced or bulk configuration, but users should not need to paste JSON for normal module toggles.
 
 ## Requirements
 
@@ -39,6 +57,8 @@ npm run dev -w @spotify-wallpaper/wallpaper
 ```
 
 Open `http://127.0.0.1:5173/`. Without Spotify settings, the wallpaper stays in browser mock mode.
+
+## Spotify Authorization Page
 
 Spotify Refresh Tokens can be generated with the static GitHub Pages auth page. The page uses PKCE in the browser,
 does not use a Client Secret, and does not store Refresh Tokens in localStorage, sessionStorage, cookies, GitHub, or
@@ -69,6 +89,21 @@ https://<owner>.github.io/<repo>/spotify-auth/callback
 
 Open the auth page, authorize Spotify, copy the displayed Refresh Token, then paste it into Wallpaper Engine's
 `spotify_refresh_token` property. Do not share screenshots or recordings that show the token.
+
+The Pages deployment workflow is `.github/workflows/spotify-auth-pages.yml`. It builds only `apps/spotify-auth`, uploads
+`apps/spotify-auth/dist`, and uses the repository variable `SPOTIFY_CLIENT_ID` to prefill the public Client ID when set.
+Because the Client ID is part of Spotify's authorization URL, it is treated as a public identifier. Do not configure or
+commit a Spotify Client Secret.
+
+If the repository name changes, build with the matching base path:
+
+```sh
+$env:VITE_AUTH_BASE_PATH='/<repo>/spotify-auth/'
+npm run build -w @spotify-wallpaper/spotify-auth
+```
+
+The auth build creates `index.html`, `callback/index.html`, and `404.html` so GitHub Pages can handle the Spotify
+callback path without a backend.
 
 For local Spotify MVP testing, explicitly provide settings JSON in the browser console and reload:
 
@@ -361,9 +396,16 @@ Spotify real-account QA before release candidate:
 
 Do not capture screenshots, logs, or sample files containing Access Tokens, Refresh Tokens, authorization codes, full OAuth callback URLs, or Client Secrets.
 
-## Optional configurator
+## Optional Configurator
 
-The configurator is optional and is not required for the Wallpaper Engine wallpaper runtime.
+The configurator is optional and is not required for the Wallpaper Engine wallpaper runtime. The preferred user-facing
+path is now:
+
+1. Use the GitHub Pages auth page to copy a Refresh Token.
+2. Paste `spotify_client_id` and `spotify_refresh_token` into Wallpaper Engine properties.
+3. Adjust common modules directly through Wallpaper Engine properties.
+
+The configurator remains useful for local development, Rainmeter output, and alternate PKCE testing.
 
 Run the browser version:
 
