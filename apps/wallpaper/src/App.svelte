@@ -126,6 +126,11 @@
     zIndex: 2
   } satisfies LayoutItem;
   $: activeAlbumItem = showAlbumDetails ? layoutItems.albumArt : albumOnlyAlbumItem;
+  $: albumModeToggleStyle = layoutStyle({
+    ...activeAlbumItem,
+    opacity: 1,
+    zIndex: activeAlbumItem.zIndex + 16
+  });
   $: albumOnlySeekbarItem = {
     ...layoutItems.seekbar,
     x: 50,
@@ -383,6 +388,16 @@
     void runPlaybackCommand({ type: 'volume', volumePercent });
   };
 
+  const toggleDisplayMode = () => {
+    if (detailHoverHideTimeout !== null) {
+      window.clearTimeout(detailHoverHideTimeout);
+      detailHoverHideTimeout = null;
+    }
+
+    detailHoverUiVisible = false;
+    displayMode = showAlbumDetails ? 'album-only' : 'album-details';
+  };
+
   const showDetailHoverUi = () => {
     if (detailHoverHideTimeout !== null) {
       window.clearTimeout(detailHoverHideTimeout);
@@ -567,11 +582,6 @@
       <div class:album-spinning={playback.isPlaying} class="album-disc">
         <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
       </div>
-      {#if !showAlbumDetails}
-        <button class="details-toggle" type="button" aria-label="Show album details" on:click={() => (displayMode = 'album-details')}>
-          &gt;
-        </button>
-      {/if}
       {#if settings.seekbar.visible && settings.seekbar.style === 'album-ring'}
         <svg class="album-progress-ring" viewBox="0 0 100 100" aria-hidden="true">
           <circle class="album-progress-track" cx="50" cy="50" r="47"></circle>
@@ -594,14 +604,25 @@
       role="group"
       aria-label="Track details"
     >
-      <button class="details-toggle details-close-toggle" type="button" aria-label="Show album only" on:click={() => (displayMode = 'album-only')}>
-        ×
-      </button>
       <p class="eyebrow">{playback.isPlaying ? 'Now Playing' : 'Paused'}</p>
       <h1>{playback.title}</h1>
       <p class="artists">{artists}</p>
       <p class="album">{playback.albumName}</p>
     </section>
+  {/if}
+
+  {#if activeAlbumItem.enabled}
+    <button
+      class="layout-item album-mode-toggle-hitbox"
+      type="button"
+      style={albumModeToggleStyle}
+      aria-label={showAlbumDetails ? 'Show album only' : 'Show album details'}
+      on:click={toggleDisplayMode}
+      on:mouseenter={showAlbumOnlyHoverUi}
+      on:mouseleave={hideAlbumOnlyHoverUi}
+      on:focusin={showAlbumOnlyHoverUi}
+      on:focusout={hideAlbumOnlyHoverUi}
+    ></button>
   {/if}
 
   {#if showAlbumDetails && settings.player.visible}
@@ -853,63 +874,23 @@
     animation: album-spin 22s linear infinite;
   }
 
-  .details-toggle {
+  .album-mode-toggle-hitbox {
     position: absolute;
-    top: calc(7% - 13px);
-    right: calc(3% - 13px);
-    z-index: 12;
-    display: grid;
-    place-items: center;
-    width: 72px;
-    height: 72px;
+    padding: 0;
     border: 0;
-    border-radius: 0;
-    color: rgb(246 247 251 / 88%);
+    border-radius: 50%;
+    appearance: none;
     background: transparent;
-    box-shadow: none;
     cursor: pointer;
-    font-size: clamp(2rem, 5vw, 3.8rem);
-    font-weight: 300;
-    isolation: isolate;
-    line-height: 1;
-    opacity: 0;
-    pointer-events: none;
-    text-shadow: 0 10px 24px rgb(0 0 0 / 42%);
-    transition:
-      color 220ms ease,
-      opacity 220ms ease,
-      transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .album-frame:hover .details-toggle,
-  .track-panel:hover .details-close-toggle,
-  .details-toggle:focus-visible {
-    opacity: 1;
-    pointer-events: auto;
+  .album-mode-toggle-hitbox:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--theme-accent, #f8d778) 72%, white 16%);
+    outline-offset: 8px;
   }
 
-  .details-close-toggle {
-    top: 0;
-    right: 0;
-    z-index: 14;
-    font-size: clamp(1.8rem, 3.1vw, 2.7rem);
-  }
-
-  .details-toggle:hover {
-    color: color-mix(in srgb, var(--theme-accent, #f8d778) 62%, white 28%);
-    transform: translateX(2px) scale(1.06);
-  }
-
-  .details-toggle:active {
-    transform: translateX(2px) scale(0.94);
-  }
-
-  .details-close-toggle:hover {
-    transform: scale(1.06);
-  }
-
-  .details-close-toggle:active {
-    transform: scale(0.94);
+  .album-mode-toggle-hitbox:active {
+    cursor: pointer;
   }
 
   .album-progress-ring {
@@ -1296,7 +1277,6 @@
 
     .album-frame,
     .seekbar-panel,
-    .details-toggle,
     .track-panel {
       transition: none;
     }
