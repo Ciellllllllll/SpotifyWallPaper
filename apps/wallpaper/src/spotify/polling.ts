@@ -7,6 +7,8 @@ const DEFAULT_PLAYING_INTERVAL_MS = 1000;
 const DEFAULT_PAUSED_INTERVAL_MS = 3000;
 const DEFAULT_ERROR_BACKOFF_MS = 5000;
 const MAX_ERROR_BACKOFF_MS = 60_000;
+const ACTIVE_TRANSIENT_ERROR_BACKOFF_MS = 5000;
+const PRIMARY_ENDPOINT_DEGRADED_COOLDOWN_MS = 5000;
 
 export interface PollDecisionInput {
   playback?: NormalizedPlayback | null;
@@ -17,6 +19,7 @@ export interface PollDecisionInput {
 
 export class SpotifyPlaybackSession {
   private token: SpotifyTokenState | null = null;
+  private primaryPlaybackEndpointBlockedUntilMs = 0;
 
   constructor(
     private readonly credentials: SpotifyCredentials,
@@ -29,7 +32,16 @@ export class SpotifyPlaybackSession {
       return token;
     }
 
-    return fetchCurrentPlayback(token.value, this.fetcher, new Date(nowMs).toISOString());
+    const result = await fetchCurrentPlayback(token.value, this.fetcher, new Date(nowMs).toISOString(), {
+      skipPrimaryEndpoint: nowMs < this.primaryPlaybackEndpointBlockedUntilMs
+    });
+    if (result.ok && result.degraded) {
+      this.primaryPlaybackEndpointBlockedUntilMs = nowMs + PRIMARY_ENDPOINT_DEGRADED_COOLDOWN_MS;
+    } else if (result.ok && nowMs >= this.primaryPlaybackEndpointBlockedUntilMs) {
+      this.primaryPlaybackEndpointBlockedUntilMs = 0;
+    }
+
+    return result;
   }
 
   async control(command: SpotifyPlaybackCommand, nowMs = Date.now()): Promise<SpotifyResult<void>> {
@@ -86,6 +98,13 @@ export const nextPollingDelayMs = ({ playback, error, consecutiveErrors = 0, set
   }
 
   if (error) {
+    if (
+      playback?.isPlaying &&
+      (error.kind === 'network_error' || error.kind === 'unavailable' || error.kind === 'unknown_response_shape')
+    ) {
+      return ACTIVE_TRANSIENT_ERROR_BACKOFF_MS;
+    }
+
     const multiplier = Math.max(1, consecutiveErrors + 1);
     return Math.min(DEFAULT_ERROR_BACKOFF_MS * multiplier, MAX_ERROR_BACKOFF_MS);
   }

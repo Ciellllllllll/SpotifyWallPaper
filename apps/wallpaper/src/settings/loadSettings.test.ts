@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { loadSettings } from './loadSettings';
+import { SPOTIFY_CREDENTIAL_STORAGE_KEY } from './spotifyCredentialCache';
+
+const storageTarget = (values: Record<string, string> = {}) => {
+  const store = new Map<string, string>(Object.entries(values));
+  return {
+    localStorage: {
+      get length() {
+        return store.size;
+      },
+      clear: () => store.clear(),
+      getItem: (key: string) => store.get(key) ?? null,
+      key: (index: number) => Array.from(store.keys())[index] ?? null,
+      removeItem: (key: string) => {
+        store.delete(key);
+      },
+      setItem: (key: string, value: string) => {
+        store.set(key, value);
+      }
+    } as Storage
+  } as Window;
+};
 
 describe('loadSettings', () => {
   it('falls back to defaults for malformed settings JSON', () => {
@@ -23,6 +44,91 @@ describe('loadSettings', () => {
     expect(loaded.settings.spotify.clientId).toBe('client-id');
     expect(loaded.settings.spotify.refreshToken).toBe('secret-refresh-token');
     expect(loaded.settings.spotify.hasRefreshToken).toBe(true);
+  });
+
+  it('uses cached Spotify credentials when settings do not contain a token', () => {
+    const loaded = loadSettings(
+      JSON.stringify({
+        debug: {
+          enabled: true
+        }
+      }),
+      storageTarget({
+        [SPOTIFY_CREDENTIAL_STORAGE_KEY]: JSON.stringify({
+          v: 1,
+          clientId: 'cached-client',
+          refreshToken: 'cached-refresh-token'
+        })
+      })
+    );
+
+    expect(loaded.settings.spotify.clientId).toBe('cached-client');
+    expect(loaded.settings.spotify.refreshToken).toBe('cached-refresh-token');
+    expect(loaded.settings.spotify.hasRefreshToken).toBe(true);
+    expect(loaded.settings.debug.enabled).toBe(true);
+  });
+
+  it('prefers explicit settings Spotify credentials over cached credentials', () => {
+    const loaded = loadSettings(
+      JSON.stringify({
+        spotify: {
+          clientId: 'settings-client',
+          refreshToken: 'settings-refresh-token'
+        }
+      }),
+      storageTarget({
+        [SPOTIFY_CREDENTIAL_STORAGE_KEY]: JSON.stringify({
+          v: 1,
+          clientId: 'cached-client',
+          refreshToken: 'cached-refresh-token'
+        })
+      })
+    );
+
+    expect(loaded.settings.spotify.clientId).toBe('settings-client');
+    expect(loaded.settings.spotify.refreshToken).toBe('settings-refresh-token');
+  });
+
+  it('does not pair a changed explicit Spotify client id with cached credentials', () => {
+    const loaded = loadSettings(
+      JSON.stringify({
+        spotify: {
+          clientId: 'new-settings-client'
+        }
+      }),
+      storageTarget({
+        [SPOTIFY_CREDENTIAL_STORAGE_KEY]: JSON.stringify({
+          v: 1,
+          clientId: 'cached-client',
+          refreshToken: 'cached-refresh-token'
+        })
+      })
+    );
+
+    expect(loaded.settings.spotify.clientId).toBe('new-settings-client');
+    expect(loaded.settings.spotify.refreshToken).toBeUndefined();
+    expect(loaded.settings.spotify.hasRefreshToken).toBe(false);
+  });
+
+  it('does not restore cached Spotify credentials when settings explicitly disable the token', () => {
+    const loaded = loadSettings(
+      JSON.stringify({
+        spotify: {
+          hasRefreshToken: false
+        }
+      }),
+      storageTarget({
+        [SPOTIFY_CREDENTIAL_STORAGE_KEY]: JSON.stringify({
+          v: 1,
+          clientId: 'cached-client',
+          refreshToken: 'cached-refresh-token'
+        })
+      })
+    );
+
+    expect(loaded.settings.spotify.clientId).toBe('');
+    expect(loaded.settings.spotify.refreshToken).toBeUndefined();
+    expect(loaded.settings.spotify.hasRefreshToken).toBe(false);
   });
 
   it('applies preset coordinates when settings JSON selects a preset without custom items', () => {

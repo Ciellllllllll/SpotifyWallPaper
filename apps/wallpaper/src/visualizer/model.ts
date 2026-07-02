@@ -55,6 +55,11 @@ export const idleVisualizerFrame = (timestampMs: number, settings: WallpaperSett
   return frameFromSamples(samples, 'idle', timestampMs);
 };
 
+export const shouldIgnoreSilentWallpaperFrame = (
+  frame: VisualizerFrame,
+  settings: WallpaperSettings['visualizer']
+): boolean => frame.source === 'wallpaper-engine' && frame.peak <= settings.noiseGate;
+
 export const buildVisualizerBars = (
   frame: VisualizerFrame,
   settings: WallpaperSettings,

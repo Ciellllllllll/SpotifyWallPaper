@@ -41,6 +41,10 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
   if (settingsJson) {
     const loaded = loadSettings(settingsJson);
     patchFromSettings(patch, loaded.settings);
+    const spotifyClearPatch = spotifyCredentialClearPatchFromSettingsJson(settingsJson);
+    if (spotifyClearPatch) {
+      patch.spotify = { ...patch.spotify, ...spotifyClearPatch };
+    }
     warning = loaded.warning;
   }
 
@@ -172,13 +176,15 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
   return { patch, warning };
 };
 
-export const applySettingsPatch = (settings: WallpaperSettings, patch: SettingsPatch): WallpaperSettings =>
-  repairSettings({
+export const applySettingsPatch = (settings: WallpaperSettings, patch: SettingsPatch): WallpaperSettings => {
+  const spotifyPatch = normalizeSpotifyCredentialPatch(settings.spotify, patch.spotify);
+
+  return repairSettings({
     ...settings,
     schemaVersion: patch.schemaVersion ?? settings.schemaVersion,
     spotify: {
       ...settings.spotify,
-      ...patch.spotify
+      ...spotifyPatch
     },
     layout: {
       ...settings.layout,
@@ -237,6 +243,7 @@ export const applySettingsPatch = (settings: WallpaperSettings, patch: SettingsP
       ...patch.debug
     }
   }).settings;
+};
 
 export const registerWallpaperPropertyListener = (
   onProperties: (result: WallpaperPropertyResult) => void,
@@ -282,4 +289,58 @@ const stringProperty = (properties: WallpaperEngineProperties, key: string): str
 const booleanProperty = (properties: WallpaperEngineProperties, key: string): boolean | undefined => {
   const value = properties[key]?.value;
   return typeof value === 'boolean' ? value : undefined;
+};
+
+const normalizeSpotifyCredentialPatch = (
+  current: WallpaperSettings['spotify'],
+  patch: Partial<WallpaperSettings['spotify']> | undefined
+): Partial<WallpaperSettings['spotify']> | undefined => {
+  if (!patch) {
+    return patch;
+  }
+
+  const next = { ...patch };
+  const hasClientIdPatch = hasOwn(patch, 'clientId');
+  const hasRefreshTokenPatch = hasOwn(patch, 'refreshToken');
+  const clientIdChanged = hasClientIdPatch && patch.clientId !== current.clientId;
+  const clientIdCleared = hasClientIdPatch && patch.clientId === '';
+
+  if ((clientIdChanged || clientIdCleared) && !hasRefreshTokenPatch) {
+    next.refreshToken = '';
+    next.hasRefreshToken = false;
+  }
+
+  return next;
+};
+
+const hasOwn = <T extends object>(target: T, key: PropertyKey): boolean => Object.prototype.hasOwnProperty.call(target, key);
+
+const spotifyCredentialClearPatchFromSettingsJson = (
+  settingsJson: string
+): Partial<WallpaperSettings['spotify']> | null => {
+  const parsed = parseJsonObject(settingsJson);
+  const spotify = parsed?.spotify;
+  if (!spotify || typeof spotify !== 'object') {
+    return null;
+  }
+
+  const record = spotify as Record<string, unknown>;
+  if (record.hasRefreshToken !== false && record.refreshToken !== '' && record.clientId !== '') {
+    return null;
+  }
+
+  return {
+    ...(record.clientId === '' ? { clientId: '' } : {}),
+    refreshToken: '',
+    hasRefreshToken: false
+  };
+};
+
+const parseJsonObject = (source: string): Record<string, unknown> | null => {
+  try {
+    const parsed: unknown = JSON.parse(source);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 };

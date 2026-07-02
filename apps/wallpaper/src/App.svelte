@@ -5,6 +5,7 @@
   import LyricsLayer from './lyrics/LyricsLayer.svelte';
   import { lyricDisplayState, parseLrc } from './lyrics/lrc';
   import { mockPlayback } from './mock/mockPlayback';
+  import { clearStoredSpotifyCredentials, persistSpotifyCredentials } from './settings/spotifyCredentialCache';
   import { defaultSettings } from './settings/defaultSettings';
   import { loadSettings } from './settings/loadSettings';
   import { credentialsFromSettings, nextPollingDelayMs, SpotifyPlaybackSession } from './spotify/polling';
@@ -15,7 +16,7 @@
   import TransitionOverlay from './transitions/TransitionOverlay.svelte';
   import { createTransitionState, type TrackTransitionState } from './transitions/model';
   import VisualizerLayer from './visualizer/VisualizerLayer.svelte';
-  import { idleVisualizerFrame, shapeVisualizerFrame } from './visualizer/model';
+  import { idleVisualizerFrame, shapeVisualizerFrame, shouldIgnoreSilentWallpaperFrame } from './visualizer/model';
   import { startAudioBridge } from './wallpaperEngine/audio';
   import { applySettingsPatch, registerWallpaperPropertyListener } from './wallpaperEngine/properties';
   import { initVisualCore, visualCoreStatus } from './wasm/visualCore';
@@ -54,6 +55,7 @@
   let stopAudioBridge: (() => void) | null = null;
   let lastAudioFrameAtMs = 0;
   let pollingRunId = 0;
+  let activeSpotifyPollingKey: string | null = null;
 
   const updateClock = () => {
     now = new Date();
@@ -150,6 +152,9 @@
     !playback.device?.isRestricted &&
     !controlBusy;
   $: controlStatusText = controlError?.message ?? (playback.device?.isRestricted ? 'Current Spotify device is restricted.' : '');
+  $: spotifyStatusText = spotifyError
+    ? `${spotifyError.kind}${spotifyError.status ? ` ${spotifyError.status}` : ''}: ${spotifyError.message}`
+    : 'ok';
 
   const playbackButtonIcon = (kind: 'previous' | 'play' | 'pause' | 'next' | 'shuffle' | 'repeat'): string => {
     switch (kind) {
@@ -262,6 +267,10 @@
   const acceptVisualizerFrame = (frame: VisualizerFrame) => {
     if (!settings.visualizer.enabled) {
       clearVisualizerFrame();
+      return;
+    }
+
+    if (shouldIgnoreSilentWallpaperFrame(frame, settings.visualizer)) {
       return;
     }
 
@@ -406,6 +415,7 @@
 
   const applyRuntimeSettings = (nextSettings: WallpaperSettings, source: string, warning: string | null) => {
     settings = nextSettings;
+    persistSpotifyCredentials(settings);
     settingsWarning = warning;
     settingsSource = source;
     if (!settings.transitions.enabled) {
@@ -416,6 +426,30 @@
     }
     startClock();
     startVisualizerIdleTicker();
+    configureSpotifyPollingIfNeeded();
+  };
+
+  const spotifyPollingKey = (nextSettings: WallpaperSettings) => {
+    const credentials = credentialsFromSettings(nextSettings);
+    if (!credentials) {
+      return '';
+    }
+
+    return JSON.stringify({
+      clientId: credentials.clientId,
+      refreshToken: credentials.refreshToken,
+      playingIntervalMs: nextSettings.spotify.pollIntervalPlayingMs,
+      pausedIntervalMs: nextSettings.spotify.pollIntervalPausedMs
+    });
+  };
+
+  const configureSpotifyPollingIfNeeded = () => {
+    const nextKey = spotifyPollingKey(settings);
+    if (nextKey === activeSpotifyPollingKey) {
+      return;
+    }
+
+    activeSpotifyPollingKey = nextKey;
     configureSpotifyPolling();
   };
 
@@ -432,6 +466,9 @@
     }
 
     playbackMode = 'spotify';
+    spotifyError = null;
+    controlError = null;
+    consecutiveErrors = 0;
     const session = new SpotifyPlaybackSession(credentials);
     spotifySession = session;
     const runId = pollingRunId;
@@ -469,6 +506,9 @@
     applyRuntimeSettings(loaded.settings, loaded.warning ? 'fallback defaults' : 'defaults/browser', loaded.warning);
     startProgressTicker();
     registerWallpaperPropertyListener((result) => {
+      if (result.patch.spotify?.refreshToken === '') {
+        clearStoredSpotifyCredentials();
+      }
       applyRuntimeSettings(applySettingsPatch(settings, result.patch), 'wallpaper-engine properties', result.warning);
     });
     stopAudioBridge = startAudioBridge(acceptVisualizerFrame);
@@ -714,7 +754,7 @@
     <aside class="layout-item debug-panel" style={layoutStyle(layoutItems.debug)} aria-label="Debug overlay">
       <div>Mode: {playbackMode}</div>
       <div>Spotify token: {settings.spotify.hasRefreshToken ? 'configured' : 'not configured'}</div>
-      <div>Spotify status: {spotifyError ? `${spotifyError.kind}: ${spotifyError.message}` : 'ok'}</div>
+      <div>Spotify status: {spotifyStatusText}</div>
       <div>Polling: {lastPollingDelayMs ? `${lastPollingDelayMs}ms` : 'idle'}</div>
       <div>Preset: {settings.layout.preset}</div>
       <div>Theme: {theme.source}</div>

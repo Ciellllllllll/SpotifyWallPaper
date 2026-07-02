@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { VisualizerFrame } from '@spotify-wallpaper/shared-types';
 import { defaultSettings } from '../settings/defaultSettings';
-import { buildVisualizerBars, buildWaveformPath, effectiveVisualizerConfig, idleVisualizerFrame, shapeVisualizerFrame } from './model';
+import {
+  buildVisualizerBars,
+  buildWaveformPath,
+  effectiveVisualizerConfig,
+  idleVisualizerFrame,
+  shapeVisualizerFrame,
+  shouldIgnoreSilentWallpaperFrame
+} from './model';
 
 const frame: VisualizerFrame = {
   source: 'mock',
@@ -75,5 +82,21 @@ describe('visualizer model', () => {
     expect(idle.source).toBe('idle');
     expect(idle.samples.length).toBeGreaterThan(0);
     expect(idle.peak).toBeGreaterThan(0);
+  });
+
+  it('ignores silent Wallpaper Engine frames so idle fallback can recover', () => {
+    expect(
+      shouldIgnoreSilentWallpaperFrame(
+        { ...frame, source: 'wallpaper-engine', samples: [0, 0, 0], peak: 0 },
+        defaultSettings.visualizer
+      )
+    ).toBe(true);
+    expect(
+      shouldIgnoreSilentWallpaperFrame(
+        { ...frame, source: 'wallpaper-engine', samples: [0.2, 0.1, 0.05], peak: 0.2 },
+        defaultSettings.visualizer
+      )
+    ).toBe(false);
+    expect(shouldIgnoreSilentWallpaperFrame({ ...frame, source: 'mock', peak: 0 }, defaultSettings.visualizer)).toBe(false);
   });
 });

@@ -132,6 +132,84 @@ describe('Wallpaper Engine property adapter', () => {
     expect(merged.debug.enabled).toBe(true);
   });
 
+  it('clears existing Spotify token when settings JSON explicitly disables credentials', () => {
+    const result = parseWallpaperProperties({
+      settings_json: {
+        value: JSON.stringify({
+          spotify: {
+            hasRefreshToken: false
+          }
+        })
+      }
+    });
+    const merged = applySettingsPatch(
+      {
+        ...defaultSettings,
+        spotify: {
+          ...defaultSettings.spotify,
+          clientId: 'existing-client',
+          refreshToken: 'existing-refresh-token',
+          hasRefreshToken: true
+        }
+      },
+      result.patch
+    );
+
+    expect(merged.spotify.clientId).toBe('existing-client');
+    expect(merged.spotify.refreshToken).toBe('');
+    expect(merged.spotify.hasRefreshToken).toBe(false);
+  });
+
+  it('clears existing Spotify token when settings JSON changes only the client id', () => {
+    const result = parseWallpaperProperties({
+      settings_json: {
+        value: JSON.stringify({
+          spotify: {
+            clientId: 'new-client'
+          }
+        })
+      }
+    });
+    const merged = applySettingsPatch(
+      {
+        ...defaultSettings,
+        spotify: {
+          ...defaultSettings.spotify,
+          clientId: 'existing-client',
+          refreshToken: 'existing-refresh-token',
+          hasRefreshToken: true
+        }
+      },
+      result.patch
+    );
+
+    expect(merged.spotify.clientId).toBe('new-client');
+    expect(merged.spotify.refreshToken).toBe('');
+    expect(merged.spotify.hasRefreshToken).toBe(false);
+  });
+
+  it('clears existing Spotify token when the client id property is cleared', () => {
+    const result = parseWallpaperProperties({
+      spotify_client_id: { value: '' }
+    });
+    const merged = applySettingsPatch(
+      {
+        ...defaultSettings,
+        spotify: {
+          ...defaultSettings.spotify,
+          clientId: 'existing-client',
+          refreshToken: 'existing-refresh-token',
+          hasRefreshToken: true
+        }
+      },
+      result.patch
+    );
+
+    expect(merged.spotify.clientId).toBe('');
+    expect(merged.spotify.refreshToken).toBe('');
+    expect(merged.spotify.hasRefreshToken).toBe(false);
+  });
+
   it('lets explicit Spotify token properties override settings JSON token fields', () => {
     const result = parseWallpaperProperties({
       settings_json: {

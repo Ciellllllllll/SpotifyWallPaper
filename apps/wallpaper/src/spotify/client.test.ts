@@ -25,6 +25,44 @@ describe('fetchCurrentPlayback', () => {
     expect(result.value.title).toBe('Current Song');
     expect(result.value.source).toBe('spotify');
   });
+
+  it('falls back to the currently-playing endpoint for transient player status failures', async () => {
+    const calls: string[] = [];
+    const fetcher = (async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      if (String(url).endsWith('/v1/me/player')) {
+        return new Response('upstream unavailable', { status: 502 });
+      }
+
+      return new Response(JSON.stringify(trackFixture), { status: 200 });
+    }) as typeof fetch;
+
+    const result = await fetchCurrentPlayback('secret-access-token', fetcher, '2026-06-13T00:00:00.000Z');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(calls).toEqual([
+      'https://api.spotify.com/v1/me/player',
+      'https://api.spotify.com/v1/me/player/currently-playing'
+    ]);
+    expect(result.value.title).toBe('Current Song');
+  });
+
+  it('does not fall back for authorization and rate-limit failures', async () => {
+    const calls: string[] = [];
+    const fetcher = (async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      return new Response('limited', { status: 429, headers: { 'retry-after': '9' } });
+    }) as typeof fetch;
+
+    const result = await fetchCurrentPlayback('secret-access-token', fetcher, '2026-06-13T00:00:00.000Z');
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(calls).toEqual(['https://api.spotify.com/v1/me/player']);
+    expect(result.error.kind).toBe('rate_limited');
+    expect(result.error.retryAfterMs).toBe(9000);
+  });
 });
 
 describe('sendPlaybackCommand', () => {

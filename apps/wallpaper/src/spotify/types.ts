@@ -26,6 +26,7 @@ export type SpotifyResult<T> =
   | {
       ok: true;
       value: T;
+      degraded?: SpotifyPlaybackError;
     }
   | {
       ok: false;

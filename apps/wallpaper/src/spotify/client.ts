@@ -7,11 +7,20 @@ const CURRENT_PLAYBACK_ENDPOINT = 'https://api.spotify.com/v1/me/player';
 const CURRENTLY_PLAYING_ENDPOINT = 'https://api.spotify.com/v1/me/player/currently-playing';
 const PLAYER_ENDPOINT = 'https://api.spotify.com/v1/me/player';
 
+export interface FetchCurrentPlaybackOptions {
+  skipPrimaryEndpoint?: boolean;
+}
+
 export const fetchCurrentPlayback = async (
   accessToken: string,
   fetcher: Fetcher = fetch,
-  fetchedAt = new Date().toISOString()
+  fetchedAt = new Date().toISOString(),
+  options: FetchCurrentPlaybackOptions = {}
 ): Promise<SpotifyResult<NormalizedPlayback>> => {
+  if (options.skipPrimaryEndpoint) {
+    return fetchCurrentlyPlayingFallback(accessToken, fetcher, fetchedAt);
+  }
+
   let response: Response;
   try {
     response = await fetcher(CURRENT_PLAYBACK_ENDPOINT, {
@@ -24,11 +33,21 @@ export const fetchCurrentPlayback = async (
   }
 
   if (response.status === 204) {
-    return { ok: false, error: classifySpotifyStatus(response.status, response.headers.get('retry-after')) };
+    return fetchCurrentlyPlayingFallback(
+      accessToken,
+      fetcher,
+      fetchedAt,
+      classifySpotifyStatus(response.status, response.headers.get('retry-after'))
+    );
   }
 
   if (!response.ok) {
-    return { ok: false, error: classifySpotifyStatus(response.status, response.headers.get('retry-after')) };
+    const error = classifySpotifyStatus(response.status, response.headers.get('retry-after'));
+    if (error.kind === 'unauthorized' || error.kind === 'forbidden' || error.kind === 'rate_limited') {
+      return { ok: false, error };
+    }
+
+    return fetchCurrentlyPlayingFallback(accessToken, fetcher, fetchedAt, error);
   }
 
   const payload = await response.json().catch(() => null);
@@ -44,7 +63,7 @@ const fetchCurrentlyPlayingFallback = async (
   accessToken: string,
   fetcher: Fetcher,
   fetchedAt: string,
-  firstError: SpotifyPlaybackError
+  firstError?: SpotifyPlaybackError
 ): Promise<SpotifyResult<NormalizedPlayback>> => {
   let response: Response;
   try {
@@ -54,7 +73,7 @@ const fetchCurrentlyPlayingFallback = async (
       }
     });
   } catch {
-    return { ok: false, error: firstError };
+    return { ok: false, error: firstError ?? classifyNetworkError() };
   }
 
   if (response.status === 204) {
@@ -62,12 +81,14 @@ const fetchCurrentlyPlayingFallback = async (
   }
 
   if (!response.ok) {
-    return { ok: false, error: firstError };
+    return { ok: false, error: classifySpotifyStatus(response.status, response.headers.get('retry-after')) };
   }
 
   const payload = await response.json().catch(() => null);
   const normalized = normalizeSpotifyPlayback(payload, fetchedAt);
-  return normalized.ok ? { ok: true, value: normalized.value.playback } : { ok: false, error: firstError };
+  return normalized.ok
+    ? { ok: true, value: normalized.value.playback, degraded: firstError }
+    : { ok: false, error: firstError ?? normalized.error };
 };
 
 export const sendPlaybackCommand = async (

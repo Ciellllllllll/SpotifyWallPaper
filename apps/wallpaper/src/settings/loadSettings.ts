@@ -2,6 +2,7 @@ import type { WallpaperSettings } from '@spotify-wallpaper/shared-types';
 import { clonePresetItems, defaultLayoutPreset, isLayoutPresetName } from '../layout/presets';
 import { defaultSettings } from './defaultSettings';
 import { repairSettings } from './repairSettings';
+import { readStoredSpotifyCredentials } from './spotifyCredentialCache';
 
 const SETTINGS_GLOBAL = '__SPOTIFY_WALLPAPER_SETTINGS__';
 const SETTINGS_STORAGE_KEY = 'spotify-wallpaper-settings';
@@ -17,14 +18,22 @@ export interface LoadedSettings {
   warning: string | null;
 }
 
-export const loadSettings = (source: unknown = readDefaultSettingsSource()): LoadedSettings => {
+type StorageTarget = Pick<Window, 'localStorage'>;
+
+export const loadSettings = (
+  source: unknown = readDefaultSettingsSource(),
+  storageTarget: StorageTarget | undefined = currentWindow()
+): LoadedSettings => {
   if (source === undefined || source === null || source === '') {
-    return { settings: defaultSettings, warning: null };
+    return withStoredSpotifyCredentials({ settings: defaultSettings, warning: null }, storageTarget);
   }
 
   const parsed = typeof source === 'string' ? parseJson(source) : source;
   if (!parsed || typeof parsed !== 'object') {
-    return { settings: defaultSettings, warning: 'Settings were malformed; defaults are active.' };
+    return withStoredSpotifyCredentials(
+      { settings: defaultSettings, warning: 'Settings were malformed; defaults are active.' },
+      storageTarget
+    );
   }
 
   const record = parsed as Record<string, unknown>;
@@ -42,8 +51,10 @@ export const loadSettings = (source: unknown = readDefaultSettingsSource()): Loa
   const rainmeter = record.rainmeter && typeof record.rainmeter === 'object' ? (record.rainmeter as Record<string, unknown>) : {};
   const debug = record.debug && typeof record.debug === 'object' ? (record.debug as Record<string, unknown>) : {};
   const preset = isLayoutPresetName(layout.preset) ? layout.preset : defaultLayoutPreset;
+  const allowsStoredSpotifyCredentials =
+    spotify.hasRefreshToken !== false && spotify.clientId !== '' && spotify.refreshToken !== '';
 
-  return repairSettings({
+  return withStoredSpotifyCredentials(repairSettings({
     ...defaultSettings,
     schemaVersion: numberOr(record.schemaVersion, defaultSettings.schemaVersion) ?? defaultSettings.schemaVersion,
     spotify: {
@@ -180,20 +191,58 @@ export const loadSettings = (source: unknown = readDefaultSettingsSource()): Loa
       ...defaultSettings.debug,
       enabled: booleanOr(debug.enabled, defaultSettings.debug.enabled)
     }
-  });
+  }), storageTarget, allowsStoredSpotifyCredentials);
 };
 
-const readDefaultSettingsSource = (): unknown => {
-  if (typeof window === 'undefined') {
+const withStoredSpotifyCredentials = (
+  loaded: LoadedSettings,
+  storageTarget: StorageTarget | undefined,
+  allowStoredCredentials = true
+): LoadedSettings => {
+  if (!allowStoredCredentials) {
+    return loaded;
+  }
+
+  const explicitClientId = loaded.settings.spotify.clientId;
+  const explicitRefreshToken = loaded.settings.spotify.refreshToken;
+  if (explicitClientId && explicitRefreshToken) {
+    return loaded;
+  }
+
+  const stored = readStoredSpotifyCredentials(storageTarget);
+  if (!stored) {
+    return loaded;
+  }
+
+  if (explicitClientId && explicitClientId !== stored.clientId) {
+    return loaded;
+  }
+
+  return {
+    ...loaded,
+    settings: {
+      ...loaded.settings,
+      spotify: {
+        ...loaded.settings.spotify,
+        clientId: explicitClientId || stored.clientId,
+        refreshToken: explicitRefreshToken || stored.refreshToken,
+        hasRefreshToken: Boolean(explicitRefreshToken || stored.refreshToken)
+      }
+    }
+  };
+};
+
+const readDefaultSettingsSource = (target = currentWindow()): unknown => {
+  if (!target) {
     return undefined;
   }
 
-  if (window[SETTINGS_GLOBAL] !== undefined) {
-    return window[SETTINGS_GLOBAL];
+  if (target[SETTINGS_GLOBAL] !== undefined) {
+    return target[SETTINGS_GLOBAL];
   }
 
   try {
-    return window.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? undefined;
+    return target.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? undefined;
   } catch {
     return undefined;
   }
@@ -212,3 +261,5 @@ const stringOrUndefined = (value: unknown): string | undefined => (typeof value 
 const numberOr = (value: unknown, fallback: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 const booleanOr = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
+const currentWindow = (): (Window & { __SPOTIFY_WALLPAPER_SETTINGS__?: unknown }) | undefined =>
+  typeof window === 'undefined' ? undefined : window;
