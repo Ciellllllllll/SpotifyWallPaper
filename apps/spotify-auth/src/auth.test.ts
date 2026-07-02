@@ -60,10 +60,11 @@ describe('spotify auth PKCE', () => {
   });
 
   it('parses callback parameters without exposing the full callback URL', () => {
-    expect(parseCallbackParams('https://example.github.io/app/callback?code=abc&state=xyz')).toEqual({
+    expect(parseCallbackParams('https://example.github.io/app/callback?code=abc&state=xyz&error_description=nope')).toEqual({
       code: 'abc',
       state: 'xyz',
-      error: null
+      error: null,
+      errorDescription: 'nope'
     });
   });
 
@@ -107,6 +108,26 @@ describe('spotify auth PKCE', () => {
     );
 
     expect(result.ok).toBe(false);
+    expect(storage.values.size).toBe(0);
+  });
+
+  it('explains access_denied without leaking callback secrets', async () => {
+    const storage = memoryStorage();
+    await buildAuthorizeUrl({ clientId: 'client-id', redirectUri: 'https://example.github.io/app/callback' }, storage);
+
+    const result = await exchangeCallbackForToken(
+      'https://example.github.io/app/callback?error=access_denied&error_description=User%20not%20registered&state=ignored',
+      'client-id',
+      'https://example.github.io/app/callback',
+      vi.fn() as unknown as typeof fetch,
+      storage
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      message:
+        'Spotify rejected authorization. If the app is in Development mode, add this Spotify account under Spotify Dashboard > User Management, then start again.'
+    });
     expect(storage.values.size).toBe(0);
   });
 
