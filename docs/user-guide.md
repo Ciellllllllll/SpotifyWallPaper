@@ -36,8 +36,8 @@ Additional scope for playback controls:
 
 - `user-modify-playback-state`
 
-For the deployed auth page, configure the repository variable `SPOTIFY_CLIENT_ID` with the public Spotify Client ID and
-register this redirect URI in the Spotify Developer Dashboard:
+For the deployed auth page, configure `SPOTIFY_CLIENT_ID` as either a repository Variable or repository Secret with the
+public Spotify Client ID, and register this redirect URI in the Spotify Developer Dashboard:
 
 ```text
 https://<owner>.github.io/<repo>/spotify-auth/callback

@@ -92,7 +92,8 @@ Open the auth page, authorize Spotify, copy the displayed Wallpaper Engine Token
 `spotify_refresh_token` / Spotify Token property. Do not share screenshots or recordings that show the token.
 
 The Pages deployment workflow is `.github/workflows/spotify-auth-pages.yml`. It builds only `apps/spotify-auth`, uploads
-`apps/spotify-auth/dist`, and uses the repository variable `SPOTIFY_CLIENT_ID` to configure the one-click Client ID when set.
+`apps/spotify-auth/dist`, and uses `SPOTIFY_CLIENT_ID` from repository Variables or Secrets to configure the one-click
+Client ID when set.
 Because the Client ID is part of Spotify's authorization URL, it is treated as a public identifier. Do not configure or
 commit a Spotify Client Secret.
 
