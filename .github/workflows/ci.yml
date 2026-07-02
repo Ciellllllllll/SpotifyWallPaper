@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feature/**
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: TypeScript tests
+        run: npm run test --workspaces --if-present
+
+      - name: TypeScript checks
+        run: npm run check
+
+      - name: Web builds
+        run: npm run build
+
+      - name: Rust workspace check
+        run: cargo check --workspace
+
+      - name: Rust workspace tests
+        run: cargo test --workspace
+
+      - name: Rust WASM target check
+        run: cargo check -p spotify-wallpaper-visual-core --target wasm32-unknown-unknown
+
+      - name: Tauri backend check
+        run: cargo check --manifest-path apps/configurator/src-tauri/Cargo.toml
+
+      - name: Tauri backend tests
+        run: cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml
+
+      - name: npm audit
+        run: npm audit --audit-level=moderate

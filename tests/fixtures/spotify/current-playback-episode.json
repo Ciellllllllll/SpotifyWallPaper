@@ -1,0 +1,34 @@
+{
+  "device": {
+    "id": "device-2",
+    "is_active": true,
+    "is_restricted": false,
+    "name": "Phone",
+    "type": "Smartphone",
+    "volume_percent": 33
+  },
+  "shuffle_state": false,
+  "repeat_state": "off",
+  "progress_ms": 120000,
+  "is_playing": false,
+  "item": {
+    "type": "episode",
+    "id": "episode-1",
+    "uri": "spotify:episode:episode-1",
+    "name": "Daily Briefing",
+    "duration_ms": 900000,
+    "publisher": "Mock Publisher",
+    "external_urls": {
+      "spotify": "https://open.spotify.com/episode/episode-1"
+    },
+    "images": [],
+    "show": {
+      "name": "Mock Show",
+      "images": [
+        {
+          "url": "https://i.scdn.co/image/show"
+        }
+      ]
+    }
+  }
+}

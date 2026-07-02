@@ -1,0 +1,12 @@
+{
+  "primaryColor": "#0f172a",
+  "secondaryColor": "#1e293b",
+  "accentColor": "#38bdf8",
+  "mutedColor": "#334155",
+  "darkColor": "#020617",
+  "lightColor": "#f8fafc",
+  "readableTextColor": "#f8fafc",
+  "overlayOpacity": 0.58,
+  "shadowStrength": 0.68,
+  "source": "fallback"
+}

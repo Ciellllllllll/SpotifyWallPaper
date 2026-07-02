@@ -1,0 +1,11 @@
+{
+  "status": 403,
+  "headers": {},
+  "body": {
+    "error": {
+      "status": 403,
+      "message": "Player command failed: Premium required"
+    }
+  },
+  "expectedKind": "forbidden"
+}

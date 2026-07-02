@@ -1,0 +1,199 @@
+{
+  "description": "Spotify-linked Web Wallpaper with mock fallback, configurable layout, lyrics, visualizer, and optional Spotify playback integration.",
+  "file": "index.html",
+  "general": {
+    "properties": {
+      "spotify_client_id": {
+        "text": "Spotify Client ID",
+        "type": "textinput",
+        "value": ""
+      },
+      "spotify_refresh_token": {
+        "text": "Spotify Refresh Token",
+        "type": "textinput",
+        "value": ""
+      },
+      "settings_json": {
+        "text": "Settings JSON",
+        "type": "textinput",
+        "value": ""
+      },
+      "selected_preset": {
+        "text": "Layout Preset",
+        "type": "combo",
+        "value": "Left Dock",
+        "options": [
+          { "label": "Minimal", "value": "Minimal" },
+          { "label": "Center Album", "value": "Center Album" },
+          { "label": "Lyrics Focus", "value": "Lyrics Focus" },
+          { "label": "Visualizer Heavy", "value": "Visualizer Heavy" },
+          { "label": "Rainmeter Hybrid", "value": "Rainmeter Hybrid" },
+          { "label": "Left Dock", "value": "Left Dock" },
+          { "label": "Bottom Player", "value": "Bottom Player" },
+          { "label": "Clock Focus", "value": "Clock Focus" },
+          { "label": "Album Ring", "value": "Album Ring" },
+          { "label": "Ambient Background", "value": "Ambient Background" }
+        ]
+      },
+      "background_mode": {
+        "text": "Background Mode",
+        "type": "combo",
+        "value": "album-blur",
+        "options": [
+          { "label": "Album Blur", "value": "album-blur" },
+          { "label": "Album Gradient", "value": "album-gradient" },
+          { "label": "Solid Color", "value": "solid-color" }
+        ]
+      },
+      "theme_mode": {
+        "text": "Theme Mode",
+        "type": "combo",
+        "value": "album",
+        "options": [
+          { "label": "Album", "value": "album" },
+          { "label": "Fallback", "value": "fallback" },
+          { "label": "Custom", "value": "custom" }
+        ]
+      },
+      "album_art_visible": {
+        "text": "Album Art Visible",
+        "type": "bool",
+        "value": true
+      },
+      "track_text_visible": {
+        "text": "Track Text Visible",
+        "type": "bool",
+        "value": true
+      },
+      "player_visible": {
+        "text": "Player Visible",
+        "type": "bool",
+        "value": true
+      },
+      "player_controls_enabled": {
+        "text": "Player Controls Enabled",
+        "type": "bool",
+        "value": true
+      },
+      "player_show_device": {
+        "text": "Show Spotify Device",
+        "type": "bool",
+        "value": true
+      },
+      "player_show_volume": {
+        "text": "Show Volume",
+        "type": "bool",
+        "value": true
+      },
+      "player_show_shuffle_repeat": {
+        "text": "Show Shuffle Repeat",
+        "type": "bool",
+        "value": true
+      },
+      "seekbar_visible": {
+        "text": "Seekbar Visible",
+        "type": "bool",
+        "value": true
+      },
+      "seekbar_style": {
+        "text": "Seekbar Style",
+        "type": "combo",
+        "value": "line",
+        "options": [
+          { "label": "Line", "value": "line" },
+          { "label": "Album Ring", "value": "album-ring" }
+        ]
+      },
+      "visualizer_enabled": {
+        "text": "Visualizer Enabled",
+        "type": "bool",
+        "value": true
+      },
+      "visualizer_mode": {
+        "text": "Visualizer Mode",
+        "type": "combo",
+        "value": "album-ring",
+        "options": [
+          { "label": "Album Ring", "value": "album-ring" },
+          { "label": "Radial Bars", "value": "radial-bars" },
+          { "label": "Waveform Line", "value": "waveform-line" }
+        ]
+      },
+      "lyrics_enabled": {
+        "text": "Lyrics Enabled",
+        "type": "bool",
+        "value": false
+      },
+      "lyrics_mode": {
+        "text": "Lyrics Mode",
+        "type": "combo",
+        "value": "current",
+        "options": [
+          { "label": "Current Line", "value": "current" },
+          { "label": "Context Lines", "value": "context" }
+        ]
+      },
+      "transitions_enabled": {
+        "text": "Transitions Enabled",
+        "type": "bool",
+        "value": false
+      },
+      "transition_preset": {
+        "text": "Transition Preset",
+        "type": "combo",
+        "value": "fade",
+        "options": [
+          { "label": "Fade", "value": "fade" },
+          { "label": "Crossfade", "value": "crossfade" },
+          { "label": "Slide Left", "value": "slide-left" },
+          { "label": "Zoom In", "value": "zoom-in" },
+          { "label": "Blur Fade", "value": "blur-fade" }
+        ]
+      },
+      "clock_enabled": {
+        "text": "Clock Enabled",
+        "type": "bool",
+        "value": true
+      },
+      "clock_hour12": {
+        "text": "12 Hour Clock",
+        "type": "bool",
+        "value": false
+      },
+      "clock_show_seconds": {
+        "text": "Show Clock Seconds",
+        "type": "bool",
+        "value": false
+      },
+      "clock_show_date": {
+        "text": "Show Date",
+        "type": "bool",
+        "value": false
+      },
+      "clock_show_weekday": {
+        "text": "Show Weekday",
+        "type": "bool",
+        "value": false
+      },
+      "performance_mode": {
+        "text": "Performance Mode",
+        "type": "combo",
+        "value": "standard",
+        "options": [
+          { "label": "Low Power", "value": "low-power" },
+          { "label": "Standard", "value": "standard" },
+          { "label": "High Effect", "value": "high-effect" }
+        ]
+      },
+      "debug_enabled": {
+        "text": "Debug Enabled",
+        "type": "bool",
+        "value": false
+      }
+    }
+  },
+  "preview": "mock/album-placeholder.svg",
+  "tags": ["spotify", "music", "web", "wallpaper engine"],
+  "title": "Spotify Wallpaper",
+  "type": "web"
+}

@@ -1,0 +1,34 @@
+{
+  "source": "mock",
+  "itemType": "track",
+  "id": "mock-track-long-title",
+  "uri": "spotify:track:mock-track-long-title",
+  "title": "A Very Long Track Title Designed To Exercise Wrapping And Responsive Text Boundaries In The Wallpaper Preview",
+  "artists": [
+    "First Fixture Artist",
+    "Second Fixture Artist",
+    "Third Fixture Artist",
+    "Fourth Fixture Artist",
+    "Fifth Fixture Artist"
+  ],
+  "albumName": "Text Stress Fixtures",
+  "imageUrls": ["/mock/album-placeholder.svg"],
+  "albumImageUrl": "/mock/album-placeholder.svg",
+  "durationMs": 360000,
+  "progressMs": 123000,
+  "isPlaying": true,
+  "device": {
+    "id": "mock-device",
+    "name": "Browser Preview",
+    "type": "browser",
+    "isActive": true,
+    "isRestricted": false,
+    "volumePercent": 64
+  },
+  "deviceName": "Browser Preview",
+  "shuffleState": false,
+  "repeatState": "off",
+  "volumePercent": 64,
+  "externalUrl": null,
+  "fetchedAt": "2026-06-14T00:00:00.000Z"
+}

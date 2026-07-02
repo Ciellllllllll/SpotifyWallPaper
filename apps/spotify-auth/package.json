@@ -1,0 +1,13 @@
+{
+  "name": "@spotify-wallpaper/spotify-auth",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1430",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 1431",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

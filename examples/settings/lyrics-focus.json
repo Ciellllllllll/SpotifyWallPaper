@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "spotify": {
+    "clientId": "",
+    "hasRefreshToken": false
+  },
+  "layout": {
+    "preset": "Lyrics Focus"
+  },
+  "theme": {
+    "mode": "album",
+    "textColor": "#f6f7fb",
+    "autoReadability": true
+  },
+  "background": {
+    "mode": "album-gradient",
+    "opacity": 0.72,
+    "blurPx": 24,
+    "solidColor": "#111318"
+  },
+  "albumArt": {
+    "visible": true
+  },
+  "text": {
+    "visible": true
+  },
+  "lyrics": {
+    "enabled": true,
+    "sourceText": "[00:01.00]First line\n[00:04.50]Second line\n[00:08.00]Third line",
+    "mode": "context",
+    "offsetMs": 0,
+    "showMissingState": true
+  },
+  "visualizer": {
+    "enabled": true,
+    "mode": "waveform-line",
+    "intensity": 0.65,
+    "sensitivity": 1,
+    "smoothing": 0.4,
+    "decay": 0.22,
+    "bassWeight": 1,
+    "midWeight": 1,
+    "trebleWeight": 1,
+    "barCount": 48,
+    "lineWidth": 3,
+    "radius": 1,
+    "gap": 8,
+    "rotationSpeed": 0.08,
+    "particleCount": 0,
+    "particleLife": 0,
+    "glowStrength": 0.45,
+    "colorMode": "theme",
+    "mirrorMode": "mirror",
+    "clampMax": 1,
+    "noiseGate": 0.03,
+    "idleAnimation": true
+  },
+  "clock": {
+    "enabled": true,
+    "hour12": false,
+    "showSeconds": false,
+    "showDate": true,
+    "showWeekday": true,
+    "fontSizePx": 30,
+    "fontWeight": 700,
+    "letterSpacingPx": 0,
+    "opacity": 0.86,
+    "colorMode": "auto",
+    "fixedColor": "#f6f7fb"
+  },
+  "transitions": {
+    "enabled": true,
+    "preset": "fade",
+    "durationMs": 700,
+    "easing": "ease-out",
+    "background": true,
+    "albumArt": true,
+    "text": true,
+    "lyrics": true,
+    "visualizer": false,
+    "reduceMotion": false
+  },
+  "performance": {
+    "mode": "standard"
+  },
+  "rainmeter": {
+    "enabled": false,
+    "outputPath": "",
+    "outputMode": "json",
+    "stoppedUpdateIntervalMs": 10000
+  },
+  "debug": {
+    "enabled": false
+  }
+}

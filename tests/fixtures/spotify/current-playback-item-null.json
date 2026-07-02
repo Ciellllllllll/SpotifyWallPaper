@@ -1,0 +1,15 @@
+{
+  "device": {
+    "id": "device-3",
+    "is_active": true,
+    "is_restricted": false,
+    "name": "Desktop",
+    "type": "Computer",
+    "volume_percent": 40
+  },
+  "shuffle_state": false,
+  "repeat_state": "off",
+  "progress_ms": null,
+  "is_playing": false,
+  "item": null
+}

@@ -1,0 +1,25 @@
+{
+  "name": "spotify-wallpaper",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @spotify-wallpaper/shared-types && npm run build -w @spotify-wallpaper/spotify-auth && npm run build -w @spotify-wallpaper/configurator && npm run build -w @spotify-wallpaper/wallpaper",
+    "build:wasm": "wasm-pack build crates/visual-core --target web --out-dir ../../apps/wallpaper/public/wasm",
+    "check": "npm run check -w @spotify-wallpaper/shared-types && npm run check -w @spotify-wallpaper/spotify-auth && npm run check -w @spotify-wallpaper/configurator && npm run check -w @spotify-wallpaper/wallpaper",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@types/node": "^25.9.3",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^8.0.16",
+    "vitest": "^4.0.0"
+  }
+}

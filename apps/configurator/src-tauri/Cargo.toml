@@ -1,0 +1,19 @@
+[package]
+name = "spotify-wallpaper-configurator"
+version = "0.0.0"
+description = "Optional configurator for Spotify Wallpaper settings"
+edition = "2021"
+
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2.6.2", features = [] }
+
+[dependencies]
+base64 = "0.22"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+tauri = { version = "2.11.2", features = [] }

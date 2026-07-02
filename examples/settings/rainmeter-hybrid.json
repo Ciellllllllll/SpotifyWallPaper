@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "spotify": {
+    "clientId": "",
+    "hasRefreshToken": false,
+    "pollIntervalPlayingMs": 1000,
+    "pollIntervalPausedMs": 3000
+  },
+  "layout": {
+    "preset": "Rainmeter Hybrid"
+  },
+  "theme": {
+    "mode": "album",
+    "textColor": "#f6f7fb",
+    "autoReadability": true
+  },
+  "background": {
+    "mode": "album-blur",
+    "opacity": 0.62,
+    "blurPx": 22,
+    "solidColor": "#111318"
+  },
+  "albumArt": {
+    "visible": true
+  },
+  "text": {
+    "visible": true
+  },
+  "player": {
+    "visible": true,
+    "controlsEnabled": true,
+    "showDevice": true,
+    "showVolume": true,
+    "showShuffleRepeat": true
+  },
+  "seekbar": {
+    "visible": true,
+    "style": "album-ring"
+  },
+  "lyrics": {
+    "enabled": false,
+    "sourceText": "",
+    "mode": "current",
+    "offsetMs": 0,
+    "showMissingState": true
+  },
+  "visualizer": {
+    "enabled": true,
+    "mode": "album-ring",
+    "intensity": 0.72,
+    "sensitivity": 1,
+    "smoothing": 0.35,
+    "decay": 0.22,
+    "bassWeight": 1.2,
+    "midWeight": 1,
+    "trebleWeight": 0.82,
+    "barCount": 56,
+    "lineWidth": 3,
+    "radius": 1.18,
+    "gap": 10,
+    "rotationSpeed": 0.16,
+    "particleCount": 0,
+    "particleLife": 0,
+    "glowStrength": 0.62,
+    "colorMode": "theme",
+    "mirrorMode": "mirror",
+    "clampMax": 1,
+    "noiseGate": 0.03,
+    "idleAnimation": true
+  },
+  "clock": {
+    "enabled": true,
+    "hour12": false,
+    "showSeconds": false,
+    "showDate": true,
+    "showWeekday": false,
+    "fontSizePx": 34,
+    "fontWeight": 700,
+    "letterSpacingPx": 0,
+    "opacity": 0.9,
+    "colorMode": "auto",
+    "fixedColor": "#f6f7fb"
+  },
+  "transitions": {
+    "enabled": true,
+    "preset": "crossfade",
+    "durationMs": 700,
+    "easing": "ease-out",
+    "background": true,
+    "albumArt": true,
+    "text": true,
+    "lyrics": true,
+    "visualizer": false,
+    "reduceMotion": false
+  },
+  "performance": {
+    "mode": "standard"
+  },
+  "rainmeter": {
+    "enabled": true,
+    "outputPath": "D:\\Rainmeter\\Skins\\SpotifyWallPaper\\NowPlaying.json",
+    "outputMode": "json",
+    "stoppedUpdateIntervalMs": 10000
+  },
+  "debug": {
+    "enabled": false
+  }
+}

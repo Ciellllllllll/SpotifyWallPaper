@@ -1,0 +1,30 @@
+import type { NormalizedPlayback } from '@spotify-wallpaper/shared-types';
+
+export const mockPlayback: NormalizedPlayback = {
+  source: 'mock',
+  itemType: 'track',
+  id: 'mock-track-001',
+  uri: 'spotify:track:mock-track-001',
+  title: 'Afterglow Atlas',
+  artists: ['Nami Kuroda', 'The Static Lights'],
+  albumName: 'Mock Horizon',
+  imageUrls: ['mock/album-placeholder.svg'],
+  albumImageUrl: 'mock/album-placeholder.svg',
+  durationMs: 242000,
+  progressMs: 94000,
+  isPlaying: true,
+  device: {
+    id: 'mock-device',
+    name: 'Browser Preview',
+    type: 'browser',
+    isActive: true,
+    isRestricted: false,
+    volumePercent: 64
+  },
+  deviceName: 'Browser Preview',
+  shuffleState: false,
+  repeatState: 'off',
+  volumePercent: 64,
+  externalUrl: null,
+  fetchedAt: new Date().toISOString()
+};
