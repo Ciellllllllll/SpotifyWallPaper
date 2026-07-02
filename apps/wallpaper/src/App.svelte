@@ -382,6 +382,18 @@
     detailHoverUiVisible = true;
   };
 
+  const showAlbumOnlyHoverUi = () => {
+    if (!showAlbumDetails) {
+      showDetailHoverUi();
+    }
+  };
+
+  const hideAlbumOnlyHoverUi = () => {
+    if (!showAlbumDetails) {
+      hideDetailHoverUi();
+    }
+  };
+
   const hideDetailHoverUi = () => {
     if (detailHoverHideTimeout !== null) {
       window.clearTimeout(detailHoverHideTimeout);
@@ -507,10 +519,10 @@
       style={layoutStyle(activeAlbumItem)}
       role="group"
       aria-label="Album art and playback controls"
-      on:mouseenter={showDetailHoverUi}
-      on:mouseleave={hideDetailHoverUi}
-      on:focusin={showDetailHoverUi}
-      on:focusout={hideDetailHoverUi}
+      on:mouseenter={showAlbumOnlyHoverUi}
+      on:mouseleave={hideAlbumOnlyHoverUi}
+      on:focusin={showAlbumOnlyHoverUi}
+      on:focusout={hideAlbumOnlyHoverUi}
     >
       <div class:album-spinning={playback.isPlaying} class="album-disc">
         <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
@@ -541,10 +553,6 @@
       style={layoutStyle(layoutItems.trackText)}
       role="group"
       aria-label="Track details"
-      on:mouseenter={showDetailHoverUi}
-      on:mouseleave={hideDetailHoverUi}
-      on:focusin={showDetailHoverUi}
-      on:focusout={hideDetailHoverUi}
     >
       <button class="details-toggle details-close-toggle" type="button" aria-label="Show album only" on:click={() => (displayMode = 'album-only')}>
         ×
@@ -994,17 +1002,24 @@
     gap: 12px;
     width: min(440px, calc(100vw - 48px));
     opacity: 0;
-    pointer-events: none;
+    pointer-events: auto;
     transform: translate(-50%, 8px);
     transition:
       opacity 240ms ease,
       transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  .control-dock > * {
+    pointer-events: none;
+  }
+
   .detail-hover-ui-visible .control-dock {
     opacity: 1;
-    pointer-events: auto;
     transform: translate(-50%, 0);
+  }
+
+  .detail-hover-ui-visible .control-dock > * {
+    pointer-events: auto;
   }
 
   .player-controls {
