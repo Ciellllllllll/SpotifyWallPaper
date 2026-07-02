@@ -2,6 +2,7 @@ node_modules/
 target/
 dist/
 apps/*/dist/
+apps/*/.vite/
 packages/*/dist/
 apps/wallpaper/public/wasm/
 apps/configurator/src-tauri/gen/
