@@ -1,9 +1,10 @@
-import type { NormalizedPlayback } from '@spotify-wallpaper/shared-types';
+import type { NormalizedPlayback, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
 import { classifyNetworkError, classifySpotifyStatus } from './errors';
 import { normalizeSpotifyPlayback } from './normalize';
 import type { Fetcher, SpotifyPlaybackCommand, SpotifyResult } from './types';
 
 const CURRENT_PLAYBACK_ENDPOINT = 'https://api.spotify.com/v1/me/player';
+const CURRENTLY_PLAYING_ENDPOINT = 'https://api.spotify.com/v1/me/player/currently-playing';
 const PLAYER_ENDPOINT = 'https://api.spotify.com/v1/me/player';
 
 export const fetchCurrentPlayback = async (
@@ -33,10 +34,40 @@ export const fetchCurrentPlayback = async (
   const payload = await response.json().catch(() => null);
   const normalized = normalizeSpotifyPlayback(payload, fetchedAt);
   if (!normalized.ok) {
-    return normalized;
+    return fetchCurrentlyPlayingFallback(accessToken, fetcher, fetchedAt, normalized.error);
   }
 
   return { ok: true, value: normalized.value.playback };
+};
+
+const fetchCurrentlyPlayingFallback = async (
+  accessToken: string,
+  fetcher: Fetcher,
+  fetchedAt: string,
+  firstError: SpotifyPlaybackError
+): Promise<SpotifyResult<NormalizedPlayback>> => {
+  let response: Response;
+  try {
+    response = await fetcher(CURRENTLY_PLAYING_ENDPOINT, {
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      }
+    });
+  } catch {
+    return { ok: false, error: firstError };
+  }
+
+  if (response.status === 204) {
+    return { ok: false, error: classifySpotifyStatus(response.status, response.headers.get('retry-after')) };
+  }
+
+  if (!response.ok) {
+    return { ok: false, error: firstError };
+  }
+
+  const payload = await response.json().catch(() => null);
+  const normalized = normalizeSpotifyPlayback(payload, fetchedAt);
+  return normalized.ok ? { ok: true, value: normalized.value.playback } : { ok: false, error: firstError };
 };
 
 export const sendPlaybackCommand = async (

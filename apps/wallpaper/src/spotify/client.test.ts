@@ -1,5 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { sendPlaybackCommand } from './client';
+import trackFixture from '../../../../tests/fixtures/spotify/current-playback-track.json';
+import { fetchCurrentPlayback, sendPlaybackCommand } from './client';
+
+describe('fetchCurrentPlayback', () => {
+  it('falls back to the currently-playing endpoint when the player payload is unexpected', async () => {
+    const calls: string[] = [];
+    const fetcher = (async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      if (String(url).endsWith('/v1/me/player')) {
+        return new Response(JSON.stringify(null), { status: 200 });
+      }
+
+      return new Response(JSON.stringify(trackFixture), { status: 200 });
+    }) as typeof fetch;
+
+    const result = await fetchCurrentPlayback('secret-access-token', fetcher, '2026-06-13T00:00:00.000Z');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(calls).toEqual([
+      'https://api.spotify.com/v1/me/player',
+      'https://api.spotify.com/v1/me/player/currently-playing'
+    ]);
+    expect(result.value.title).toBe('Current Song');
+    expect(result.value.source).toBe('spotify');
+  });
+});
 
 describe('sendPlaybackCommand', () => {
   it('sends playback operations to Spotify without exposing token values in errors', async () => {

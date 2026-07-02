@@ -40,13 +40,13 @@ export const normalizeSpotifyPlayback = (
   }
 
   const item = raw.item as Record<string, unknown>;
-  const itemType = item.type === 'episode' ? 'episode' : item.type === 'track' ? 'track' : null;
+  const itemType = playbackItemType(item.type) ?? playbackItemType(raw.currently_playing_type);
   if (!itemType) {
     return {
-      ok: false,
-      error: {
-        kind: 'unknown_response_shape',
-        message: 'Spotify playback item type was unexpected.'
+      ok: true,
+      value: {
+        playback: buildEmptyPlayback(raw, device, fetchedAt),
+        warning: itemNullError()
       }
     };
   }
@@ -210,3 +210,5 @@ const externalUrl = (item: Record<string, unknown>): string | null => {
 const nullableString = (value: unknown): string | null => (typeof value === 'string' && value.length > 0 ? value : null);
 const stringOr = (value: unknown, fallback: string): string => (typeof value === 'string' ? value : fallback);
 const numberOr = (value: unknown, fallback: number): number => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
+const playbackItemType = (value: unknown): 'track' | 'episode' | null =>
+  value === 'track' || value === 'episode' ? value : null;

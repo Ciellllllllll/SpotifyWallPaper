@@ -54,4 +54,5 @@ export interface SpotifyPlaybackResponse {
   device?: unknown;
   shuffle_state?: unknown;
   repeat_state?: unknown;
+  currently_playing_type?: unknown;
 }

@@ -706,7 +706,7 @@
     <aside class="layout-item debug-panel" style={layoutStyle(layoutItems.debug)} aria-label="Debug overlay">
       <div>Mode: {playbackMode}</div>
       <div>Spotify token: {settings.spotify.hasRefreshToken ? 'configured' : 'not configured'}</div>
-      <div>Spotify status: {spotifyError ? spotifyError.kind : 'ok'}</div>
+      <div>Spotify status: {spotifyError ? `${spotifyError.kind}: ${spotifyError.message}` : 'ok'}</div>
       <div>Polling: {lastPollingDelayMs ? `${lastPollingDelayMs}ms` : 'idle'}</div>
       <div>Preset: {settings.layout.preset}</div>
       <div>Theme: {theme.source}</div>
