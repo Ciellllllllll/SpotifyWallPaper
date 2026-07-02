@@ -43,11 +43,26 @@ jobs:
       - name: Test auth page
         run: npm run test -w @spotify-wallpaper/spotify-auth
 
+      - name: Configure Spotify Client ID
+        env:
+          SPOTIFY_CLIENT_ID_VARIABLE: ${{ vars.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_ID_SECRET: ${{ secrets.SPOTIFY_CLIENT_ID }}
+        run: |
+          if [ -n "$SPOTIFY_CLIENT_ID_VARIABLE" ]; then
+            echo "VITE_SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID_VARIABLE" >> "$GITHUB_ENV"
+            echo "Using SPOTIFY_CLIENT_ID from repository Variables."
+          elif [ -n "$SPOTIFY_CLIENT_ID_SECRET" ]; then
+            echo "VITE_SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID_SECRET" >> "$GITHUB_ENV"
+            echo "Using SPOTIFY_CLIENT_ID from repository Secrets."
+          else
+            echo "SPOTIFY_CLIENT_ID is not configured in repository Variables or Secrets." >&2
+            exit 1
+          fi
+
       - name: Build auth page
         run: npm run build -w @spotify-wallpaper/spotify-auth
         env:
           VITE_AUTH_BASE_PATH: /SpotifyWallPaper/spotify-auth/
-          VITE_SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID || secrets.SPOTIFY_CLIENT_ID }}
 
       - name: Prepare Pages artifact
         run: node apps/spotify-auth/prepare-pages.mjs
