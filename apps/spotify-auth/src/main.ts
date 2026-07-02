@@ -40,6 +40,11 @@ const renderHome = (): void => {
           <span>Spotify Client ID</span>
           <input id="client-id" value="${escapeHtml(clientId)}" autocomplete="off" spellcheck="false" />
         </label>
+        <label>
+          <span>Spotify Redirect URI</span>
+          <input id="redirect-uri" value="${escapeHtml(redirectUri)}" readonly spellcheck="false" />
+        </label>
+        <button id="copy-redirect-uri" type="button">Copy Redirect URI</button>
         <button id="authorize" type="button">Authorize Spotify</button>
         <p id="status" class="status" role="status"></p>
       </div>
@@ -51,6 +56,16 @@ const renderHome = (): void => {
       </aside>
     </section>
   `;
+
+  document.querySelector<HTMLButtonElement>('#copy-redirect-uri')?.addEventListener('click', async () => {
+    const status = document.querySelector<HTMLParagraphElement>('#status');
+    try {
+      await navigator.clipboard.writeText(redirectUri);
+      setStatus(status, 'Redirect URI copied. Paste it into Spotify Dashboard exactly as shown.');
+    } catch {
+      setStatus(status, 'Clipboard was unavailable. Select the Redirect URI and copy it manually.');
+    }
+  });
 
   document.querySelector<HTMLButtonElement>('#authorize')?.addEventListener('click', async () => {
     const status = document.querySelector<HTMLParagraphElement>('#status');

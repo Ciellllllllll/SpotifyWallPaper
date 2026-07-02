@@ -131,6 +131,26 @@ describe('spotify auth PKCE', () => {
     expect(storage.values.size).toBe(0);
   });
 
+  it('explains Spotify server_error as an app settings check', async () => {
+    const storage = memoryStorage();
+    await buildAuthorizeUrl({ clientId: 'client-id', redirectUri: 'https://example.github.io/app/callback' }, storage);
+
+    const result = await exchangeCallbackForToken(
+      'https://example.github.io/app/callback?error=server_error&state=ignored',
+      'client-id',
+      'https://example.github.io/app/callback',
+      vi.fn() as unknown as typeof fetch,
+      storage
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      message:
+        'Spotify returned server_error before issuing a code. In Spotify Dashboard, confirm this Client ID belongs to the app and add https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/callback under Redirect URIs exactly.'
+    });
+    expect(storage.values.size).toBe(0);
+  });
+
   it('redacts token-like values from error messages', () => {
     expect(sanitizeErrorMessage('failed code=secret-code refresh_token=secret-token access_token=secret-access')).toBe(
       'failed code=[redacted] refresh_token=[redacted] access_token=[redacted]'

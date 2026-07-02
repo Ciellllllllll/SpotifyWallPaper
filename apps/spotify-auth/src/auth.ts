@@ -197,6 +197,10 @@ const spotifyAuthorizationErrorMessage = (error: string, description: string | n
     return 'Spotify rejected the authorization request. Check that the Spotify Redirect URI exactly matches https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/callback.';
   }
 
+  if (normalizedError === 'server_error') {
+    return 'Spotify returned server_error before issuing a code. In Spotify Dashboard, confirm this Client ID belongs to the app and add https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/callback under Redirect URIs exactly.';
+  }
+
   return `Spotify returned authorization error: ${error}. Check the Spotify app settings and start again.`;
 };
 
