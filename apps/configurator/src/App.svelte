@@ -297,10 +297,6 @@
           <span>Visualizer</span>
         </label>
         <label class="check-row">
-          <input type="checkbox" checked={draft.lyricsEnabled} on:change={(event) => update('lyricsEnabled', event.currentTarget.checked)} />
-          <span>Lyrics</span>
-        </label>
-        <label class="check-row">
           <input type="checkbox" checked={draft.transitionEnabled} on:change={(event) => update('transitionEnabled', event.currentTarget.checked)} />
           <span>Transitions</span>
         </label>

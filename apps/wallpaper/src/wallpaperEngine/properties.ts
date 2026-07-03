@@ -11,6 +11,9 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
 
   const clientId = stringProperty(properties, 'spotify_client_id');
   const refreshToken = stringProperty(properties, 'spotify_refresh_token');
+  const playbackProvider = stringProperty(properties, 'spotify_playback_provider');
+  const backendUrl = stringProperty(properties, 'spotify_backend_url');
+  const pairingToken = stringProperty(properties, 'spotify_pairing_token');
   const settingsJson = stringProperty(properties, 'settings_json');
   const selectedPreset = stringProperty(properties, 'selected_preset');
   const backgroundMode = stringProperty(properties, 'background_mode');
@@ -26,8 +29,6 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
   const seekbarStyle = stringProperty(properties, 'seekbar_style');
   const visualizerEnabled = booleanProperty(properties, 'visualizer_enabled');
   const visualizerMode = stringProperty(properties, 'visualizer_mode');
-  const lyricsEnabled = booleanProperty(properties, 'lyrics_enabled');
-  const lyricsMode = stringProperty(properties, 'lyrics_mode');
   const transitionsEnabled = booleanProperty(properties, 'transitions_enabled');
   const transitionPreset = stringProperty(properties, 'transition_preset');
   const clockEnabled = booleanProperty(properties, 'clock_enabled');
@@ -46,6 +47,20 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
       patch.spotify = { ...patch.spotify, ...spotifyClearPatch };
     }
     warning = loaded.warning;
+  }
+
+  if (
+    playbackProvider === 'direct' ||
+    playbackProvider === 'backend' ||
+    backendUrl !== undefined ||
+    pairingToken !== undefined
+  ) {
+    patch.spotify = {
+      ...patch.spotify,
+      ...(playbackProvider === 'direct' || playbackProvider === 'backend' ? { playbackProvider } : {}),
+      ...(backendUrl !== undefined ? { backendUrl } : {}),
+      ...(pairingToken !== undefined ? { pairingToken } : {})
+    };
   }
 
   const bundledToken = refreshToken !== undefined ? parseWallpaperEngineSpotifyToken(refreshToken) : null;
@@ -124,14 +139,6 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
 
   if (visualizerMode === 'album-ring' || visualizerMode === 'radial-bars' || visualizerMode === 'waveform-line') {
     patch.visualizer = { ...patch.visualizer, mode: visualizerMode };
-  }
-
-  if (lyricsEnabled !== undefined) {
-    patch.lyrics = { ...patch.lyrics, enabled: lyricsEnabled };
-  }
-
-  if (lyricsMode === 'current' || lyricsMode === 'context') {
-    patch.lyrics = { ...patch.lyrics, mode: lyricsMode };
   }
 
   if (transitionsEnabled !== undefined) {
@@ -214,10 +221,6 @@ export const applySettingsPatch = (settings: WallpaperSettings, patch: SettingsP
       ...settings.seekbar,
       ...patch.seekbar
     },
-    lyrics: {
-      ...settings.lyrics,
-      ...patch.lyrics
-    },
     visualizer: {
       ...settings.visualizer,
       ...patch.visualizer
@@ -261,6 +264,11 @@ const patchFromSettings = (patch: SettingsPatch, settings: WallpaperSettings): v
   if (settings.spotify.clientId) {
     spotifyPatch.clientId = settings.spotify.clientId;
   }
+  spotifyPatch.playbackProvider = settings.spotify.playbackProvider ?? 'direct';
+  spotifyPatch.backendUrl = settings.spotify.backendUrl ?? '';
+  if (settings.spotify.pairingToken) {
+    spotifyPatch.pairingToken = settings.spotify.pairingToken;
+  }
   if (settings.spotify.refreshToken) {
     spotifyPatch.refreshToken = settings.spotify.refreshToken;
     spotifyPatch.hasRefreshToken = true;
@@ -273,7 +281,6 @@ const patchFromSettings = (patch: SettingsPatch, settings: WallpaperSettings): v
   patch.background = { ...patch.background, ...settings.background };
   patch.player = { ...patch.player, ...settings.player };
   patch.seekbar = { ...patch.seekbar, ...settings.seekbar };
-  patch.lyrics = { ...patch.lyrics, ...settings.lyrics };
   patch.visualizer = { ...patch.visualizer, ...settings.visualizer };
   patch.clock = { ...patch.clock, ...settings.clock };
   patch.transitions = { ...patch.transitions, ...settings.transitions };
@@ -308,6 +315,11 @@ const normalizeSpotifyCredentialPatch = (
   if ((clientIdChanged || clientIdCleared) && !hasRefreshTokenPatch) {
     next.refreshToken = '';
     next.hasRefreshToken = false;
+  }
+
+  if (patch.playbackProvider === 'direct') {
+    next.backendUrl = '';
+    next.pairingToken = '';
   }
 
   return next;

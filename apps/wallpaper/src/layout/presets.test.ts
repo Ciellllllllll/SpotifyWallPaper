@@ -6,7 +6,6 @@ describe('layout presets', () => {
     expect(layoutPresetNames).toEqual([
       'Minimal',
       'Center Album',
-      'Lyrics Focus',
       'Visualizer Heavy',
       'Rainmeter Hybrid',
       'Left Dock',
@@ -17,7 +16,7 @@ describe('layout presets', () => {
     ]);
 
     for (const preset of layoutPresetNames) {
-      expect(Object.keys(layoutPresets[preset]).sort()).toEqual(['albumArt', 'clock', 'debug', 'lyrics', 'seekbar', 'trackText']);
+      expect(Object.keys(layoutPresets[preset]).sort()).toEqual(['albumArt', 'clock', 'debug', 'seekbar', 'trackText']);
     }
   });
 

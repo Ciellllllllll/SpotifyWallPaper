@@ -48,7 +48,17 @@ describe('Wallpaper Engine project.json', () => {
 
     expect(properties.spotify_client_id?.type).toBe('textinput');
     expect(properties.spotify_refresh_token?.type).toBe('textinput');
+    expect(properties.spotify_playback_provider?.type).toBe('combo');
+    expect(properties.spotify_backend_url?.type).toBe('textinput');
+    expect(properties.spotify_pairing_token?.type).toBe('textinput');
     expect(properties.settings_json?.type).toBe('textinput');
+  });
+
+  it('does not expose lyrics settings in Wallpaper Engine properties', () => {
+    const properties = loadProjectJson().general?.properties ?? {};
+
+    expect(properties.lyrics_enabled).toBeUndefined();
+    expect(properties.lyrics_mode).toBeUndefined();
   });
 
   it('enables Wallpaper Engine audio processing for the visualizer', () => {

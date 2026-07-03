@@ -1,5 +1,7 @@
 export type PlaybackSource = 'mock' | 'spotify';
 
+export type SpotifyPlaybackProviderKind = 'direct' | 'backend';
+
 export type PlaybackItemType = 'track' | 'episode' | 'none';
 
 export type SpotifyRepeatState = 'off' | 'track' | 'context';
@@ -86,12 +88,11 @@ export type LayoutAnchor =
   | 'bottom-center'
   | 'bottom-right';
 
-export type LayoutItemKey = 'albumArt' | 'trackText' | 'seekbar' | 'lyrics' | 'clock' | 'debug';
+export type LayoutItemKey = 'albumArt' | 'trackText' | 'seekbar' | 'clock' | 'debug';
 
 export type LayoutPresetName =
   | 'Minimal'
   | 'Center Album'
-  | 'Lyrics Focus'
   | 'Visualizer Heavy'
   | 'Rainmeter Hybrid'
   | 'Left Dock'
@@ -121,9 +122,12 @@ export interface LayoutItem {
 export interface WallpaperSettings {
   schemaVersion: number;
   spotify: {
+    playbackProvider?: SpotifyPlaybackProviderKind;
     clientId: string;
     refreshToken?: string;
     hasRefreshToken: boolean;
+    backendUrl?: string;
+    pairingToken?: string;
     pollIntervalPlayingMs?: number;
     pollIntervalPausedMs?: number;
   };
@@ -159,14 +163,6 @@ export interface WallpaperSettings {
   seekbar: {
     visible: boolean;
     style: 'line' | 'album-ring';
-  };
-  lyrics: {
-    enabled: boolean;
-    sourceText: string;
-    mode: 'current' | 'context';
-    offsetMs: number;
-    showMissingState: boolean;
-    provider: LyricsProviderConfig;
   };
   visualizer: {
     enabled: boolean;
@@ -213,7 +209,6 @@ export interface WallpaperSettings {
     background: boolean;
     albumArt: boolean;
     text: boolean;
-    lyrics: boolean;
     visualizer: boolean;
     reduceMotion: boolean;
   };
@@ -254,23 +249,4 @@ export interface WallpaperTheme {
   overlayOpacity: number;
   shadowStrength: number;
   source: 'extracted' | 'fallback';
-}
-
-export interface LyricsProviderConfig {
-  name: 'user-lrc';
-  searchInputs: {
-    title: boolean;
-    artists: boolean;
-    album: boolean;
-    duration: boolean;
-  };
-  supportsSynced: boolean;
-  supportsPlain: boolean;
-  cachePolicy: 'none' | 'memory' | 'persistent';
-  failureReason: 'not-configured' | 'not-found' | 'invalid-lrc' | 'provider-error' | null;
-}
-
-export interface LyricLine {
-  timeMs: number;
-  text: string;
 }

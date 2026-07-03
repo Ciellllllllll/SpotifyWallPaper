@@ -16,6 +16,9 @@ describe('Wallpaper Engine property adapter', () => {
     const result = parseWallpaperProperties({
       spotify_client_id: { value: 'client-id' },
       spotify_refresh_token: { value: 'secret-refresh-token' },
+      spotify_playback_provider: { value: 'backend' },
+      spotify_backend_url: { value: 'https://localhost:49320/' },
+      spotify_pairing_token: { value: 'secret-pairing-token' },
       selected_preset: { value: 'Bottom Player' },
       background_mode: { value: 'solid-color' },
       theme_mode: { value: 'fallback' },
@@ -30,8 +33,6 @@ describe('Wallpaper Engine property adapter', () => {
       seekbar_style: { value: 'album-ring' },
       visualizer_enabled: { value: false },
       visualizer_mode: { value: 'waveform-line' },
-      lyrics_enabled: { value: true },
-      lyrics_mode: { value: 'context' },
       transitions_enabled: { value: true },
       transition_preset: { value: 'blur-fade' },
       clock_enabled: { value: true },
@@ -48,7 +49,10 @@ describe('Wallpaper Engine property adapter', () => {
       spotify: {
         clientId: 'client-id',
         refreshToken: 'secret-refresh-token',
-        hasRefreshToken: true
+        hasRefreshToken: true,
+        playbackProvider: 'backend',
+        backendUrl: 'https://localhost:49320/',
+        pairingToken: 'secret-pairing-token'
       },
       layout: { preset: 'Bottom Player' },
       background: { mode: 'solid-color' },
@@ -64,7 +68,6 @@ describe('Wallpaper Engine property adapter', () => {
       },
       seekbar: { visible: true, style: 'album-ring' },
       visualizer: { enabled: false, mode: 'waveform-line' },
-      lyrics: { enabled: true, mode: 'context' },
       transitions: { enabled: true, preset: 'blur-fade' },
       clock: {
         enabled: true,
@@ -319,31 +322,6 @@ describe('Wallpaper Engine property adapter', () => {
     });
   });
 
-  it('applies lyrics settings from pasted settings JSON', () => {
-    const result = parseWallpaperProperties({
-      settings_json: {
-        value: JSON.stringify({
-          lyrics: {
-            enabled: true,
-            sourceText: '[00:01.00]One',
-            mode: 'context',
-            offsetMs: 1200,
-            showMissingState: false
-          }
-        })
-      }
-    });
-    const merged = applySettingsPatch(defaultSettings, result.patch);
-
-    expect(merged.lyrics).toMatchObject({
-      enabled: true,
-      sourceText: '[00:01.00]One',
-      mode: 'context',
-      offsetMs: 1200,
-      showMissingState: false
-    });
-  });
-
   it('applies transition settings from pasted settings JSON', () => {
     const result = parseWallpaperProperties({
       settings_json: {
@@ -356,7 +334,6 @@ describe('Wallpaper Engine property adapter', () => {
             background: true,
             albumArt: false,
             text: true,
-            lyrics: false,
             visualizer: true,
             reduceMotion: true
           }
@@ -371,7 +348,6 @@ describe('Wallpaper Engine property adapter', () => {
       durationMs: 900,
       easing: 'ease-in-out',
       albumArt: false,
-      lyrics: false,
       visualizer: true,
       reduceMotion: true
     });
@@ -438,5 +414,23 @@ describe('Wallpaper Engine property adapter', () => {
 
     expect(result.warning).toContain('malformed');
     expect(result.warning).not.toContain('secret-refresh-token');
+  });
+
+  it('applies backend provider settings from properties without requiring Spotify credentials', () => {
+    const result = parseWallpaperProperties({
+      spotify_playback_provider: { value: 'backend' },
+      spotify_backend_url: { value: 'https://localhost:49320/' },
+      spotify_pairing_token: { value: 'secret-pairing-token' }
+    });
+    const merged = applySettingsPatch(defaultSettings, result.patch);
+
+    expect(result.warning).toBeNull();
+    expect(merged.spotify).toMatchObject({
+      playbackProvider: 'backend',
+      backendUrl: 'https://localhost:49320/',
+      pairingToken: 'secret-pairing-token',
+      clientId: '',
+      hasRefreshToken: false
+    });
   });
 });

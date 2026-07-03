@@ -43,7 +43,6 @@ export const loadSettings = (
   const background = record.background && typeof record.background === 'object' ? (record.background as Record<string, unknown>) : {};
   const player = record.player && typeof record.player === 'object' ? (record.player as Record<string, unknown>) : {};
   const seekbar = record.seekbar && typeof record.seekbar === 'object' ? (record.seekbar as Record<string, unknown>) : {};
-  const lyrics = record.lyrics && typeof record.lyrics === 'object' ? (record.lyrics as Record<string, unknown>) : {};
   const visualizer = record.visualizer && typeof record.visualizer === 'object' ? (record.visualizer as Record<string, unknown>) : {};
   const clock = record.clock && typeof record.clock === 'object' ? (record.clock as Record<string, unknown>) : {};
   const transitions = record.transitions && typeof record.transitions === 'object' ? (record.transitions as Record<string, unknown>) : {};
@@ -59,9 +58,15 @@ export const loadSettings = (
     schemaVersion: numberOr(record.schemaVersion, defaultSettings.schemaVersion) ?? defaultSettings.schemaVersion,
     spotify: {
       ...defaultSettings.spotify,
+      playbackProvider:
+        spotify.playbackProvider === 'backend' || spotify.playbackProvider === 'direct'
+          ? spotify.playbackProvider
+          : defaultSettings.spotify.playbackProvider,
       clientId: stringOr(spotify.clientId, defaultSettings.spotify.clientId),
       refreshToken: stringOrUndefined(spotify.refreshToken),
       hasRefreshToken: Boolean(spotify.refreshToken) || Boolean(spotify.hasRefreshToken),
+      backendUrl: stringOr(spotify.backendUrl, defaultSettings.spotify.backendUrl ?? ''),
+      pairingToken: stringOrUndefined(spotify.pairingToken),
       pollIntervalPlayingMs: numberOr(spotify.pollIntervalPlayingMs, defaultSettings.spotify.pollIntervalPlayingMs),
       pollIntervalPausedMs: numberOr(spotify.pollIntervalPausedMs, defaultSettings.spotify.pollIntervalPausedMs)
     },
@@ -99,18 +104,6 @@ export const loadSettings = (
       ...defaultSettings.seekbar,
       visible: booleanOr(seekbar.visible, defaultSettings.seekbar.visible),
       style: stringOr(seekbar.style, defaultSettings.seekbar.style) as WallpaperSettings['seekbar']['style']
-    },
-    lyrics: {
-      ...defaultSettings.lyrics,
-      enabled: booleanOr(lyrics.enabled, defaultSettings.lyrics.enabled),
-      sourceText: stringOr(lyrics.sourceText, defaultSettings.lyrics.sourceText),
-      mode: stringOr(lyrics.mode, defaultSettings.lyrics.mode) as WallpaperSettings['lyrics']['mode'],
-      offsetMs: numberOr(lyrics.offsetMs, defaultSettings.lyrics.offsetMs) ?? defaultSettings.lyrics.offsetMs,
-      showMissingState: booleanOr(lyrics.showMissingState, defaultSettings.lyrics.showMissingState),
-      provider: {
-        ...defaultSettings.lyrics.provider,
-        ...(lyrics.provider && typeof lyrics.provider === 'object' ? (lyrics.provider as WallpaperSettings['lyrics']['provider']) : {})
-      }
     },
     visualizer: {
       ...defaultSettings.visualizer,
@@ -167,7 +160,6 @@ export const loadSettings = (
       background: booleanOr(transitions.background, defaultSettings.transitions.background),
       albumArt: booleanOr(transitions.albumArt, defaultSettings.transitions.albumArt),
       text: booleanOr(transitions.text, defaultSettings.transitions.text),
-      lyrics: booleanOr(transitions.lyrics, defaultSettings.transitions.lyrics),
       visualizer: booleanOr(transitions.visualizer, defaultSettings.transitions.visualizer),
       reduceMotion: booleanOr(transitions.reduceMotion, defaultSettings.transitions.reduceMotion)
     },

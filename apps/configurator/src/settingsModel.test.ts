@@ -33,7 +33,6 @@ describe('configurator settings model', () => {
       ...defaultDraft,
       preset: 'Album Ring',
       performanceMode: 'low-power',
-      lyricsEnabled: true,
       clockShowSeconds: true,
       playerControlsEnabled: false,
       rainmeterEnabled: true,
@@ -46,7 +45,6 @@ describe('configurator settings model', () => {
     expect(imported.draft).toMatchObject({
       preset: 'Album Ring',
       performanceMode: 'low-power',
-      lyricsEnabled: true,
       clockShowSeconds: true,
       playerControlsEnabled: false,
       rainmeterEnabled: true,
@@ -94,7 +92,6 @@ describe('configurator settings model', () => {
           clientId: {},
           refreshToken: []
         },
-        lyrics: { enabled: 'yes' },
         visualizer: { enabled: 'yes' },
         transitions: { enabled: 'yes' },
         clock: {
@@ -113,7 +110,6 @@ describe('configurator settings model', () => {
 
     expect(imported.draft.spotifyClientId).toBe('');
     expect(imported.draft.spotifyRefreshToken).toBe('');
-    expect(exported.lyrics.enabled).toBe(defaultDraft.lyricsEnabled);
     expect(exported.visualizer.enabled).toBe(defaultDraft.visualizerEnabled);
     expect(exported.transitions.enabled).toBe(defaultDraft.transitionEnabled);
     expect(exported.clock.enabled).toBe(defaultDraft.clockEnabled);

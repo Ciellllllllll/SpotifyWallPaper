@@ -4,8 +4,10 @@ import { clonePresetItems, defaultLayoutPreset } from '../layout/presets';
 export const defaultSettings: WallpaperSettings = {
   schemaVersion: 1,
   spotify: {
+    playbackProvider: 'direct',
     clientId: '',
     hasRefreshToken: false,
+    backendUrl: '',
     pollIntervalPlayingMs: 1000,
     pollIntervalPausedMs: 3000
   },
@@ -40,26 +42,6 @@ export const defaultSettings: WallpaperSettings = {
   seekbar: {
     visible: true,
     style: 'line'
-  },
-  lyrics: {
-    enabled: false,
-    sourceText: '',
-    mode: 'current',
-    offsetMs: 0,
-    showMissingState: true,
-    provider: {
-      name: 'user-lrc',
-      searchInputs: {
-        title: true,
-        artists: true,
-        album: true,
-        duration: true
-      },
-      supportsSynced: true,
-      supportsPlain: false,
-      cachePolicy: 'none',
-      failureReason: 'not-configured'
-    }
   },
   visualizer: {
     enabled: true,
@@ -106,7 +88,6 @@ export const defaultSettings: WallpaperSettings = {
     background: true,
     albumArt: true,
     text: true,
-    lyrics: true,
     visualizer: false,
     reduceMotion: false
   },

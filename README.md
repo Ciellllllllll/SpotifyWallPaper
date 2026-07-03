@@ -1,6 +1,6 @@
 # Spotify Wallpaper
 
-Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-previewable mock wallpaper plus Spotify playback polling, Wallpaper Engine property customization, a static GitHub Pages Spotify authorization helper, visualizer, LRC lyrics, transitions, player controls, an optional Tauri configurator, and optional Rainmeter JSON export.
+Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-previewable mock wallpaper plus Spotify playback polling, Wallpaper Engine property customization, a static GitHub Pages Spotify authorization helper, visualizer, transitions, player controls, an optional Tauri configurator, and optional Rainmeter JSON export.
 
 ## Guides And Repository Notes
 
@@ -13,7 +13,7 @@ Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-
 - Wallpaper app: Svelte, TypeScript, Vite, Wallpaper Engine Web Wallpaper APIs.
 - Spotify auth page: static Vite + TypeScript app for GitHub Pages using Authorization Code with PKCE.
 - Shared model types: TypeScript workspace package.
-- Visual core: Rust compiled to WebAssembly for pure layout, lyrics, readability, and visualizer helpers.
+- Visual core: Rust compiled to WebAssembly for pure layout, readability, and visualizer helpers.
 - Optional configurator: Svelte frontend with Tauri/Rust backend.
 - Optional Rainmeter output: configurator-side JSON writer and scheduler.
 
@@ -209,33 +209,10 @@ Rust/TypeScript runtime boundary:
 
 | Concern | Source of truth | Runtime fallback | Notes |
 | --- | --- | --- | --- |
-| LRC parse and LRC offset application | Rust/WASM visual core | TypeScript parser | Wallpaper calls Rust through `parseLrcWithCore` when the WASM bundle is loaded. |
 | Visualizer smoothing, decay, and normalized peak | Rust/WASM visual core | TypeScript normalizer | Rendering-specific bar/path generation stays in TypeScript. |
 | Theme readability and contrast | Rust/WASM visual core | TypeScript contrast helper | Browser album pixel extraction stays in TypeScript because it uses Image and Canvas APIs. |
 | Percent layout rectangle | Rust/WASM visual core | TypeScript CSS transform style | Non-percent units and CSS string construction stay in TypeScript. |
 | Full nested settings validation | TypeScript | None | Keep TypeScript as source of truth until the Rust schema crate models the full nested app settings object. |
-
-Lyrics use user-provided LRC text only. The wallpaper does not bundle lyrics, scrape lyrics, or call external lyrics
-providers in the current phase:
-
-```js
-localStorage.setItem(
-  'spotify-wallpaper-settings',
-  JSON.stringify({
-    layout: {
-      preset: 'Lyrics Focus'
-    },
-    lyrics: {
-      enabled: true,
-      sourceText: '[00:01.00]First line\\n[00:04.50]Second line',
-      mode: 'context',
-      offsetMs: 0,
-      showMissingState: true
-    }
-  })
-);
-location.reload();
-```
 
 Visualizer settings support the Phase 6 MVP modes: `album-ring`, `radial-bars`, and `waveform-line`. Intensity and
 sensitivity directly affect the normalized audio output. Low-power performance mode reduces visualizer bar count, sample
@@ -290,7 +267,6 @@ localStorage.setItem(
       background: true,
       albumArt: true,
       text: true,
-      lyrics: true,
       visualizer: false,
       reduceMotion: false
     }
@@ -374,7 +350,6 @@ Wallpaper Engine manual QA before release candidate:
 | `settings_json` | Entered as single-line JSON; valid JSON applies settings; empty or malformed JSON falls back safely and reports a debug warning. |
 | `spotify_client_id` | Optional for `swpt1.` tokens. Empty and dummy values can be entered; Client ID reaches Spotify polling settings without being logged. |
 | `spotify_refresh_token` | Accepts either a `swpt1.` Wallpaper Engine Token from the auth page or a raw Refresh Token for manual testing. Debug only shows configured/not configured. Do not use real tokens for public QA screenshots or logs because the input field can be visible. |
-| `lyrics_enabled` | Toggles the lyrics layer without breaking layout. |
 | `visualizer_enabled` | Enables/disables visualizer rendering and clears visualizer state when disabled. |
 | `performance_mode` | Accepts `low-power`, `standard`, and `high-effect`; invalid values keep safe defaults. |
 | `debug_enabled` | Toggles the debug panel without exposing token values. |
@@ -474,8 +449,6 @@ The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 - `seekbar_style`
 - `visualizer_enabled`
 - `visualizer_mode`
-- `lyrics_enabled`
-- `lyrics_mode`
 - `transitions_enabled`
 - `transition_preset`
 - `clock_enabled`

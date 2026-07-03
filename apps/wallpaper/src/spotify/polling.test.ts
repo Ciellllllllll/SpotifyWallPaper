@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import trackFixture from '../../../../tests/fixtures/spotify/current-playback-track.json';
 import { defaultSettings } from '../settings/defaultSettings';
-import { credentialsFromSettings, nextPollingDelayMs, SpotifyPlaybackSession } from './polling';
+import {
+  BackendPlaybackProvider,
+  credentialsFromSettings,
+  nextPollingDelayMs,
+  playbackProviderFromSettings,
+  SpotifyPlaybackSession
+} from './polling';
 
 describe('Spotify polling decisions', () => {
   it('uses configured playing and paused polling intervals', () => {
@@ -72,5 +78,108 @@ describe('Spotify polling decisions', () => {
       'https://api.spotify.com/v1/me/player',
       'https://api.spotify.com/v1/me/player/currently-playing'
     ]);
+  });
+
+  it('uses a backend playback provider when backend settings are configured', async () => {
+    const provider = playbackProviderFromSettings(
+      {
+        ...defaultSettings,
+        spotify: {
+          ...defaultSettings.spotify,
+          playbackProvider: 'backend',
+          backendUrl: 'http://127.0.0.1:49320/',
+          pairingToken: 'secret-pairing-token'
+        }
+      },
+      (() => Promise.resolve(new Response(JSON.stringify(trackFixture), { status: 200 }))) as typeof fetch
+    );
+
+    expect(provider).toBeInstanceOf(BackendPlaybackProvider);
+    const result = await provider?.poll(0);
+
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.value.title).toBe('Current Song');
+  });
+
+  it('falls back to direct credential polling when backend settings are not configured', () => {
+    const provider = playbackProviderFromSettings({
+      ...defaultSettings,
+      spotify: {
+        ...defaultSettings.spotify,
+        clientId: 'client-id',
+        refreshToken: 'refresh-token',
+        hasRefreshToken: true,
+        playbackProvider: 'backend',
+        backendUrl: '',
+        pairingToken: 'secret-pairing-token'
+      }
+    });
+
+    expect(provider).toBeInstanceOf(SpotifyPlaybackSession);
+  });
+
+  it('calls backend playback and control endpoints with bearer pairing token', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetcher = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return new Response(JSON.stringify(trackFixture), { status: 200 });
+    }) as typeof fetch;
+    const provider = new BackendPlaybackProvider(
+      { backendUrl: 'http://127.0.0.1:49320/', pairingToken: 'secret-pairing-token' },
+      fetcher
+    );
+
+    await provider.poll(0);
+    await provider.control({ type: 'pause' }, 1000);
+
+    expect(calls.map((call) => [call.url, call.init?.method, (call.init?.headers as Record<string, string>).authorization])).toEqual([
+      ['http://127.0.0.1:49320/api/playback', 'GET', 'Bearer secret-pairing-token'],
+      ['http://127.0.0.1:49320/api/control', 'POST', 'Bearer secret-pairing-token']
+    ]);
+    expect(calls[1].init?.body).toBe(JSON.stringify({ type: 'pause' }));
+  });
+
+  it('rejects non-loopback backend URLs before sending the pairing token', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetcher = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return new Response(JSON.stringify(trackFixture), { status: 200 });
+    }) as typeof fetch;
+    const provider = new BackendPlaybackProvider(
+      { backendUrl: 'https://example.com:49320/', pairingToken: 'secret-pairing-token' },
+      fetcher
+    );
+
+    const result = await provider.poll(0);
+
+    expect(result.ok).toBe(false);
+    expect(calls).toEqual([]);
+  });
+
+  it('preserves backend rate-limit retry delay from error payloads', async () => {
+    const provider = new BackendPlaybackProvider(
+      { backendUrl: 'http://127.0.0.1:49320/', pairingToken: 'secret-pairing-token' },
+      (async () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: {
+              kind: 'rate_limited',
+              message: 'Spotify rate limit reached.',
+              retryAfterMs: 12000,
+              status: 429
+            }
+          }),
+          { status: 429 }
+        )) as typeof fetch
+    );
+
+    const result = await provider.poll(0);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe('rate_limited');
+    expect(result.error.retryAfterMs).toBe(12000);
   });
 });

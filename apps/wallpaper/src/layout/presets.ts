@@ -23,7 +23,6 @@ const leftDockItems: Record<LayoutItemKey, LayoutItem> = {
   albumArt: item({ x: 27, y: 50, anchor: 'center-left', width: 360, height: 360, zIndex: 2 }),
   trackText: item({ x: 52.5, y: 48, anchor: 'center-left', width: 760, height: 300, zIndex: 3 }),
   seekbar: item({ x: 52.5, y: 73, anchor: 'center-left', width: 440, height: 44, zIndex: 3 }),
-  lyrics: item({ x: 68, y: 50, anchor: 'center', width: 560, height: 240, zIndex: 3 }),
   clock: item({
     x: 96,
     y: 94,
@@ -58,13 +57,6 @@ export const layoutPresets: Record<LayoutPresetName, Record<LayoutItemKey, Layou
     albumArt: item({ x: 50, y: 42, anchor: 'center', width: 380, height: 380 }),
     trackText: item({ x: 50, y: 73, anchor: 'center', width: 640, height: 180 }),
     seekbar: item({ x: 50, y: 85, anchor: 'center', width: 520, height: 44 })
-  },
-  'Lyrics Focus': {
-    ...leftDockItems,
-    albumArt: item({ x: 8, y: 24, anchor: 'top-left', width: 260, height: 260 }),
-    trackText: item({ x: 8, y: 60, anchor: 'center-left', width: 420, height: 180 }),
-    seekbar: item({ x: 8, y: 78, anchor: 'center-left', width: 380, height: 44 }),
-    lyrics: item({ x: 62, y: 50, anchor: 'center', width: 720, height: 340, zIndex: 4 })
   },
   'Visualizer Heavy': {
     ...leftDockItems,
@@ -105,7 +97,6 @@ export const layoutPresets: Record<LayoutPresetName, Record<LayoutItemKey, Layou
     albumArt: item({ enabled: false, x: 50, y: 50, width: 360, height: 360 }),
     trackText: item({ x: 50, y: 52, anchor: 'center', width: 680, height: 240 }),
     seekbar: item({ x: 50, y: 72, anchor: 'center', width: 520, height: 44 }),
-    lyrics: item({ x: 50, y: 64, anchor: 'center', width: 720, height: 260, zIndex: 4 }),
     clock: item({ x: 96, y: 94, anchor: 'bottom-right', width: 220, height: 72, participatesInTransition: false })
   }
 };

@@ -1,24 +1,8 @@
 use wasm_bindgen::prelude::*;
 
 use crate::layout::{calculate_layout_rect, Anchor, LayoutInput};
-use crate::lrc::parse_lrc;
 use crate::theme::{readability_for_background, Rgb};
 use crate::visualizer::normalize_samples;
-
-#[wasm_bindgen]
-pub fn parse_lrc_json(input: &str) -> String {
-    let parsed = parse_lrc(input);
-    serde_json::json!({
-        "offsetMs": parsed.offset_ms,
-        "lines": parsed.lines.into_iter().map(|line| {
-            serde_json::json!({
-                "timeMs": line.time_ms,
-                "text": line.text
-            })
-        }).collect::<Vec<_>>()
-    })
-    .to_string()
-}
 
 #[wasm_bindgen]
 pub fn normalize_visualizer_json(input_json: &str) -> String {

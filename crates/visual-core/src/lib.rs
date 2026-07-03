@@ -1,6 +1,5 @@
 pub mod animation;
 pub mod layout;
-pub mod lrc;
 pub mod theme;
 pub mod visualizer;
 #[cfg(target_arch = "wasm32")]

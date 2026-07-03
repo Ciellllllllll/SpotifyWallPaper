@@ -8,7 +8,6 @@ export interface ConfiguratorDraft {
   preset: LayoutPresetName;
   backgroundMode: WallpaperSettings['background']['mode'];
   themeMode: WallpaperSettings['theme']['mode'];
-  lyricsEnabled: boolean;
   visualizerEnabled: boolean;
   transitionEnabled: boolean;
   clockEnabled: boolean;
@@ -23,7 +22,6 @@ export interface ConfiguratorDraft {
 export const layoutPresetOptions: LayoutPresetName[] = [
   'Minimal',
   'Center Album',
-  'Lyrics Focus',
   'Visualizer Heavy',
   'Rainmeter Hybrid',
   'Left Dock',
@@ -60,7 +58,6 @@ export const defaultDraft: ConfiguratorDraft = {
   preset: 'Left Dock',
   backgroundMode: 'album-blur',
   themeMode: 'album',
-  lyricsEnabled: false,
   visualizerEnabled: true,
   transitionEnabled: false,
   clockEnabled: true,
@@ -115,26 +112,6 @@ export const buildSettings = (draft: ConfiguratorDraft): WallpaperSettings => ({
     visible: true,
     style: draft.preset === 'Album Ring' ? 'album-ring' : 'line'
   },
-  lyrics: {
-    enabled: draft.lyricsEnabled,
-    sourceText: '',
-    mode: 'current',
-    offsetMs: 0,
-    showMissingState: true,
-    provider: {
-      name: 'user-lrc',
-      searchInputs: {
-        title: true,
-        artists: true,
-        album: true,
-        duration: true
-      },
-      supportsSynced: true,
-      supportsPlain: false,
-      cachePolicy: 'none',
-      failureReason: 'not-configured'
-    }
-  },
   visualizer: {
     enabled: draft.visualizerEnabled,
     mode: 'album-ring',
@@ -180,7 +157,6 @@ export const buildSettings = (draft: ConfiguratorDraft): WallpaperSettings => ({
     background: true,
     albumArt: true,
     text: true,
-    lyrics: true,
     visualizer: false,
     reduceMotion: false
   },
@@ -216,7 +192,6 @@ export const importSettingsJson = (source: string): { draft: ConfiguratorDraft; 
           defaultDraft.backgroundMode
         ),
         themeMode: oneOf(parsed.theme?.mode, ['album', 'fallback', 'custom'] as const, defaultDraft.themeMode),
-        lyricsEnabled: booleanOr(parsed.lyrics?.enabled, defaultDraft.lyricsEnabled),
         visualizerEnabled: booleanOr(parsed.visualizer?.enabled, defaultDraft.visualizerEnabled),
         transitionEnabled: booleanOr(parsed.transitions?.enabled, defaultDraft.transitionEnabled),
         clockEnabled: booleanOr(parsed.clock?.enabled, defaultDraft.clockEnabled),
@@ -241,7 +216,6 @@ const presetItems = (preset: LayoutPresetName): WallpaperSettings['layout']['ite
   albumArt: item(albumArtForPreset(preset)),
   trackText: item(trackTextForPreset(preset)),
   seekbar: item(seekbarForPreset(preset)),
-  lyrics: item(preset === 'Lyrics Focus' ? { x: 62, y: 50, anchor: 'center', width: 720, height: 340, zIndex: 4 } : { x: 68, y: 50, anchor: 'center', width: 560, height: 240 }),
   clock: item(preset === 'Clock Focus' ? { x: 50, y: 45, anchor: 'center', width: 520, height: 160, scale: 1.8, participatesInTransition: false } : { x: 96, y: 94, anchor: 'bottom-right', width: 220, height: 72, participatesInTransition: false }),
   debug: item({ x: 98.8, y: 2, anchor: 'top-right', width: 280, height: 240, zIndex: 5, locked: true, participatesInTransition: false })
 });

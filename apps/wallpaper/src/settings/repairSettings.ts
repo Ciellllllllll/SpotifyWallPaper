@@ -8,7 +8,7 @@ import type {
 import { clonePresetItems, defaultLayoutPreset, isLayoutPresetName } from '../layout/presets';
 import { defaultSettings } from './defaultSettings';
 
-const layoutItemKeys: LayoutItemKey[] = ['albumArt', 'trackText', 'seekbar', 'lyrics', 'clock', 'debug'];
+const layoutItemKeys: LayoutItemKey[] = ['albumArt', 'trackText', 'seekbar', 'clock', 'debug'];
 const anchors: LayoutAnchor[] = [
   'top-left',
   'top-center',
@@ -24,7 +24,6 @@ const units: LayoutUnit[] = ['percent', 'px', 'vw', 'vh'];
 const visualizerModes: WallpaperSettings['visualizer']['mode'][] = ['album-ring', 'radial-bars', 'waveform-line'];
 const visualizerColorModes: WallpaperSettings['visualizer']['colorMode'][] = ['theme', 'accent', 'white'];
 const visualizerMirrorModes: WallpaperSettings['visualizer']['mirrorMode'][] = ['none', 'mirror'];
-const lyricModes: WallpaperSettings['lyrics']['mode'][] = ['current', 'context'];
 const seekbarStyles: WallpaperSettings['seekbar']['style'][] = ['line', 'album-ring'];
 const clockColorModes: WallpaperSettings['clock']['colorMode'][] = ['auto', 'fixed'];
 const rainmeterOutputModes: WallpaperSettings['rainmeter']['outputMode'][] = ['json'];
@@ -36,6 +35,7 @@ const transitionPresets: WallpaperSettings['transitions']['preset'][] = [
   'blur-fade'
 ];
 const transitionEasings: WallpaperSettings['transitions']['easing'][] = ['linear', 'ease', 'ease-out', 'ease-in-out'];
+const playbackProviders = ['direct', 'backend'] as const;
 
 export interface RepairResult {
   settings: WallpaperSettings;
@@ -65,6 +65,12 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
     spotify: {
       ...defaultSettings.spotify,
       ...input.spotify,
+      playbackProvider: oneOf(input.spotify?.playbackProvider, playbackProviders, defaultSettings.spotify.playbackProvider ?? 'direct'),
+      clientId: typeof input.spotify?.clientId === 'string' ? input.spotify.clientId : defaultSettings.spotify.clientId,
+      refreshToken: typeof input.spotify?.refreshToken === 'string' ? input.spotify.refreshToken : undefined,
+      hasRefreshToken: booleanOr(input.spotify?.hasRefreshToken, defaultSettings.spotify.hasRefreshToken),
+      backendUrl: typeof input.spotify?.backendUrl === 'string' ? input.spotify.backendUrl : defaultSettings.spotify.backendUrl,
+      pairingToken: typeof input.spotify?.pairingToken === 'string' && input.spotify.pairingToken ? input.spotify.pairingToken : undefined,
       pollIntervalPlayingMs: numberInRange(input.spotify?.pollIntervalPlayingMs, 500, 60_000, 1000),
       pollIntervalPausedMs: numberInRange(input.spotify?.pollIntervalPausedMs, 500, 60_000, 3000)
     },
@@ -110,33 +116,6 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
       ...input.seekbar,
       visible: booleanOr(input.seekbar?.visible, defaultSettings.seekbar.visible),
       style: oneOf(input.seekbar?.style, seekbarStyles, defaultSettings.seekbar.style)
-    },
-    lyrics: {
-      ...defaultSettings.lyrics,
-      enabled: booleanOr(input.lyrics?.enabled, defaultSettings.lyrics.enabled),
-      sourceText: typeof input.lyrics?.sourceText === 'string' ? input.lyrics.sourceText : defaultSettings.lyrics.sourceText,
-      mode: oneOf(input.lyrics?.mode, lyricModes, defaultSettings.lyrics.mode),
-      offsetMs: Math.round(numberInRange(input.lyrics?.offsetMs, -30_000, 30_000, defaultSettings.lyrics.offsetMs)),
-      showMissingState: booleanOr(input.lyrics?.showMissingState, defaultSettings.lyrics.showMissingState),
-      provider: {
-        name: 'user-lrc',
-        searchInputs: {
-          title: booleanOr(input.lyrics?.provider?.searchInputs?.title, defaultSettings.lyrics.provider.searchInputs.title),
-          artists: booleanOr(input.lyrics?.provider?.searchInputs?.artists, defaultSettings.lyrics.provider.searchInputs.artists),
-          album: booleanOr(input.lyrics?.provider?.searchInputs?.album, defaultSettings.lyrics.provider.searchInputs.album),
-          duration: booleanOr(input.lyrics?.provider?.searchInputs?.duration, defaultSettings.lyrics.provider.searchInputs.duration)
-        },
-        supportsSynced: true,
-        supportsPlain: false,
-        cachePolicy: 'none',
-        failureReason:
-          input.lyrics?.provider?.failureReason === 'not-configured' ||
-          input.lyrics?.provider?.failureReason === 'not-found' ||
-          input.lyrics?.provider?.failureReason === 'invalid-lrc' ||
-          input.lyrics?.provider?.failureReason === 'provider-error'
-            ? input.lyrics.provider.failureReason
-            : null
-      }
     },
     visualizer: {
       ...defaultSettings.visualizer,
@@ -187,7 +166,6 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
       background: booleanOr(input.transitions?.background, defaultSettings.transitions.background),
       albumArt: booleanOr(input.transitions?.albumArt, defaultSettings.transitions.albumArt),
       text: booleanOr(input.transitions?.text, defaultSettings.transitions.text),
-      lyrics: booleanOr(input.transitions?.lyrics, defaultSettings.transitions.lyrics),
       visualizer: booleanOr(input.transitions?.visualizer, defaultSettings.transitions.visualizer),
       reduceMotion: booleanOr(input.transitions?.reduceMotion, defaultSettings.transitions.reduceMotion)
     },
@@ -209,6 +187,7 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
   };
 
   repaired ||= input.schemaVersion !== repairedSettings.schemaVersion;
+  repaired ||= JSON.stringify({ ...defaultSettings.spotify, ...input.spotify }) !== JSON.stringify(repairedSettings.spotify);
   repaired ||= input.background?.mode !== repairedSettings.background.mode;
   repaired ||= input.background?.opacity !== repairedSettings.background.opacity;
   repaired ||= input.background?.blurPx !== repairedSettings.background.blurPx;
@@ -219,7 +198,6 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
   repaired ||= input.theme?.autoReadability !== repairedSettings.theme.autoReadability;
   repaired ||= JSON.stringify({ ...defaultSettings.player, ...input.player }) !== JSON.stringify(repairedSettings.player);
   repaired ||= JSON.stringify({ ...defaultSettings.seekbar, ...input.seekbar }) !== JSON.stringify(repairedSettings.seekbar);
-  repaired ||= JSON.stringify({ ...defaultSettings.lyrics, ...input.lyrics }) !== JSON.stringify(repairedSettings.lyrics);
   repaired ||= JSON.stringify({ ...defaultSettings.visualizer, ...input.visualizer }) !== JSON.stringify(repairedSettings.visualizer);
   repaired ||= JSON.stringify({ ...defaultSettings.clock, ...input.clock }) !== JSON.stringify(repairedSettings.clock);
   repaired ||= JSON.stringify({ ...defaultSettings.transitions, ...input.transitions }) !== JSON.stringify(repairedSettings.transitions);

@@ -16,7 +16,6 @@ export interface SettingsPatch {
   text?: Partial<WallpaperSettings['text']>;
   player?: Partial<WallpaperSettings['player']>;
   seekbar?: Partial<WallpaperSettings['seekbar']>;
-  lyrics?: Partial<WallpaperSettings['lyrics']>;
   visualizer?: Partial<WallpaperSettings['visualizer']>;
   clock?: Partial<WallpaperSettings['clock']>;
   transitions?: Partial<WallpaperSettings['transitions']>;

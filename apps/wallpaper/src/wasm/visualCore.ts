@@ -1,9 +1,4 @@
-import type { LayoutItem, LyricLine, VisualizerFrame, WallpaperSettings } from '@spotify-wallpaper/shared-types';
-
-export interface LrcParseResult {
-  offsetMs: number;
-  lines: LyricLine[];
-}
+import type { LayoutItem, VisualizerFrame, WallpaperSettings } from '@spotify-wallpaper/shared-types';
 
 export interface ReadabilityResult {
   text: { r: number; g: number; b: number };
@@ -21,7 +16,6 @@ export interface LayoutRect {
 
 interface VisualCoreModule {
   default?: () => Promise<void>;
-  parse_lrc_json: (input: string) => string;
   normalize_visualizer_json: (inputJson: string) => string;
   readability_json: (r: number, g: number, b: number) => string;
   calculate_layout_rect_json: (inputJson: string) => string;
@@ -59,11 +53,6 @@ const visualCoreModuleUrl = (): string =>
     : new URL('../wasm/spotify_wallpaper_visual_core.js', import.meta.url).href;
 
 export const visualCoreStatus = (): 'wasm' | 'typescript-fallback' => (coreModule ? 'wasm' : 'typescript-fallback');
-
-export const parseLrcWithCore = (input: string, fallback: () => LrcParseResult): LrcParseResult => {
-  const output = callJson<LrcParseResult>(() => coreModule?.parse_lrc_json(input));
-  return output?.lines ? output : fallback();
-};
 
 export const normalizeSamplesWithCore = (
   frame: VisualizerFrame,

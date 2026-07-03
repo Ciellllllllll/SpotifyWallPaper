@@ -2,13 +2,11 @@
   import { onDestroy, onMount } from 'svelte';
   import './app.css';
   import type { LayoutItem, NormalizedPlayback, SpotifyPlaybackError, WallpaperSettings, WallpaperTheme } from '@spotify-wallpaper/shared-types';
-  import LyricsLayer from './lyrics/LyricsLayer.svelte';
-  import { lyricDisplayState, parseLrc } from './lyrics/lrc';
   import { mockPlayback } from './mock/mockPlayback';
   import { clearStoredSpotifyCredentials, persistSpotifyCredentials } from './settings/spotifyCredentialCache';
   import { defaultSettings } from './settings/defaultSettings';
   import { loadSettings } from './settings/loadSettings';
-  import { credentialsFromSettings, nextPollingDelayMs, SpotifyPlaybackSession } from './spotify/polling';
+  import { nextPollingDelayMs, playbackProviderFromSettings, type SpotifyPlaybackProvider } from './spotify/polling';
   import { layoutStyle } from './layout/style';
   import { buildBackgroundStyle, buildThemeCssVariables } from './theme/background';
   import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from './theme/colors';
@@ -38,7 +36,7 @@
   let themeImageUrl = '';
   let lastPollingDelayMs: number | null = null;
   let consecutiveErrors = 0;
-  let spotifySession: SpotifyPlaybackSession | null = null;
+  let spotifySession: SpotifyPlaybackProvider | null = null;
   let controlError: SpotifyPlaybackError | null = null;
   let controlBusy = false;
   let displayMode: 'album-only' | 'album-details' = 'album-only';
@@ -143,13 +141,6 @@
   $: seekbarPanelStyle = `${layoutStyle(activeSeekbarItem)}${
     showAlbumDetails && !detailHoverUiVisible ? '; opacity: 0; pointer-events: none' : ''
   }`;
-  $: parsedLyrics = parseLrc(settings.lyrics.sourceText);
-  $: lyricsState = lyricDisplayState(
-    parsedLyrics.lines,
-    displayedProgressMs + settings.lyrics.offsetMs,
-    settings.lyrics.enabled,
-    settings.lyrics.showMissingState
-  );
   $: canControlPlayback =
     Boolean(spotifySession) &&
     playback.source === 'spotify' &&
@@ -445,14 +436,20 @@
   };
 
   const spotifyPollingKey = (nextSettings: WallpaperSettings) => {
-    const credentials = credentialsFromSettings(nextSettings);
-    if (!credentials) {
+    const hasBackendProvider =
+      nextSettings.spotify.playbackProvider === 'backend' &&
+      Boolean(nextSettings.spotify.backendUrl && nextSettings.spotify.pairingToken);
+    const hasDirectCredentials = Boolean(nextSettings.spotify.clientId && nextSettings.spotify.refreshToken);
+    if (!hasBackendProvider && !hasDirectCredentials) {
       return '';
     }
 
     return JSON.stringify({
-      clientId: credentials.clientId,
-      refreshToken: credentials.refreshToken,
+      playbackProvider: nextSettings.spotify.playbackProvider,
+      clientId: nextSettings.spotify.clientId,
+      refreshToken: nextSettings.spotify.refreshToken,
+      backendUrl: nextSettings.spotify.backendUrl,
+      pairingToken: nextSettings.spotify.pairingToken,
       playingIntervalMs: nextSettings.spotify.pollIntervalPlayingMs,
       pausedIntervalMs: nextSettings.spotify.pollIntervalPausedMs
     });
@@ -471,8 +468,8 @@
   const configureSpotifyPolling = () => {
     stopPolling();
 
-    const credentials = credentialsFromSettings(settings);
-    if (!credentials) {
+    const session = playbackProviderFromSettings(settings);
+    if (!session) {
       playbackMode = 'browser mock';
       spotifyError = null;
       controlError = null;
@@ -480,11 +477,10 @@
       return;
     }
 
-    playbackMode = 'spotify';
+    playbackMode = settings.spotify.playbackProvider === 'backend' ? 'spotify backend' : 'spotify direct';
     spotifyError = null;
     controlError = null;
     consecutiveErrors = 0;
-    const session = new SpotifyPlaybackSession(credentials);
     spotifySession = session;
     const runId = pollingRunId;
 
@@ -563,10 +559,6 @@
   <div class="album-backdrop" aria-hidden="true" style={albumBackground}></div>
 
   <VisualizerLayer frame={visualizerFrame} {settings} {theme} albumItem={activeAlbumItem} />
-
-  {#if showAlbumDetails}
-    <LyricsLayer {settings} state={lyricsState} />
-  {/if}
 
   {#if settings.albumArt.visible && activeAlbumItem.enabled}
     <div
@@ -783,7 +775,6 @@
       <div>Transition: {transitionState ? transitionState.resolvedPreset : 'idle'}</div>
       <div>Visualizer: {settings.visualizer.enabled ? `${settings.visualizer.mode}/${visualizerFrame?.source ?? 'idle'}` : 'disabled'}</div>
       <div>Visual core: {visualCoreStatus()}</div>
-      <div>Lyrics: {settings.lyrics.enabled ? `${lyricsState.status}/${parsedLyrics.lines.length}` : 'disabled'}</div>
       <div>Performance: {settings.performance.mode}</div>
       <div>Audio peak: {visualizerFrame ? visualizerFrame.peak.toFixed(2) : '0.00'}</div>
       <div>Settings: {settingsWarning ?? settingsSource}</div>

@@ -46,6 +46,28 @@ describe('loadSettings', () => {
     expect(loaded.settings.spotify.hasRefreshToken).toBe(true);
   });
 
+  it('loads backend playback provider settings without exposing the pairing token in warnings', () => {
+    const loaded = loadSettings(
+      JSON.stringify({
+        spotify: {
+          playbackProvider: 'backend',
+          backendUrl: 'https://localhost:49320/',
+          pairingToken: 'secret-pairing-token',
+          pollIntervalPlayingMs: 100
+        }
+      })
+    );
+
+    expect(loaded.warning).toContain('repaired');
+    expect(loaded.warning).not.toContain('secret-pairing-token');
+    expect(loaded.settings.spotify).toMatchObject({
+      playbackProvider: 'backend',
+      backendUrl: 'https://localhost:49320/',
+      pairingToken: 'secret-pairing-token',
+      pollIntervalPlayingMs: 500
+    });
+  });
+
   it('uses cached Spotify credentials when settings do not contain a token', () => {
     const loaded = loadSettings(
       JSON.stringify({
@@ -229,55 +251,6 @@ describe('loadSettings', () => {
     });
   });
 
-  it('loads and repairs lyrics settings', () => {
-    const loaded = loadSettings(
-      JSON.stringify({
-        lyrics: {
-          enabled: true,
-          sourceText: '[00:01.00]One',
-          mode: 'context',
-          offsetMs: 60000,
-          showMissingState: false,
-          provider: {
-            name: 'external-provider',
-            searchInputs: {
-              title: false,
-              artists: true,
-              album: false,
-              duration: true
-            },
-            supportsSynced: false,
-            supportsPlain: true,
-            cachePolicy: 'persistent',
-            failureReason: 'not-found'
-          }
-        }
-      })
-    );
-
-    expect(loaded.warning).toContain('repaired');
-    expect(loaded.settings.lyrics).toMatchObject({
-      enabled: true,
-      sourceText: '[00:01.00]One',
-      mode: 'context',
-      offsetMs: 30000,
-      showMissingState: false,
-      provider: {
-        name: 'user-lrc',
-        searchInputs: {
-          title: false,
-          artists: true,
-          album: false,
-          duration: true
-        },
-        supportsSynced: true,
-        supportsPlain: false,
-        cachePolicy: 'none',
-        failureReason: 'not-found'
-      }
-    });
-  });
-
   it('loads and repairs transition settings', () => {
     const loaded = loadSettings(
       JSON.stringify({
@@ -289,7 +262,6 @@ describe('loadSettings', () => {
           background: false,
           albumArt: true,
           text: false,
-          lyrics: true,
           visualizer: true,
           reduceMotion: true
         }
@@ -305,7 +277,6 @@ describe('loadSettings', () => {
       background: false,
       albumArt: true,
       text: false,
-      lyrics: true,
       visualizer: true,
       reduceMotion: true
     });
