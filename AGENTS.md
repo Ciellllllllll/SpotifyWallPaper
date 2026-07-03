@@ -41,7 +41,7 @@ Please commit once each phase is complete. Please refer to previous commit messa
 ## Architectural rule
 The wallpaper display is a Web Wallpaper. Rendering belongs to the web frontend. Rust is used for pure logic through WASM and for the optional Tauri configurator backend.
 
-The Rust/WASM core must not own Spotify HTTP calls, DOM mutation, Canvas/WebGL drawing, or Wallpaper Engine API registration. It may validate settings, compute layout, parse LRC, generate themes, normalize visualizer data, and compute animation helper values.
+The Rust/WASM core must not own Spotify HTTP calls, DOM mutation, Canvas/WebGL drawing, or Wallpaper Engine API registration. It may validate settings, compute layout, generate themes, normalize visualizer data, and compute animation helper values.
 
 ## Required implementation order
 Follow `docs/03-implementation-phases.md`. Do not implement advanced effects before the MVP foundations are in place.
@@ -55,12 +55,13 @@ Minimum order:
 5. Layout and settings schema
 6. Background/theme
 7. Visualizer
-8. Lyrics
-9. Transitions
-10. Player controls
-11. Tauri configurator
-12. Rainmeter
-13. QA, docs, release polish
+8. Transitions
+9. Player controls
+10. Tauri configurator
+11. Rainmeter
+12. QA, docs, release polish
+
+Lyrics/LRC support is deferred from the current v1 scope. Reintroduce it only after updating the current specs, settings schema, tests, and SpecGuard checklist in the same phase.
 
 ## SubAgent reporting format
 At the end of each task or phase, report:

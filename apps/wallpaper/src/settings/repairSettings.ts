@@ -45,6 +45,11 @@ export interface RepairResult {
 
 export const repairSettings = (input: WallpaperSettings): RepairResult => {
   let repaired = false;
+  const sanitizedInput = { ...input };
+  if (Object.prototype.hasOwnProperty.call(sanitizedInput, 'lyrics')) {
+    delete (sanitizedInput as Record<string, unknown>).lyrics;
+    repaired = true;
+  }
   const preset = isLayoutPresetName(input.layout?.preset) ? input.layout.preset : defaultLayoutPreset;
   repaired ||= preset !== input.layout?.preset;
 
@@ -60,7 +65,7 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
 
   const repairedSettings: WallpaperSettings = {
     ...defaultSettings,
-    ...input,
+    ...sanitizedInput,
     schemaVersion: numberInRange(input.schemaVersion, 1, 1, defaultSettings.schemaVersion),
     spotify: {
       ...defaultSettings.spotify,

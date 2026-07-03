@@ -4,7 +4,6 @@
 
 Rust is the source of truth for these pure calculations when the generated WASM bundle is present:
 
-- LRC parsing and offset application: `crates/visual-core/src/lrc.rs`
 - Visualizer smoothing, decay, clamping, and peak normalization: `crates/visual-core/src/visualizer.rs`
 - Theme readability and contrast selection: `crates/visual-core/src/theme.rs`
 - Percent-based layout rectangle calculation: `crates/visual-core/src/layout.rs`
@@ -41,7 +40,6 @@ This Codex environment cannot launch Wallpaper Engine or attach to its live audi
 - `settings_json`
 - `spotify_client_id`
 - `spotify_refresh_token`
-- `lyrics_enabled`
 - `visualizer_enabled`
 - `performance_mode`
 - `debug_enabled`

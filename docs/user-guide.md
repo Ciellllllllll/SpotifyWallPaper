@@ -95,7 +95,6 @@ Supported user property keys:
 - `settings_json`
 - `selected_preset`
 - `visualizer_enabled`
-- `lyrics_enabled`
 - `performance_mode`
 - `debug_enabled`
 
@@ -109,7 +108,7 @@ If Wallpaper Engine APIs are absent, the same build still works in a browser usi
 
 ## Rust/WASM Visual Core
 
-The wallpaper can use the Rust visual core at runtime for LRC parsing, visualizer normalization, readability calculation, and percent layout rectangle calculation. Generate the WASM bundle before packaging when Rust runtime integration is required:
+The wallpaper can use the Rust visual core at runtime for visualizer normalization, readability calculation, and percent layout rectangle calculation. Generate the WASM bundle before packaging when Rust runtime integration is required:
 
 ```sh
 wasm-pack build crates/visual-core --target web --out-dir ../../apps/wallpaper/public/wasm
@@ -159,7 +158,6 @@ Every settings object uses `schemaVersion: 1` and these top-level categories:
 - `text`
 - `player`
 - `seekbar`
-- `lyrics`
 - `visualizer`
 - `clock`
 - `transitions`
@@ -173,7 +171,6 @@ Use `layout.preset` for the first level of customization. Available presets:
 
 - `Minimal`
 - `Center Album`
-- `Lyrics Focus`
 - `Visualizer Heavy`
 - `Rainmeter Hybrid`
 - `Left Dock`
@@ -181,26 +178,6 @@ Use `layout.preset` for the first level of customization. Available presets:
 - `Clock Focus`
 - `Album Ring`
 - `Ambient Background`
-
-## Lyrics LRC Guide
-
-Lyrics are user-provided LRC text only. The wallpaper does not bundle lyrics, scrape lyrics, or call external lyrics providers in this milestone.
-
-Example:
-
-```json
-{
-  "lyrics": {
-    "enabled": true,
-    "sourceText": "[00:01.00]First line\n[00:04.50]Second line",
-    "mode": "context",
-    "offsetMs": 0,
-    "showMissingState": true
-  }
-}
-```
-
-Supported LRC behavior includes timestamped lines, metadata lines, offsets, empty lines, duplicate timestamps, long lines, and no active line before the first timestamp.
 
 ## Rainmeter Integration
 
@@ -234,7 +211,7 @@ A minimal Rainmeter reader sample is available at `examples/rainmeter/SpotifyWal
 - Browser opens but no Spotify data appears: this is expected without Spotify settings; mock playback should still render.
 - Wallpaper Engine properties do not apply: confirm the property key names and verify `settings_json` is single-line valid JSON.
 - Spotify controls fail: passive display works without Premium, but some playback operations can be denied by Spotify or by restricted devices.
-- Lyrics do not show: confirm `lyrics.enabled` is true and `sourceText` contains valid LRC timestamps.
+- Lyrics/LRC settings are not available in this milestone. Remove legacy `lyrics` fields from pasted settings JSON if they appear in old samples.
 - Visualizer is idle: Wallpaper Engine audio data may be unavailable; browser preview uses mock or idle audio paths.
 - Rainmeter write fails: confirm the configurator is running in the Tauri shell, not only the browser preview, and verify the output path is writable.
 - Settings break the layout: clear `spotify-wallpaper-settings` from local storage or import a known-good sample from `examples/settings/`.

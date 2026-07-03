@@ -22,7 +22,6 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm mock album art or placeholder is visible.
 - Confirm title, artists, progress, seekbar, and clock are visible.
 - Confirm visualizer renders from mock or idle audio data.
-- Confirm lyrics can be enabled with user LRC text.
 - Confirm malformed settings JSON falls back safely.
 - Confirm no Wallpaper Engine object is required.
 
@@ -38,7 +37,6 @@ Resource-intensive commands should run through `h5i capture run`.
   - `settings_json`
   - `selected_preset`
   - `visualizer_enabled`
-  - `lyrics_enabled`
   - `performance_mode`
   - `debug_enabled`
 - Confirm `settings_json` is editable as single-line JSON with valid JSON, an empty value, and malformed JSON; malformed JSON must not crash the wallpaper.

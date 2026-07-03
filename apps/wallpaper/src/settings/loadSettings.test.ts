@@ -46,6 +46,19 @@ describe('loadSettings', () => {
     expect(loaded.settings.spotify.hasRefreshToken).toBe(true);
   });
 
+  it('drops legacy lyrics settings from pasted settings JSON', () => {
+    const loaded = loadSettings(
+      JSON.stringify({
+        lyrics: {
+          enabled: true,
+          sourceText: '[00:01.00]legacy line'
+        }
+      })
+    );
+
+    expect('lyrics' in (loaded.settings as unknown as Record<string, unknown>)).toBe(false);
+  });
+
   it('loads backend playback provider settings without exposing the pairing token in warnings', () => {
     const loaded = loadSettings(
       JSON.stringify({
