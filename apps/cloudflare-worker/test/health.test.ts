@@ -13,4 +13,18 @@ describe('GET /health', () => {
       }
     });
   });
+
+  it('returns a redacted envelope for unknown routes', async () => {
+    const response = await SELF.fetch('https://worker.test/not-found');
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: {
+        kind: 'unavailable',
+        message: 'Route not found.',
+        status: 404
+      }
+    });
+  });
 });

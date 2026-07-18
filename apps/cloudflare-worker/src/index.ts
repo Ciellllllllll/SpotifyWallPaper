@@ -1,4 +1,4 @@
-import type { ApiResult, Env } from './contracts';
+import type { ApiResult } from './contracts';
 
 interface HealthValue {
   service: 'spotify-wallpaper-backend';

@@ -7,11 +7,88 @@
     "ENVIRONMENT": "development",
     "PUBLIC_BASE_URL": "http://127.0.0.1:8787"
   },
+  "secrets": {
+    "required": [
+      "TOKEN_ENCRYPTION_KEYRING",
+      "TOKEN_ENCRYPTION_ACTIVE_KEY_ID",
+      "PAIRING_HMAC_KEYRING",
+      "PAIRING_HMAC_ACTIVE_KEY_ID",
+      "OAUTH_STATE_HMAC_KEY"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "spotify-wallpaper-local",
+      "migrations_dir": "migrations"
+    },
+    {
+      "binding": "DELETION_DB",
+      "database_name": "spotify-wallpaper-deletion-local",
+      "migrations_dir": "migrations/deletion-ledger"
+    }
+  ],
   "observability": {
     "enabled": true,
     "logs": {
       "invocation_logs": false,
       "head_sampling_rate": 0
+    }
+  },
+  "env": {
+    "preview": {
+      "vars": {
+        "ENVIRONMENT": "preview"
+      },
+      "secrets": {
+        "required": [
+          "PUBLIC_BASE_URL",
+          "TOKEN_ENCRYPTION_KEYRING",
+          "TOKEN_ENCRYPTION_ACTIVE_KEY_ID",
+          "PAIRING_HMAC_KEYRING",
+          "PAIRING_HMAC_ACTIVE_KEY_ID",
+          "OAUTH_STATE_HMAC_KEY"
+        ]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "spotify-wallpaper-preview",
+          "migrations_dir": "migrations"
+        },
+        {
+          "binding": "DELETION_DB",
+          "database_name": "spotify-wallpaper-deletion-preview",
+          "migrations_dir": "migrations/deletion-ledger"
+        }
+      ]
+    },
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production"
+      },
+      "secrets": {
+        "required": [
+          "PUBLIC_BASE_URL",
+          "TOKEN_ENCRYPTION_KEYRING",
+          "TOKEN_ENCRYPTION_ACTIVE_KEY_ID",
+          "PAIRING_HMAC_KEYRING",
+          "PAIRING_HMAC_ACTIVE_KEY_ID",
+          "OAUTH_STATE_HMAC_KEY"
+        ]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "spotify-wallpaper-production",
+          "migrations_dir": "migrations"
+        },
+        {
+          "binding": "DELETION_DB",
+          "database_name": "spotify-wallpaper-deletion-production",
+          "migrations_dir": "migrations/deletion-ledger"
+        }
+      ]
     }
   }
 }
