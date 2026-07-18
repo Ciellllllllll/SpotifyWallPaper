@@ -10,8 +10,8 @@ import {
   findActiveCredentialByPairingToken,
   getCredentialByPublicId,
   insertOAuthSession,
-  readCredentialSecrets,
-  revokeCredential
+  markCredentialReauthorizationRequired,
+  readCredentialSecrets
 } from '../src/db';
 import { generatePairingToken, pairingDigest } from '../src/pairing';
 
@@ -156,7 +156,7 @@ describe('credential storage', () => {
       findActiveCredentialByPairingToken(env.DB, 'malformed', pairingKeys)
     ).resolves.toBeNull();
 
-    await revokeCredential(env.DB, pairing.publicId, nowMs + 1);
+    await markCredentialReauthorizationRequired(env.DB, pairing.publicId, nowMs + 1);
     await expect(
       findActiveCredentialByPairingToken(env.DB, pairing.token, pairingKeys)
     ).resolves.toBeNull();

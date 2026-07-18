@@ -3,11 +3,12 @@ import { defineConfig } from 'vitest/config';
 
 const testEncryptionKey = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 const testPairingKey = 'ggggggggggggggggggggggggggggggggggggggggggg';
+const testOauthStateKey = 'QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ';
 process.env.TOKEN_ENCRYPTION_KEYRING = JSON.stringify({ test: testEncryptionKey });
 process.env.TOKEN_ENCRYPTION_ACTIVE_KEY_ID = 'test';
 process.env.PAIRING_HMAC_KEYRING = JSON.stringify({ test: testPairingKey });
 process.env.PAIRING_HMAC_ACTIVE_KEY_ID = 'test';
-process.env.OAUTH_STATE_HMAC_KEY = testEncryptionKey;
+process.env.OAUTH_STATE_HMAC_KEY = testOauthStateKey;
 
 export default defineConfig({
   test: {

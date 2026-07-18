@@ -73,6 +73,16 @@ export interface CompleteRefreshLeaseInput {
   nowMs: number;
 }
 
+export interface ReauthorizeCredentialInput {
+  publicId: string;
+  spotifyClientId: string;
+  refreshToken: EncryptedSecret;
+  accessToken: EncryptedSecret;
+  accessTokenExpiresAtMs: number;
+  refreshAuthorizedAtMs: number;
+  nowMs: number;
+}
+
 interface OAuthSessionRow {
   state_digest: string;
   browser_digest: string;
@@ -204,13 +214,22 @@ export async function findActiveCredentialByPairingToken(
   token: string,
   pairingKeyring: SecretKeyring
 ): Promise<Credential | null> {
+  const credential = await findCredentialByPairingToken(db, token, pairingKeyring);
+  return credential?.authStatus === 'active' ? credential : null;
+}
+
+export async function findCredentialByPairingToken(
+  db: D1Database,
+  token: string,
+  pairingKeyring: SecretKeyring
+): Promise<Credential | null> {
   const parsed = parsePairingToken(token);
   if (parsed === null) {
     return null;
   }
 
   const row = await db
-    .prepare(`SELECT * FROM credentials WHERE public_id = ? AND auth_status = 'active'`)
+    .prepare('SELECT * FROM credentials WHERE public_id = ?')
     .bind(parsed.publicId)
     .first<CredentialRow>();
   if (row === null) {
@@ -230,7 +249,46 @@ export async function findActiveCredentialByPairingToken(
   return mapCredential(row);
 }
 
-export async function revokeCredential(
+export async function reauthorizeCredential(
+  db: D1Database,
+  credential: ReauthorizeCredentialInput
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE credentials
+       SET refresh_token_ciphertext = ?,
+           refresh_token_nonce = ?,
+           refresh_token_key_id = ?,
+           access_token_ciphertext = ?,
+           access_token_nonce = ?,
+           access_token_key_id = ?,
+           access_token_expires_at_ms = ?,
+           refresh_authorized_at_ms = ?,
+           token_version = token_version + 1,
+           refresh_lease_id = NULL,
+           refresh_lease_until_ms = NULL,
+           auth_status = 'active',
+           updated_at_ms = ?
+       WHERE public_id = ? AND spotify_client_id = ?`
+    )
+    .bind(
+      credential.refreshToken.ciphertext,
+      credential.refreshToken.nonce,
+      credential.refreshToken.keyId,
+      credential.accessToken.ciphertext,
+      credential.accessToken.nonce,
+      credential.accessToken.keyId,
+      credential.accessTokenExpiresAtMs,
+      credential.refreshAuthorizedAtMs,
+      credential.nowMs,
+      credential.publicId,
+      credential.spotifyClientId
+    )
+    .run();
+  return result.meta.changes === 1;
+}
+
+export async function markCredentialReauthorizationRequired(
   db: D1Database,
   publicId: string,
   nowMs: number

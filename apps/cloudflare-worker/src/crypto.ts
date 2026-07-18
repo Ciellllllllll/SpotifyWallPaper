@@ -31,6 +31,33 @@ export function createOAuthState(): string {
   return randomBase64Url(32);
 }
 
+export async function keyedDigest(
+  value: string,
+  purpose: 'oauth-browser' | 'oauth-state',
+  encodedKey: string
+): Promise<string> {
+  try {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      decodeBase64Url(encodedKey, 32),
+      {
+        name: 'HMAC',
+        hash: 'SHA-256'
+      },
+      false,
+      ['sign']
+    );
+    const digest = await crypto.subtle.sign(
+      'HMAC',
+      key,
+      encoder.encode(`spotify-wallpaper:${purpose}:v1:${value}`)
+    );
+    return encodeBase64Url(new Uint8Array(digest));
+  } catch {
+    throw new Error('Digest generation failed.');
+  }
+}
+
 export function parseSecretKeyring(serialized: string): SecretKeyring {
   try {
     const parsed: unknown = JSON.parse(serialized);
