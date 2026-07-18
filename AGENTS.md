@@ -25,9 +25,14 @@ Architecture or cross-cutting work must also read:
 - `docs/03-implementation-phases.md`
 - `docs/30-subagent-matrix.md`
 
+Public backend work must also read `docs/25-public-backend.md`.
+
 ## Hard rules
 Do not embed Spotify Client Secret in the Web Wallpaper.
-Do not log Access Token, Refresh Token, authorization code, or full OAuth callback URL.
+Do not log Access Token, Refresh Token, Pairing Token, authorization code, OAuth state, PKCE verifier, Worker encryption/HMAC keys, or full OAuth callback URL.
+Do not put Spotify tokens, Pairing Tokens, authorization codes, OAuth state, PKCE verifiers, or callback URLs in URL parameters outside Spotify's required authorization callback.
+Do not store a public-backend Pairing Token in plaintext outside Wallpaper Engine's user property and the one-time no-store authorization success response.
+Disable Cloudflare invocation logs for any Worker that handles Spotify OAuth callbacks.
 Do not record, store, transform, or redistribute Spotify audio.
 Do not bundle lyrics data.
 Do not make the Tauri configurator mandatory for the Wallpaper Engine wallpaper to run.
@@ -40,6 +45,8 @@ Please commit once each phase is complete. Please refer to previous commit messa
 
 ## Architectural rule
 The wallpaper display is a Web Wallpaper. Rendering belongs to the web frontend. Rust is used for pure logic through WASM and for the optional Tauri configurator backend.
+
+The optional public Spotify proxy is a separate TypeScript Cloudflare Worker. It may own Spotify HTTP calls, OAuth PKCE, encrypted token persistence, and proxy API routes. It must not become required for browser mock mode, direct legacy mode, or the loopback Rust backend.
 
 The Rust/WASM core must not own Spotify HTTP calls, DOM mutation, Canvas/WebGL drawing, or Wallpaper Engine API registration. It may validate settings, compute layout, generate themes, normalize visualizer data, and compute animation helper values.
 
@@ -100,3 +107,4 @@ After major edits, refresh the index with:
 
 ```bash
 codegraph index
+```
