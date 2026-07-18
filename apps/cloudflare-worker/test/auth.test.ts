@@ -212,6 +212,39 @@ describe('GET /auth/callback', () => {
     expect(html).not.toContain('insufficient-scope-code');
     expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM credentials').first('count')).toBe(0);
   });
+
+  it('cancels an undeclared multibyte token response after the byte limit', async () => {
+    const started = await startAuth();
+    const cancelled = vi.fn();
+    const multibyteChunk = new TextEncoder().encode('界'.repeat(6_000));
+    let remainingChunks = 3;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            pull(controller) {
+              if (remainingChunks-- > 0) {
+                controller.enqueue(multibyteChunk);
+                return;
+              }
+              controller.close();
+            },
+            cancel: cancelled
+          }),
+          {
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
+      )
+    );
+
+    const response = await callback(started, 'oversized-response-code');
+
+    expect(response.status).toBe(502);
+    expect(cancelled).toHaveBeenCalledOnce();
+    expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM credentials').first('count')).toBe(0);
+  });
 });
 
 describe('POST /auth/reauthorize', () => {

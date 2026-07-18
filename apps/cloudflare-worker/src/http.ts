@@ -120,6 +120,62 @@ export function methodNotAllowed(allow: string): Response {
   return response;
 }
 
+export async function readBoundedBytes(
+  message: Request | Response,
+  maxBytes: number
+): Promise<Uint8Array | null> {
+  const contentLength = Number(message.headers.get('Content-Length') ?? '0');
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    await message.body?.cancel();
+    return null;
+  }
+  if (message.body === null) {
+    return new Uint8Array();
+  }
+
+  const reader = message.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) {
+        break;
+      }
+      totalBytes += chunk.value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(chunk.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const merged = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged;
+}
+
+export async function readBoundedText(
+  message: Request | Response,
+  maxBytes: number
+): Promise<string | null> {
+  const bytes = await readBoundedBytes(message, maxBytes);
+  if (bytes === null) {
+    return null;
+  }
+  return new TextDecoder('utf-8', {
+    fatal: true,
+    ignoreBOM: true
+  }).decode(bytes);
+}
+
 function safeApiHeaders(): Headers {
   return new Headers({
     'Cache-Control': 'no-store',

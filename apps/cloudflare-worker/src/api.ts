@@ -15,6 +15,7 @@ import {
   isSetupSameOrigin,
   isWallpaperOriginAllowed,
   methodNotAllowed,
+  readBoundedBytes,
   withWallpaperCors
 } from './http';
 import { parsePairingToken } from './pairing';
@@ -86,6 +87,9 @@ async function handleControl(request: Request, env: Env): Promise<Response> {
     if (credential === null) {
       return corsIfAllowed(unauthorized(), request);
     }
+    if (!(await rateLimit(env.CONTROL_RATE_LIMITER, `control:${credential.publicId}`))) {
+      return corsIfAllowed(rateLimited(), request);
+    }
     const parsed = await parseControlRequest(request);
     if (parsed.kind === 'too_large') {
       return corsIfAllowed(
@@ -98,9 +102,6 @@ async function handleControl(request: Request, env: Env): Promise<Response> {
         apiError(400, 'unknown_response_shape', 'Control request is invalid.'),
         request
       );
-    }
-    if (!(await rateLimit(env.CONTROL_RATE_LIMITER, `control:${credential.publicId}`))) {
-      return corsIfAllowed(rateLimited(), request);
     }
     if (parsed.command.type === 'seek') {
       const playback = await fetchCredentialPlayback(env.DB, credential, env);
@@ -210,12 +211,8 @@ async function parseControlRequest(
   ) {
     return { kind: 'invalid' };
   }
-  const declaredLength = Number(request.headers.get('Content-Length') ?? '0');
-  if (Number.isFinite(declaredLength) && declaredLength > maxControlBodyBytes) {
-    return { kind: 'too_large' };
-  }
-  const bytes = await request.arrayBuffer();
-  if (bytes.byteLength > maxControlBodyBytes) {
+  const bytes = await readBoundedBytes(request, maxControlBodyBytes);
+  if (bytes === null) {
     return { kind: 'too_large' };
   }
 

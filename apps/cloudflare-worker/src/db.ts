@@ -589,27 +589,35 @@ export async function reconcileDeletionTombstones(
   deletionDb: D1Database,
   nowMs: number
 ): Promise<number> {
-  const tombstones = await deletionDb
-    .prepare(
-      `SELECT public_id, deleted_at_ms, expires_at_ms
-       FROM deletion_tombstones
-       ORDER BY public_id
-       LIMIT 1000`
-    )
-    .all<{
-      public_id: string;
-      deleted_at_ms: number;
-      expires_at_ms: number;
-    }>();
+  let reconciled = 0;
+  let cursor = '';
+  while (true) {
+    const tombstones = await deletionDb
+      .prepare(
+        `SELECT public_id
+         FROM deletion_tombstones
+         WHERE public_id > ?
+         ORDER BY public_id
+         LIMIT 1000`
+      )
+      .bind(cursor)
+      .all<{ public_id: string }>();
 
-  for (const tombstone of tombstones.results) {
-    await deleteCredentialData(db, tombstone.public_id);
+    for (const tombstone of tombstones.results) {
+      await deleteCredentialData(db, tombstone.public_id);
+    }
+    reconciled += tombstones.results.length;
+    if (tombstones.results.length < 1000) {
+      break;
+    }
+    cursor = tombstones.results[tombstones.results.length - 1]!.public_id;
   }
+
   await deletionDb
     .prepare('DELETE FROM deletion_tombstones WHERE expires_at_ms <= ?')
     .bind(nowMs)
     .run();
-  return tombstones.results.length;
+  return reconciled;
 }
 
 export async function readCredentialSecrets(

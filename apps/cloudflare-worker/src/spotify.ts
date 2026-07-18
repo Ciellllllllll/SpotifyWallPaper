@@ -24,6 +24,7 @@ import {
   type Credential,
   type RefreshLease
 } from './db';
+import { readBoundedText } from './http';
 import { emptySpotifyPlayback, normalizeSpotifyPlayback } from './normalize';
 
 const playbackEndpoint = 'https://api.spotify.com/v1/me/player';
@@ -599,40 +600,6 @@ async function boundedJson(response: Response): Promise<ApiResult<unknown>> {
   } catch {
     return unknownResponse(response.status);
   }
-}
-
-async function readBoundedText(
-  response: Response,
-  maxBytes: number
-): Promise<string | null> {
-  if (response.body === null) {
-    return '';
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  while (true) {
-    const chunk = await reader.read();
-    if (chunk.done) {
-      break;
-    }
-    totalBytes += chunk.value.byteLength;
-    if (totalBytes > maxBytes) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(chunk.value);
-  }
-  const merged = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder('utf-8', {
-    fatal: true,
-    ignoreBOM: true
-  }).decode(merged);
 }
 
 async function isInvalidGrant(response: Response): Promise<boolean> {

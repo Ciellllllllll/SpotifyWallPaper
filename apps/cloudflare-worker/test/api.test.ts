@@ -187,6 +187,44 @@ describe('control API validation', () => {
     expect(spotify).not.toHaveBeenCalled();
   });
 
+  it('cancels an undeclared streaming body as soon as it exceeds 1 KiB', async () => {
+    const pairing = await createApiCredential();
+    const cancelled = vi.fn();
+    const chunks = [
+      new TextEncoder().encode('{"type":"play","padding":"'),
+      new Uint8Array(700),
+      new Uint8Array(700)
+    ];
+    let index = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const chunk = chunks[index++];
+        if (chunk === undefined) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+      cancel: cancelled
+    });
+
+    const response = await worker.fetch(
+      new Request(`${baseUrl}/api/control`, {
+        method: 'POST',
+        headers: {
+          Origin: 'null',
+          Authorization: `Bearer ${pairing.token}`,
+          'Content-Type': 'application/json'
+        },
+        body
+      }),
+      env
+    );
+
+    expect(response.status).toBe(413);
+    expect(cancelled).toHaveBeenCalledOnce();
+  });
+
   it('rejects seek positions beyond the current item duration', async () => {
     const pairing = await createApiCredential();
     const spotify = vi.fn(async () => Response.json(trackFixture));
@@ -250,6 +288,48 @@ describe('account deletion', () => {
     await reconcileDeletionTombstones(env.DB, env.DELETION_DB, nowMs + 1);
 
     expect(await getCredentialByPublicId(env.DB, pairing.publicId)).toBeNull();
+  });
+
+  it('reconciles beyond the first 1,000 tombstones before expiring the ledger', async () => {
+    await env.DELETION_DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 0
+         UNION ALL
+         SELECT value + 1 FROM sequence WHERE value < 999
+       )
+       INSERT INTO deletion_tombstones (public_id, deleted_at_ms, expires_at_ms)
+       SELECT printf('restore-%04d', value), ?, ? FROM sequence`
+    )
+      .bind(nowMs - 100, nowMs - 1)
+      .run();
+    await env.DELETION_DB.prepare(
+      `INSERT INTO deletion_tombstones (public_id, deleted_at_ms, expires_at_ms)
+       VALUES ('restore-1000', ?, ?)`
+    )
+      .bind(nowMs - 100, nowMs - 1)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO credentials (
+         public_id, pairing_digest, pairing_key_id, spotify_client_id,
+         refresh_authorized_at_ms, created_at_ms, updated_at_ms
+       ) VALUES ('restore-1000', 'digest', 'test', 'restored-client', ?, ?, ?)`
+    )
+      .bind(nowMs - 100, nowMs - 100, nowMs - 100)
+      .run();
+
+    const reconciled = await reconcileDeletionTombstones(
+      env.DB,
+      env.DELETION_DB,
+      nowMs
+    );
+
+    expect(reconciled).toBe(1001);
+    expect(await getCredentialByPublicId(env.DB, 'restore-1000')).toBeNull();
+    expect(
+      await env.DELETION_DB.prepare(
+        'SELECT COUNT(*) AS count FROM deletion_tombstones'
+      ).first<number>('count')
+    ).toBe(0);
   });
 });
 

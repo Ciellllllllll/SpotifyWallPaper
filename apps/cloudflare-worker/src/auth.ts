@@ -16,6 +16,7 @@ import {
   insertOAuthSession,
   reauthorizeCredential
 } from './db';
+import { readBoundedBytes, readBoundedText } from './http';
 import { callbackPage, fixedError } from './pages';
 import {
   activePairingKey,
@@ -328,12 +329,8 @@ async function readClientId(request: Request): Promise<string | null> {
       return null;
     }
 
-    const contentLength = Number(request.headers.get('Content-Length') ?? '0');
-    if (Number.isFinite(contentLength) && contentLength > 2048) {
-      return null;
-    }
-    const bytes = await request.arrayBuffer();
-    if (bytes.byteLength > 2048) {
+    const bytes = await readBoundedBytes(request, 2048);
+    if (bytes === null) {
       return null;
     }
     const body = new TextDecoder('utf-8', {
@@ -423,12 +420,8 @@ async function exchangeAuthorizationCode(
       return null;
     }
 
-    const contentLength = Number(response.headers.get('Content-Length') ?? '0');
-    if (Number.isFinite(contentLength) && contentLength > 32_768) {
-      return null;
-    }
-    const text = await response.text();
-    if (text.length > 32_768) {
+    const text = await readBoundedText(response, 32_768);
+    if (text === null) {
       return null;
     }
     const parsed: unknown = JSON.parse(text);
