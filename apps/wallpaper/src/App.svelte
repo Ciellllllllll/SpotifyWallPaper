@@ -6,7 +6,12 @@
   import { clearStoredSpotifyCredentials, persistSpotifyCredentials } from './settings/spotifyCredentialCache';
   import { defaultSettings } from './settings/defaultSettings';
   import { loadSettings } from './settings/loadSettings';
-  import { nextPollingDelayMs, playbackProviderFromSettings, type SpotifyPlaybackProvider } from './spotify/polling';
+  import {
+    nextPollingDelayMs,
+    playbackHistoryAfterPoll,
+    playbackProviderFromSettings,
+    type SpotifyPlaybackProvider
+  } from './spotify/polling';
   import { layoutStyle } from './layout/style';
   import { buildBackgroundStyle, buildThemeCssVariables } from './theme/background';
   import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from './theme/colors';
@@ -177,15 +182,6 @@
       updateTheme(playback.albumImageUrl, nextSeed);
     }
   }
-
-  const replacePlayback = (next: NormalizedPlayback) => {
-    if (playback.id !== next.id || playback.itemType !== next.itemType) {
-      previousPlayback = playback;
-      startTrackTransition(playback, next);
-    }
-
-    playback = next;
-  };
 
   const clearTransition = () => {
     if (transitionTimeout !== null) {
@@ -490,8 +486,18 @@
         return;
       }
 
+      const priorHistory = { playback, previousPlayback };
+      const nextHistory = playbackHistoryAfterPoll(priorHistory, result);
+      if (
+        result.ok &&
+        nextHistory.previousPlayback === priorHistory.playback
+      ) {
+        startTrackTransition(priorHistory.playback, nextHistory.playback);
+      }
+      playback = nextHistory.playback;
+      previousPlayback = nextHistory.previousPlayback;
+
       if (result.ok) {
-        replacePlayback(result.value);
         spotifyError = null;
         consecutiveErrors = 0;
       } else {

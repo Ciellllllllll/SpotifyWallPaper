@@ -7,6 +7,8 @@ import type { Fetcher, SpotifyCredentials, SpotifyPlaybackCommand, SpotifyResult
 
 const DEFAULT_PLAYING_INTERVAL_MS = 1000;
 const DEFAULT_PAUSED_INTERVAL_MS = 3000;
+const PUBLIC_BACKEND_PLAYING_INTERVAL_MS = 2000;
+const PUBLIC_BACKEND_PAUSED_INTERVAL_MS = 5000;
 const DEFAULT_ERROR_BACKOFF_MS = 5000;
 const MAX_ERROR_BACKOFF_MS = 60_000;
 const ACTIVE_TRANSIENT_ERROR_BACKOFF_MS = 5000;
@@ -27,6 +29,11 @@ export interface SpotifyPlaybackProvider {
 export interface BackendPlaybackProviderConfig {
   backendUrl: string;
   pairingToken: string;
+}
+
+export interface PlaybackHistory {
+  playback: NormalizedPlayback;
+  previousPlayback: NormalizedPlayback | null;
 }
 
 export class SpotifyPlaybackSession implements SpotifyPlaybackProvider {
@@ -105,7 +112,8 @@ export class BackendPlaybackProvider implements SpotifyPlaybackProvider {
     try {
       response = await this.fetcher(endpoint.value, {
         method: 'GET',
-        headers: this.headers()
+        headers: this.headers(),
+        ...backendFetchPolicy
       });
     } catch {
       return { ok: false, error: classifyNetworkError() };
@@ -143,7 +151,8 @@ export class BackendPlaybackProvider implements SpotifyPlaybackProvider {
           ...this.headers(),
           'content-type': 'application/json'
         },
-        body: JSON.stringify(command)
+        body: JSON.stringify(command),
+        ...backendFetchPolicy
       });
     } catch {
       return { ok: false, error: classifyNetworkError() };
@@ -207,18 +216,56 @@ export const playbackProviderFromSettings = (
   settings: WallpaperSettings,
   fetcher: Fetcher = fetch
 ): SpotifyPlaybackProvider | null => {
-  const backendConfig = backendConfigFromSettings(settings);
-  if (backendConfig) {
-    return new BackendPlaybackProvider(backendConfig, fetcher);
+  if (settings.spotify.playbackProvider === 'backend') {
+    const backendConfig = backendConfigFromSettings(settings);
+    return backendConfig
+      ? new BackendPlaybackProvider(backendConfig, fetcher)
+      : null;
   }
 
   const credentials = credentialsFromSettings(settings);
   return credentials ? new SpotifyPlaybackSession(credentials, fetcher) : null;
 };
 
+export const playbackHistoryAfterPoll = (
+  history: PlaybackHistory,
+  result: SpotifyResult<NormalizedPlayback>
+): PlaybackHistory => {
+  if (!result.ok) {
+    return history;
+  }
+  if (
+    history.playback.id !== result.value.id ||
+    history.playback.itemType !== result.value.itemType
+  ) {
+    return {
+      playback: result.value,
+      previousPlayback: history.playback
+    };
+  }
+  return {
+    playback: result.value,
+    previousPlayback: history.previousPlayback
+  };
+};
+
 export const nextPollingDelayMs = ({ playback, error, consecutiveErrors = 0, settings }: PollDecisionInput): number => {
+  const publicBackend = isTrustedPublicBackend(settings);
+  const playingIntervalMs = pollingInterval(
+    settings?.spotify.pollIntervalPlayingMs,
+    DEFAULT_PLAYING_INTERVAL_MS,
+    PUBLIC_BACKEND_PLAYING_INTERVAL_MS,
+    publicBackend
+  );
+  const pausedIntervalMs = pollingInterval(
+    settings?.spotify.pollIntervalPausedMs,
+    DEFAULT_PAUSED_INTERVAL_MS,
+    PUBLIC_BACKEND_PAUSED_INTERVAL_MS,
+    publicBackend
+  );
+
   if (error?.kind === 'rate_limited' && error.retryAfterMs !== undefined) {
-    return Math.max(error.retryAfterMs, DEFAULT_PLAYING_INTERVAL_MS);
+    return Math.max(error.retryAfterMs, playingIntervalMs);
   }
 
   if (error) {
@@ -234,10 +281,23 @@ export const nextPollingDelayMs = ({ playback, error, consecutiveErrors = 0, set
   }
 
   if (playback?.isPlaying) {
-    return clampInterval(settings?.spotify.pollIntervalPlayingMs, DEFAULT_PLAYING_INTERVAL_MS);
+    return playingIntervalMs;
   }
 
-  return clampInterval(settings?.spotify.pollIntervalPausedMs, DEFAULT_PAUSED_INTERVAL_MS);
+  return pausedIntervalMs;
+};
+
+const pollingInterval = (
+  configured: number | undefined,
+  localDefault: number,
+  publicDefault: number,
+  publicBackend: boolean
+): number => {
+  const value =
+    publicBackend && (configured === undefined || configured === localDefault)
+      ? publicDefault
+      : configured;
+  return clampInterval(value, publicBackend ? publicDefault : localDefault);
 };
 
 const clampInterval = (value: number | undefined, fallback: number): number => {
@@ -252,8 +312,7 @@ const normalizeBackendBaseUrl = (value: string): SpotifyResult<string> => {
   try {
     const url = new URL(value);
     if (
-      url.protocol !== 'http:' ||
-      !isLoopbackHost(url.hostname) ||
+      !isCanonicalOriginInput(value, url) ||
       url.username ||
       url.password ||
       url.search ||
@@ -263,13 +322,67 @@ const normalizeBackendBaseUrl = (value: string): SpotifyResult<string> => {
       return invalidBackendUrl();
     }
 
+    const isLoopback = url.protocol === 'http:' && isLoopbackHost(url.hostname);
+    const officialOrigin = configuredOfficialBackendOrigin();
+    const isOfficial =
+      url.protocol === 'https:' &&
+      officialOrigin !== null &&
+      url.origin === officialOrigin;
+    if (!isLoopback && !isOfficial) {
+      return invalidBackendUrl();
+    }
+
     return { ok: true, value: `${url.origin}/` };
   } catch {
     return invalidBackendUrl();
   }
 };
 
+const configuredOfficialBackendOrigin = (): string | null => {
+  const value = import.meta.env.VITE_SPOTIFY_BACKEND_ORIGIN;
+  if (!value) {
+    return null;
+  }
+  try {
+    const url = new URL(value);
+    if (
+      !isCanonicalOriginInput(value, url) ||
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      (url.pathname && url.pathname !== '/')
+    ) {
+      return null;
+    }
+    return url.origin;
+  } catch {
+    return null;
+  }
+};
+
+const isCanonicalOriginInput = (value: string, url: URL): boolean =>
+  value === url.origin || value === `${url.origin}/`;
+
+const isTrustedPublicBackend = (settings: WallpaperSettings | undefined): boolean => {
+  if (
+    settings?.spotify.playbackProvider !== 'backend' ||
+    !settings.spotify.backendUrl
+  ) {
+    return false;
+  }
+  const normalized = normalizeBackendBaseUrl(settings.spotify.backendUrl);
+  return normalized.ok && normalized.value.startsWith('https://');
+};
+
 const isLoopbackHost = (hostname: string): boolean => hostname === '127.0.0.1' || hostname === '[::1]';
+
+const backendFetchPolicy = {
+  redirect: 'error',
+  credentials: 'omit',
+  referrerPolicy: 'no-referrer'
+} satisfies Pick<RequestInit, 'redirect' | 'credentials' | 'referrerPolicy'>;
 
 const invalidBackendUrl = (): SpotifyResult<string> => ({
   ok: false,
@@ -297,27 +410,58 @@ const unwrapBackendPayload = (payload: unknown): SpotifyResult<unknown> => {
 
   if (record.ok === false && record.error && typeof record.error === 'object') {
     const error = record.error as Partial<SpotifyPlaybackError>;
+    const kind =
+      error.kind === 'unauthorized' ||
+      error.kind === 'forbidden' ||
+      error.kind === 'rate_limited' ||
+      error.kind === 'network_error' ||
+      error.kind === 'unavailable' ||
+      error.kind === 'unknown_response_shape' ||
+      error.kind === 'item_null'
+        ? error.kind
+        : 'unknown_response_shape';
     return {
       ok: false,
       error: {
-        kind:
-          error.kind === 'unauthorized' ||
-          error.kind === 'forbidden' ||
-          error.kind === 'rate_limited' ||
-          error.kind === 'network_error' ||
-          error.kind === 'unavailable' ||
-          error.kind === 'unknown_response_shape' ||
-          error.kind === 'item_null'
-            ? error.kind
-            : 'unknown_response_shape',
-        message: typeof error.message === 'string' ? error.message : 'Spotify backend returned an unexpected response.',
-        retryAfterMs: typeof error.retryAfterMs === 'number' ? error.retryAfterMs : undefined,
+        kind,
+        message: backendErrorMessage(kind),
+        retryAfterMs: validRetryAfterMs(error.retryAfterMs),
         status: typeof error.status === 'number' ? error.status : undefined
       }
     };
   }
 
   return { ok: true, value: payload };
+};
+
+const validRetryAfterMs = (value: unknown): number | undefined =>
+  typeof value === 'number' &&
+  Number.isFinite(value) &&
+  Number.isInteger(value) &&
+  value >= 0 &&
+  value <= 86_400_000
+    ? value
+    : undefined;
+
+const backendErrorMessage = (
+  kind: SpotifyPlaybackError['kind']
+): string => {
+  switch (kind) {
+    case 'unauthorized':
+      return 'Spotify authorization is required.';
+    case 'forbidden':
+      return 'Spotify playback access was denied.';
+    case 'rate_limited':
+      return 'Spotify rate limit reached.';
+    case 'network_error':
+      return 'Spotify backend network request failed.';
+    case 'unavailable':
+      return 'Spotify backend is unavailable.';
+    case 'item_null':
+      return 'Spotify has no current playback item.';
+    case 'unknown_response_shape':
+      return 'Spotify backend returned an unexpected response.';
+  }
 };
 
 const isNormalizedPlayback = (value: unknown): value is NormalizedPlayback => {

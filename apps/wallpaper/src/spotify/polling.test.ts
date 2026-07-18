@@ -1,15 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import trackFixture from '../../../../tests/fixtures/spotify/current-playback-track.json';
+import { mockPlayback } from '../mock/mockPlayback';
 import { defaultSettings } from '../settings/defaultSettings';
 import {
   BackendPlaybackProvider,
   credentialsFromSettings,
   nextPollingDelayMs,
+  playbackHistoryAfterPoll,
   playbackProviderFromSettings,
   SpotifyPlaybackSession
 } from './polling';
 
 describe('Spotify polling decisions', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('uses configured playing and paused polling intervals', () => {
     expect(nextPollingDelayMs({ playback: { isPlaying: true } as never, settings: defaultSettings })).toBe(1000);
     expect(nextPollingDelayMs({ playback: { isPlaying: false } as never, settings: defaultSettings })).toBe(3000);
@@ -48,6 +54,50 @@ describe('Spotify polling decisions', () => {
         }
       })
     ).toEqual({ clientId: 'client-id', refreshToken: 'refresh-token' });
+  });
+
+  it('keeps browser mock mode without credentials and direct mode with credentials', () => {
+    expect(playbackProviderFromSettings(defaultSettings)).toBeNull();
+    expect(
+      playbackProviderFromSettings({
+        ...defaultSettings,
+        spotify: {
+          ...defaultSettings.spotify,
+          playbackProvider: 'direct',
+          clientId: 'client-id',
+          refreshToken: 'refresh-token',
+          hasRefreshToken: true
+        }
+      })
+    ).toBeInstanceOf(SpotifyPlaybackSession);
+  });
+
+  it('preserves current and previous playback references after a polling error', () => {
+    const previous = {
+      ...mockPlayback,
+      id: 'previous-track',
+      title: 'Previous Track'
+    };
+    const state = {
+      playback: {
+        ...mockPlayback,
+        id: 'current-track',
+        title: 'Current Track'
+      },
+      previousPlayback: previous
+    };
+
+    const retained = playbackHistoryAfterPoll(state, {
+      ok: false,
+      error: {
+        kind: 'unavailable',
+        message: 'secret-pairing-token'
+      }
+    });
+
+    expect(retained).toBe(state);
+    expect(retained.playback).toBe(state.playback);
+    expect(retained.previousPlayback).toBe(previous);
   });
 
   it('cools down the primary playback endpoint after a fallback success', async () => {
@@ -102,7 +152,7 @@ describe('Spotify polling decisions', () => {
     expect(result.value.title).toBe('Current Song');
   });
 
-  it('falls back to direct credential polling when backend settings are not configured', () => {
+  it('does not fall back to direct credentials when the selected backend is invalid', () => {
     const provider = playbackProviderFromSettings({
       ...defaultSettings,
       spotify: {
@@ -116,7 +166,7 @@ describe('Spotify polling decisions', () => {
       }
     });
 
-    expect(provider).toBeInstanceOf(SpotifyPlaybackSession);
+    expect(provider).toBeNull();
   });
 
   it('calls backend playback and control endpoints with bearer pairing token', async () => {
@@ -138,16 +188,62 @@ describe('Spotify polling decisions', () => {
       ['http://127.0.0.1:49320/api/control', 'POST', 'Bearer secret-pairing-token']
     ]);
     expect(calls[1].init?.body).toBe(JSON.stringify({ type: 'pause' }));
+    for (const call of calls) {
+      expect(call.init).toMatchObject({
+        redirect: 'error',
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer'
+      });
+    }
   });
 
-  it('rejects non-loopback backend URLs before sending the pairing token', async () => {
+  it('accepts only the exact build-time HTTPS origin', async () => {
+    vi.stubEnv('VITE_SPOTIFY_BACKEND_ORIGIN', 'https://api.wallpaper.example');
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetcher = (async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      return Response.json({ ok: true, value: trackFixture });
+    }) as typeof fetch;
+    const official = new BackendPlaybackProvider(
+      {
+        backendUrl: 'https://api.wallpaper.example/',
+        pairingToken: 'secret-pairing-token'
+      },
+      fetcher
+    );
+    const arbitrary = new BackendPlaybackProvider(
+      {
+        backendUrl: 'https://attacker.example/',
+        pairingToken: 'secret-pairing-token'
+      },
+      fetcher
+    );
+
+    await expect(official.poll(0)).resolves.toMatchObject({ ok: true });
+    await expect(arbitrary.poll(0)).resolves.toMatchObject({ ok: false });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('https://api.wallpaper.example/api/playback');
+  });
+
+  it.each([
+    'https://user@api.wallpaper.example/',
+    'https://@api.wallpaper.example/',
+    'https://api.wallpaper.example/setup',
+    'https://api.wallpaper.example/./',
+    'https://api.wallpaper.example/%2e',
+    'https://api.wallpaper.example/?token=value',
+    'https://api.wallpaper.example/?',
+    'https://api.wallpaper.example/#fragment',
+    'https://api.wallpaper.example/#'
+  ])('rejects a non-origin backend URL before sending the pairing token: %s', async (backendUrl) => {
+    vi.stubEnv('VITE_SPOTIFY_BACKEND_ORIGIN', 'https://api.wallpaper.example');
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetcher = (async (url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(url), init });
       return new Response(JSON.stringify(trackFixture), { status: 200 });
     }) as typeof fetch;
     const provider = new BackendPlaybackProvider(
-      { backendUrl: 'https://example.com:49320/', pairingToken: 'secret-pairing-token' },
+      { backendUrl, pairingToken: 'secret-pairing-token' },
       fetcher
     );
 
@@ -155,6 +251,74 @@ describe('Spotify polling decisions', () => {
 
     expect(result.ok).toBe(false);
     expect(calls).toEqual([]);
+  });
+
+  it('rejects redirects without following them or forwarding the pairing token', async () => {
+    vi.stubEnv('VITE_SPOTIFY_BACKEND_ORIGIN', 'https://api.wallpaper.example');
+    const fetcher = vi.fn(
+      async (_url: RequestInfo | URL, init?: RequestInit) => {
+        expect(init?.redirect).toBe('error');
+        return new Response(null, {
+          status: 302,
+          headers: { Location: 'https://attacker.example/collect' }
+        });
+      }
+    ) as unknown as typeof fetch;
+    const provider = new BackendPlaybackProvider(
+      {
+        backendUrl: 'https://api.wallpaper.example',
+        pairingToken: 'secret-pairing-token'
+      },
+      fetcher
+    );
+
+    await expect(provider.poll(0)).resolves.toMatchObject({ ok: false });
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('uses public backend polling defaults while retaining direct and loopback defaults', () => {
+    vi.stubEnv('VITE_SPOTIFY_BACKEND_ORIGIN', 'https://api.wallpaper.example');
+    const publicSettings = {
+      ...defaultSettings,
+      spotify: {
+        ...defaultSettings.spotify,
+        playbackProvider: 'backend' as const,
+        backendUrl: 'https://api.wallpaper.example',
+        pairingToken: 'secret-pairing-token'
+      }
+    };
+    const loopbackSettings = {
+      ...publicSettings,
+      spotify: {
+        ...publicSettings.spotify,
+        backendUrl: 'http://127.0.0.1:49320'
+      }
+    };
+
+    expect(
+      nextPollingDelayMs({
+        playback: { isPlaying: true } as never,
+        settings: publicSettings
+      })
+    ).toBe(2000);
+    expect(
+      nextPollingDelayMs({
+        playback: { isPlaying: false } as never,
+        settings: publicSettings
+      })
+    ).toBe(5000);
+    expect(
+      nextPollingDelayMs({
+        playback: { isPlaying: true } as never,
+        settings: loopbackSettings
+      })
+    ).toBe(1000);
+    expect(
+      nextPollingDelayMs({
+        playback: { isPlaying: false } as never,
+        settings: loopbackSettings
+      })
+    ).toBe(3000);
   });
 
   it('preserves backend rate-limit retry delay from error payloads', async () => {
@@ -181,5 +345,91 @@ describe('Spotify polling decisions', () => {
     if (result.ok) return;
     expect(result.error.kind).toBe('rate_limited');
     expect(result.error.retryAfterMs).toBe(12000);
+  });
+
+  it('never reflects a backend-provided error message', async () => {
+    const provider = new BackendPlaybackProvider(
+      {
+        backendUrl: 'http://127.0.0.1:49320/',
+        pairingToken: 'secret-pairing-token'
+      },
+      (async () =>
+        Response.json(
+          {
+            ok: false,
+            error: {
+              kind: 'unauthorized',
+              message: 'accidental secret-pairing-token reflection',
+              status: 401
+            }
+          },
+          { status: 401 }
+        )) as typeof fetch
+    );
+
+    const result = await provider.poll(0);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toBe('Spotify authorization is required.');
+    expect(JSON.stringify(result.error)).not.toContain('secret-pairing-token');
+  });
+
+  it.each(['1e309', '-1', '1.5', '86400001'])(
+    'drops an unsafe backend retry delay: %s',
+    async (retryAfterMs) => {
+      const provider = new BackendPlaybackProvider(
+        {
+          backendUrl: 'http://127.0.0.1:49320/',
+          pairingToken: 'secret-pairing-token'
+        },
+        (async () =>
+          new Response(
+            `{"ok":false,"error":{"kind":"rate_limited","message":"ignored","retryAfterMs":${retryAfterMs},"status":429}}`,
+            { status: 429 }
+          )) as typeof fetch
+      );
+
+      const result = await provider.poll(0);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.retryAfterMs).toBeUndefined();
+      expect(
+        nextPollingDelayMs({
+          playback: mockPlayback,
+          error: result.error,
+          consecutiveErrors: 0,
+          settings: defaultSettings
+        })
+      ).toBe(5000);
+    }
+  );
+
+  it('drops an oversized retry-after header on the malformed-body fallback path', async () => {
+    const provider = new BackendPlaybackProvider(
+      {
+        backendUrl: 'http://127.0.0.1:49320/',
+        pairingToken: 'secret-pairing-token'
+      },
+      (async () =>
+        new Response('not-json', {
+          status: 429,
+          headers: { 'Retry-After': '2147484' }
+        })) as typeof fetch
+    );
+
+    const result = await provider.poll(0);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.retryAfterMs).toBeUndefined();
+    expect(
+      nextPollingDelayMs({
+        playback: mockPlayback,
+        error: result.error,
+        settings: defaultSettings
+      })
+    ).toBe(5000);
   });
 });
