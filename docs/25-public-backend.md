@@ -6,6 +6,20 @@ The public backend is an optional TypeScript Cloudflare Worker using D1. It exis
 
 The loopback Rust backend remains the local-development backend. Direct browser-side refresh and `swpt1.` remain legacy-compatible. Browser mock mode remains available without any backend.
 
+The loopback Rust backend contract remains:
+
+```text
+GET  /health
+GET  /auth/start
+GET  /auth/callback
+GET  /api/playback
+POST /api/control
+```
+
+It binds only to `127.0.0.1` or `::1` and uses the same success/error envelope, normalized playback, and control JSON as the public Worker.
+
+Legacy direct token grammar is `swpt1.<base64url-json>`, with a maximum total length of 20,000 characters. The decoded JSON must be an object containing exactly compatible `v: 1`, non-empty string `clientId`, and non-empty string `refreshToken` fields. Invalid encoding, JSON, version, types, empty values, or excessive length is rejected without logging the input. `swpt1.` is parsed only by direct legacy mode and is never accepted as a public Worker Bearer token.
+
 ## Spotify application mode
 
 The initial Worker uses BYO Client ID with Authorization Code + PKCE and no Client Secret. A managed shared Spotify application is out of scope until Extended Quota approval and a separate threat-model review.
@@ -95,7 +109,20 @@ Error:
 }
 ```
 
-The envelope and command format are protocol version 1 through the `swpb1` credential version. Accepted controls are play, pause, next, previous, seek, volume, shuffle, and repeat. Unknown commands and out-of-range values are rejected.
+The envelope and command format are protocol version 1 through the `swpb1` credential version. Accepted command JSON is:
+
+```json
+{ "type": "play" }
+{ "type": "pause" }
+{ "type": "next" }
+{ "type": "previous" }
+{ "type": "seek", "positionMs": 0 }
+{ "type": "volume", "volumePercent": 0 }
+{ "type": "shuffle", "state": false }
+{ "type": "repeat", "state": "off" }
+```
+
+`positionMs` is a finite integer from 0 through the current item duration. `volumePercent` is a finite integer from 0 through 100. `shuffle.state` is boolean. `repeat.state` is exactly `off`, `track`, or `context`. Unknown fields, missing fields, unknown commands, non-integer numbers, and out-of-range values are rejected before a Spotify request.
 
 The Worker returns normalized playback only. `source` remains `spotify` and `fetchedAt` is required. Errors contain fixed application messages, not Spotify response bodies or secrets.
 

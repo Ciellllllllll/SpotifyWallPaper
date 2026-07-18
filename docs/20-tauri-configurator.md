@@ -33,7 +33,7 @@ The configurator is optional. The wallpaper must not require it at runtime.
 
 ## Token policy
 
-Do not show tokens by default. Do not include tokens in exported settings by default. If token export is allowed, it must be explicit.
+Do not show tokens by default. Do not include tokens in exported settings by default. Legacy direct Refresh Token export, if retained, must be explicit. Public-backend Pairing Token export is never allowed.
 
 The public Worker setup page is the supported public-backend authorization path. Tauri remains optional and must not be required to authorize or run the Wallpaper Engine wallpaper.
 

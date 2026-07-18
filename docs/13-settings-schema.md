@@ -45,9 +45,9 @@ Lyrics/LRC settings are not part of the current v1 schema. Legacy `lyrics` input
 
 ## Export policy
 
-Settings export must allow excluding tokens. Default export should not include secrets.
+Settings export must allow excluding legacy direct Refresh Tokens. Default export does not include secrets. A public-backend Pairing Token must never be exported, including when legacy Refresh Token export is explicitly enabled.
 
-`spotify.refreshToken` and `spotify.pairingToken` are secrets. Export, debug, warning, error, Rainmeter, and phase-report paths exclude both by default. `spotify.backendUrl` may contain only HTTP loopback or the exact release-configured HTTPS origin.
+`spotify.refreshToken` and `spotify.pairingToken` are secrets. Export, debug, warning, error, Rainmeter, and phase-report paths always exclude `pairingToken` and exclude `refreshToken` by default. `spotify.backendUrl` may contain only HTTP loopback or the exact release-configured HTTPS origin.
 
 The public-backend change does not require a schema-version bump because `playbackProvider`, `backendUrl`, and `pairingToken` already exist as optional fields. Legacy schema version 1 settings must remain valid.
 
