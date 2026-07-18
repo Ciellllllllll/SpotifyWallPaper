@@ -38,11 +38,11 @@
   "env": {
     "preview": {
       "vars": {
-        "ENVIRONMENT": "preview"
+        "ENVIRONMENT": "preview",
+        "PUBLIC_BASE_URL": "https://preview.invalid"
       },
       "secrets": {
         "required": [
-          "PUBLIC_BASE_URL",
           "TOKEN_ENCRYPTION_KEYRING",
           "TOKEN_ENCRYPTION_ACTIVE_KEY_ID",
           "PAIRING_HMAC_KEYRING",
@@ -65,11 +65,11 @@
     },
     "production": {
       "vars": {
-        "ENVIRONMENT": "production"
+        "ENVIRONMENT": "production",
+        "PUBLIC_BASE_URL": "https://production.invalid"
       },
       "secrets": {
         "required": [
-          "PUBLIC_BASE_URL",
           "TOKEN_ENCRYPTION_KEYRING",
           "TOKEN_ENCRYPTION_ACTIVE_KEY_ID",
           "PAIRING_HMAC_KEYRING",
