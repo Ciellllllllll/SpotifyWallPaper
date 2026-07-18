@@ -83,6 +83,11 @@ export interface ReauthorizeCredentialInput {
   nowMs: number;
 }
 
+export interface SpotifyBackoff {
+  retryUntilMs: number;
+  updatedAtMs: number;
+}
+
 interface OAuthSessionRow {
   state_digest: string;
   browser_digest: string;
@@ -291,6 +296,7 @@ export async function reauthorizeCredential(
 export async function markCredentialReauthorizationRequired(
   db: D1Database,
   publicId: string,
+  tokenVersion: number,
   nowMs: number
 ): Promise<boolean> {
   const result = await db
@@ -304,12 +310,15 @@ export async function markCredentialReauthorizationRequired(
            access_token_nonce = NULL,
            access_token_key_id = NULL,
            access_token_expires_at_ms = NULL,
+           token_version = token_version + 1,
            refresh_lease_id = NULL,
            refresh_lease_until_ms = NULL,
            updated_at_ms = ?
-       WHERE public_id = ?`
+       WHERE public_id = ?
+         AND auth_status = 'active'
+         AND token_version = ?`
     )
-    .bind(nowMs, publicId)
+    .bind(nowMs, publicId, tokenVersion)
     .run();
   return result.meta.changes === 1;
 }
@@ -397,6 +406,99 @@ export async function completeRefreshLease(
     )
     .run();
   return result.meta.changes === 1;
+}
+
+export async function releaseRefreshLease(
+  db: D1Database,
+  publicId: string,
+  leaseId: string,
+  tokenVersion: number,
+  nowMs: number
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE credentials
+       SET refresh_lease_id = NULL,
+           refresh_lease_until_ms = NULL,
+           updated_at_ms = ?
+       WHERE public_id = ?
+         AND refresh_lease_id = ?
+         AND token_version = ?`
+    )
+    .bind(nowMs, publicId, leaseId, tokenVersion)
+    .run();
+  return result.meta.changes === 1;
+}
+
+export async function failRefreshLeaseAsReauthorizationRequired(
+  db: D1Database,
+  publicId: string,
+  leaseId: string,
+  tokenVersion: number,
+  nowMs: number
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE credentials
+       SET auth_status = 'reauth_required',
+           refresh_token_ciphertext = NULL,
+           refresh_token_nonce = NULL,
+           refresh_token_key_id = NULL,
+           access_token_ciphertext = NULL,
+           access_token_nonce = NULL,
+           access_token_key_id = NULL,
+           access_token_expires_at_ms = NULL,
+           refresh_lease_id = NULL,
+           refresh_lease_until_ms = NULL,
+           token_version = token_version + 1,
+           updated_at_ms = ?
+       WHERE public_id = ?
+         AND auth_status = 'active'
+         AND refresh_lease_id = ?
+         AND token_version = ?
+         AND refresh_lease_until_ms >= ?`
+    )
+    .bind(nowMs, publicId, leaseId, tokenVersion, nowMs)
+    .run();
+  return result.meta.changes === 1;
+}
+
+export async function getSpotifyBackoff(
+  db: D1Database,
+  spotifyClientId: string
+): Promise<SpotifyBackoff | null> {
+  const row = await db
+    .prepare(
+      `SELECT retry_until_ms, updated_at_ms
+       FROM spotify_backoff
+       WHERE spotify_client_id = ?`
+    )
+    .bind(spotifyClientId)
+    .first<{ retry_until_ms: number; updated_at_ms: number }>();
+  return row === null
+    ? null
+    : {
+        retryUntilMs: row.retry_until_ms,
+        updatedAtMs: row.updated_at_ms
+      };
+}
+
+export async function upsertSpotifyBackoff(
+  db: D1Database,
+  spotifyClientId: string,
+  retryUntilMs: number,
+  nowMs: number
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO spotify_backoff (spotify_client_id, retry_until_ms, updated_at_ms)
+       VALUES (?, ?, ?)
+       ON CONFLICT (spotify_client_id) DO UPDATE SET
+         retry_until_ms = MAX(spotify_backoff.retry_until_ms, excluded.retry_until_ms),
+         updated_at_ms = excluded.updated_at_ms`
+    )
+    .bind(spotifyClientId, retryUntilMs, nowMs)
+    .run();
 }
 
 export async function readCredentialSecrets(

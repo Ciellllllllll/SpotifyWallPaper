@@ -156,7 +156,25 @@ describe('credential storage', () => {
       findActiveCredentialByPairingToken(env.DB, 'malformed', pairingKeys)
     ).resolves.toBeNull();
 
-    await markCredentialReauthorizationRequired(env.DB, pairing.publicId, nowMs + 1);
+    await expect(
+      markCredentialReauthorizationRequired(
+        env.DB,
+        pairing.publicId,
+        999,
+        nowMs + 1
+      )
+    ).resolves.toBe(false);
+    await expect(
+      findActiveCredentialByPairingToken(env.DB, pairing.token, pairingKeys)
+    ).resolves.toMatchObject({ publicId: pairing.publicId });
+    await expect(
+      markCredentialReauthorizationRequired(
+        env.DB,
+        pairing.publicId,
+        1,
+        nowMs + 1
+      )
+    ).resolves.toBe(true);
     await expect(
       findActiveCredentialByPairingToken(env.DB, pairing.token, pairingKeys)
     ).resolves.toBeNull();
