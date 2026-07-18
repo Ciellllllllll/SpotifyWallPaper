@@ -1,0 +1,23 @@
+{
+  "name": "@spotify-wallpaper/cloudflare-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "check": "npm run types && tsc -p tsconfig.json --noEmit",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "test": "vitest run",
+    "types": "wrangler types && node normalize-generated-types.mjs"
+  },
+  "dependencies": {
+    "@spotify-wallpaper/shared-types": "*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.112.0"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "spotify-wallpaper-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-18",
+  "vars": {
+    "ENVIRONMENT": "development",
+    "PUBLIC_BASE_URL": "http://127.0.0.1:8787"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "invocation_logs": false,
+      "head_sampling_rate": 0
+    }
+  }
+}
