@@ -12,6 +12,7 @@ import {
   consumeOAuthSession,
   createCredential,
   findCredentialByPairingToken,
+  isDeletionTombstoned,
   insertOAuthSession,
   reauthorizeCredential
 } from './db';
@@ -19,7 +20,8 @@ import { callbackPage, fixedError } from './pages';
 import {
   activePairingKey,
   generatePairingToken,
-  pairingDigest
+  pairingDigest,
+  parsePairingToken
 } from './pairing';
 
 const authorizeEndpoint = 'https://accounts.spotify.com/authorize';
@@ -90,6 +92,13 @@ export async function handleReauthorize(request: Request, env: Env): Promise<Res
   }
 
   try {
+    const parsed = parsePairingToken(token);
+    if (
+      parsed === null ||
+      (await isDeletionTombstoned(env.DELETION_DB, parsed.publicId))
+    ) {
+      return fixedError(401, 'A valid Pairing Token is required.');
+    }
     const pairingKeyring = parseSecretKeyring(env.PAIRING_HMAC_KEYRING);
     const credential = await findCredentialByPairingToken(env.DB, token, pairingKeyring);
     if (credential === null) {
@@ -147,6 +156,12 @@ export async function handleAuthCallback(request: Request, env: Env): Promise<Re
       nowMs
     );
     if (session === null || callback.denied) {
+      return callbackPage(400, 'error');
+    }
+    if (
+      session.credentialPublicId !== null &&
+      (await isDeletionTombstoned(env.DELETION_DB, session.credentialPublicId))
+    ) {
       return callbackPage(400, 'error');
     }
 

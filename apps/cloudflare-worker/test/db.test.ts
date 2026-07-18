@@ -7,6 +7,7 @@ import {
   completeRefreshLease,
   consumeOAuthSession,
   createCredential,
+  deleteCredentialData,
   findActiveCredentialByPairingToken,
   getCredentialByPublicId,
   insertOAuthSession,
@@ -260,6 +261,35 @@ describe('deletion ledger', () => {
       'expires_at_ms'
     ]);
   });
+
+  it('keeps shared Client ID backoff until the final credential is deleted', async () => {
+    const first = await createTestCredential();
+    const second = await createTestCredential();
+    await env.DB.prepare(
+      `INSERT INTO spotify_backoff (spotify_client_id, retry_until_ms, updated_at_ms)
+       VALUES (?, ?, ?)`
+    )
+      .bind('spotify-client-id', nowMs + 1000, nowMs)
+      .run();
+
+    await deleteCredentialData(env.DB, first.publicId);
+    expect(
+      await env.DB.prepare(
+        'SELECT retry_until_ms FROM spotify_backoff WHERE spotify_client_id = ?'
+      )
+        .bind('spotify-client-id')
+        .first('retry_until_ms')
+    ).toBe(nowMs + 1000);
+
+    await deleteCredentialData(env.DB, second.publicId);
+    expect(
+      await env.DB.prepare(
+        'SELECT retry_until_ms FROM spotify_backoff WHERE spotify_client_id = ?'
+      )
+        .bind('spotify-client-id')
+        .first('retry_until_ms')
+    ).toBeNull();
+  });
 });
 
 describe('refresh leases', () => {
@@ -267,8 +297,8 @@ describe('refresh leases', () => {
     const pairing = await createTestCredential();
 
     const [first, second] = await Promise.all([
-      acquireRefreshLease(env.DB, pairing.publicId, 'lease-one', nowMs, nowMs + 30_000),
-      acquireRefreshLease(env.DB, pairing.publicId, 'lease-two', nowMs, nowMs + 30_000)
+      acquireRefreshLease(env.DB, pairing.publicId, 1, 'lease-one', nowMs, nowMs + 30_000),
+      acquireRefreshLease(env.DB, pairing.publicId, 1, 'lease-two', nowMs, nowMs + 30_000)
     ]);
 
     expect([first, second].filter(Boolean)).toHaveLength(1);
@@ -283,6 +313,7 @@ describe('refresh leases', () => {
     const lease = await acquireRefreshLease(
       env.DB,
       pairing.publicId,
+      1,
       'lease-current',
       nowMs,
       nowMs + 30_000
@@ -340,6 +371,7 @@ describe('refresh leases', () => {
     await acquireRefreshLease(
       env.DB,
       pairing.publicId,
+      1,
       'lease-expiring',
       nowMs,
       nowMs + 10

@@ -16,6 +16,7 @@ import {
   failRefreshLeaseAsReauthorizationRequired,
   getCredentialByPublicId,
   getSpotifyBackoff,
+  invalidateAccessToken,
   markCredentialReauthorizationRequired,
   readCredentialSecrets,
   releaseRefreshLease,
@@ -46,6 +47,7 @@ export type SpotifyPlaybackCommand =
 export interface SpotifyRequestOptions {
   fetcher?: typeof fetch;
   nowMs?: number;
+  refreshTimeoutMs?: number;
   sleep?: (milliseconds: number) => Promise<void>;
 }
 
@@ -148,6 +150,7 @@ export async function getCredentialAccessToken(
   const lease = await acquireRefreshLease(
     db,
     initialCredential.publicId,
+    initialCredential.tokenVersion,
     leaseId,
     nowMs,
     nowMs + refreshLeaseMs
@@ -155,7 +158,25 @@ export async function getCredentialAccessToken(
   if (lease === null) {
     return waitForRefresh(db, initialCredential, env, options, nowMs);
   }
-  return refreshAccessToken(db, initialCredential, lease, env, options, nowMs);
+  const leasedCredential = await getCredentialByPublicId(
+    db,
+    initialCredential.publicId
+  );
+  if (
+    leasedCredential === null ||
+    leasedCredential.refreshLeaseId !== lease.leaseId ||
+    leasedCredential.tokenVersion !== lease.tokenVersion
+  ) {
+    await releaseRefreshLease(
+      db,
+      initialCredential.publicId,
+      lease.leaseId,
+      lease.tokenVersion,
+      nowMs
+    );
+    return unavailable();
+  }
+  return refreshAccessToken(db, leasedCredential, lease, env, options, nowMs);
 }
 
 export async function fetchCredentialPlayback(
@@ -172,11 +193,20 @@ export async function fetchCredentialPlayback(
   if (!token.ok) {
     return token;
   }
-  const result = await fetchSpotifyPlayback(
+  let result = await fetchSpotifyPlayback(
     token.value,
     options.fetcher,
     new Date(nowMs).toISOString()
   );
+  if (!result.ok && result.error.kind === 'unauthorized') {
+    result = await retryPlaybackAfterUnauthorized(
+      db,
+      credential,
+      env,
+      options,
+      nowMs
+    );
+  }
   if (!result.ok && result.error.kind === 'rate_limited') {
     await persistRateLimit(db, credential.spotifyClientId, result.error, nowMs);
   }
@@ -198,14 +228,115 @@ export async function sendCredentialSpotifyCommand(
   if (!token.ok) {
     return token;
   }
-  const result = await sendSpotifyCommand(token.value, command, options.fetcher);
+  let result = await sendSpotifyCommand(token.value, command, options.fetcher);
+  if (!result.ok && result.error.kind === 'unauthorized') {
+    result = await retryCommandAfterUnauthorized(
+      db,
+      credential,
+      env,
+      command,
+      options,
+      nowMs
+    );
+  }
   if (!result.ok && result.error.kind === 'rate_limited') {
     await persistRateLimit(db, credential.spotifyClientId, result.error, nowMs);
   }
   return result;
 }
 
+async function retryPlaybackAfterUnauthorized(
+  db: D1Database,
+  credential: Credential,
+  env: Env,
+  options: SpotifyRequestOptions,
+  nowMs: number
+): Promise<ApiResult<NormalizedPlayback>> {
+  await invalidateAccessToken(
+    db,
+    credential.publicId,
+    credential.tokenVersion,
+    nowMs
+  );
+  const reloaded = await getCredentialByPublicId(db, credential.publicId);
+  if (reloaded === null) {
+    return authorizationRequired();
+  }
+  const token = await getCredentialAccessToken(db, reloaded, env, {
+    ...options,
+    nowMs
+  });
+  return token.ok
+    ? fetchSpotifyPlayback(
+        token.value,
+        options.fetcher,
+        new Date(nowMs).toISOString()
+      )
+    : token;
+}
+
+async function retryCommandAfterUnauthorized(
+  db: D1Database,
+  credential: Credential,
+  env: Env,
+  command: SpotifyPlaybackCommand,
+  options: SpotifyRequestOptions,
+  nowMs: number
+): Promise<ApiResult<null>> {
+  await invalidateAccessToken(
+    db,
+    credential.publicId,
+    credential.tokenVersion,
+    nowMs
+  );
+  const reloaded = await getCredentialByPublicId(db, credential.publicId);
+  if (reloaded === null) {
+    return authorizationRequired();
+  }
+  const token = await getCredentialAccessToken(db, reloaded, env, {
+    ...options,
+    nowMs
+  });
+  return token.ok
+    ? sendSpotifyCommand(token.value, command, options.fetcher)
+    : token;
+}
+
 async function refreshAccessToken(
+  db: D1Database,
+  credential: Credential,
+  lease: RefreshLease,
+  env: Env,
+  options: SpotifyRequestOptions,
+  nowMs: number
+): Promise<ApiResult<string>> {
+  try {
+    return await runRefreshAccessToken(
+      db,
+      credential,
+      lease,
+      env,
+      options,
+      nowMs
+    );
+  } catch {
+    return unavailable();
+  } finally {
+    try {
+      await releaseRefreshLease(
+        db,
+        credential.publicId,
+        lease.leaseId,
+        lease.tokenVersion,
+        options.nowMs ?? Date.now()
+      );
+    } catch {
+      // Lease expiry remains the final recovery path if D1 is unavailable.
+    }
+  }
+}
+
+async function runRefreshAccessToken(
   db: D1Database,
   credential: Credential,
   lease: RefreshLease,
@@ -247,7 +378,10 @@ async function refreshAccessToken(
         grant_type: 'refresh_token',
         refresh_token: refreshToken
       }).toString(),
-      redirect: 'error'
+      redirect: 'error',
+      signal: AbortSignal.timeout(
+        Math.max(1, Math.min(options.refreshTimeoutMs ?? 10_000, 10_000))
+      )
     });
   } catch {
     const failedAtMs = options.nowMs ?? Date.now();
@@ -454,8 +588,8 @@ async function boundedJson(response: Response): Promise<ApiResult<unknown>> {
     return unknownResponse(response.status);
   }
   try {
-    const text = await response.text();
-    if (text.length > maxResponseBytes) {
+    const text = await readBoundedText(response, maxResponseBytes);
+    if (text === null) {
       return unknownResponse(response.status);
     }
     return {
@@ -465,6 +599,40 @@ async function boundedJson(response: Response): Promise<ApiResult<unknown>> {
   } catch {
     return unknownResponse(response.status);
   }
+}
+
+async function readBoundedText(
+  response: Response,
+  maxBytes: number
+): Promise<string | null> {
+  if (response.body === null) {
+    return '';
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) {
+      break;
+    }
+    totalBytes += chunk.value.byteLength;
+    if (totalBytes > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(chunk.value);
+  }
+  const merged = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder('utf-8', {
+    fatal: true,
+    ignoreBOM: true
+  }).decode(merged);
 }
 
 async function isInvalidGrant(response: Response): Promise<boolean> {

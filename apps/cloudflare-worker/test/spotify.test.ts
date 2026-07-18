@@ -99,6 +99,31 @@ describe('Spotify playback requests', () => {
       }
     });
   });
+
+  it('cancels a content-length-free response after the byte limit', async () => {
+    let cancelled = false;
+    const chunk = new Uint8Array(140_000).fill(0x61);
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(chunk);
+      },
+      cancel() {
+        cancelled = true;
+      }
+    });
+
+    const result = await fetchSpotifyPlayback(
+      'access-token',
+      vi.fn(async () => new Response(stream)),
+      fetchedAt
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { kind: 'unknown_response_shape' }
+    });
+    expect(cancelled).toBe(true);
+  });
 });
 
 describe('Spotify control requests', () => {

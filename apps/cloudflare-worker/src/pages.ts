@@ -37,6 +37,11 @@ button{cursor:pointer}
 <input id="pairing-token" type="password" autocomplete="off" required>
 <button type="submit">Reauthorize Spotify</button>
 </form>
+<form id="delete-account-form">
+<label for="delete-pairing-token">Pairing Token to delete</label>
+<input id="delete-pairing-token" type="password" autocomplete="off" required>
+<button type="submit">Delete backend account</button>
+</form>
 <p id="reauthorize-status" aria-live="polite"></p>
 </main>
 <script nonce="${nonce}">
@@ -61,6 +66,27 @@ document.getElementById('reauthorize-form').addEventListener('submit', async (ev
   } catch {
     token = '';
     document.getElementById('reauthorize-status').textContent = 'Reauthorization could not start.';
+  }
+});
+document.getElementById('delete-account-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const input = document.getElementById('delete-pairing-token');
+  let token = input.value;
+  input.value = '';
+  try {
+    const response = await fetch('/api/account', {
+      method: 'DELETE',
+      headers: { Authorization: \`Bearer \${token}\` },
+      credentials: 'same-origin',
+      redirect: 'error',
+      referrerPolicy: 'no-referrer'
+    });
+    token = '';
+    if (!response.ok) throw new Error();
+    document.getElementById('reauthorize-status').textContent = 'Backend account deleted.';
+  } catch {
+    token = '';
+    document.getElementById('reauthorize-status').textContent = 'Backend account could not be deleted.';
   }
 });
 </script>

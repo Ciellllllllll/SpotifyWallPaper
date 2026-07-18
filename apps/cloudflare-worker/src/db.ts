@@ -88,6 +88,12 @@ export interface SpotifyBackoff {
   updatedAtMs: number;
 }
 
+export interface DeletionTombstone {
+  publicId: string;
+  deletedAtMs: number;
+  expiresAtMs: number;
+}
+
 interface OAuthSessionRow {
   state_digest: string;
   browser_digest: string;
@@ -337,6 +343,7 @@ export async function deleteCredential(
 export async function acquireRefreshLease(
   db: D1Database,
   publicId: string,
+  expectedTokenVersion: number,
   leaseId: string,
   nowMs: number,
   leaseUntilMs: number
@@ -351,10 +358,11 @@ export async function acquireRefreshLease(
        SET refresh_lease_id = ?, refresh_lease_until_ms = ?, updated_at_ms = ?
        WHERE public_id = ?
          AND auth_status = 'active'
+         AND token_version = ?
          AND (refresh_lease_id IS NULL OR refresh_lease_until_ms <= ?)
        RETURNING token_version`
     )
-    .bind(leaseId, leaseUntilMs, nowMs, publicId, nowMs)
+    .bind(leaseId, leaseUntilMs, nowMs, publicId, expectedTokenVersion, nowMs)
     .first<{ token_version: number }>();
 
   return row === null
@@ -430,6 +438,26 @@ export async function releaseRefreshLease(
   return result.meta.changes === 1;
 }
 
+export async function invalidateAccessToken(
+  db: D1Database,
+  publicId: string,
+  tokenVersion: number,
+  nowMs: number
+): Promise<boolean> {
+  const result = await db
+    .prepare(
+      `UPDATE credentials
+       SET access_token_expires_at_ms = 0,
+           updated_at_ms = ?
+       WHERE public_id = ?
+         AND auth_status = 'active'
+         AND token_version = ?`
+    )
+    .bind(nowMs, publicId, tokenVersion)
+    .run();
+  return result.meta.changes === 1;
+}
+
 export async function failRefreshLeaseAsReauthorizationRequired(
   db: D1Database,
   publicId: string,
@@ -499,6 +527,89 @@ export async function upsertSpotifyBackoff(
     )
     .bind(spotifyClientId, retryUntilMs, nowMs)
     .run();
+}
+
+export async function writeDeletionTombstone(
+  deletionDb: D1Database,
+  publicId: string,
+  deletedAtMs: number,
+  expiresAtMs: number
+): Promise<void> {
+  await deletionDb
+    .prepare(
+      `INSERT INTO deletion_tombstones (public_id, deleted_at_ms, expires_at_ms)
+       VALUES (?, ?, ?)
+       ON CONFLICT (public_id) DO UPDATE SET
+         deleted_at_ms = MIN(deletion_tombstones.deleted_at_ms, excluded.deleted_at_ms),
+         expires_at_ms = MAX(deletion_tombstones.expires_at_ms, excluded.expires_at_ms)`
+    )
+    .bind(publicId, deletedAtMs, expiresAtMs)
+    .run();
+}
+
+export async function isDeletionTombstoned(
+  deletionDb: D1Database,
+  publicId: string
+): Promise<boolean> {
+  const row = await deletionDb
+    .prepare('SELECT 1 AS tombstoned FROM deletion_tombstones WHERE public_id = ?')
+    .bind(publicId)
+    .first<number>('tombstoned');
+  return row === 1;
+}
+
+export async function deleteCredentialData(
+  db: D1Database,
+  publicId: string
+): Promise<void> {
+  await db.batch([
+    db
+      .prepare(
+        `DELETE FROM spotify_backoff
+         WHERE spotify_client_id IN (
+           SELECT spotify_client_id FROM credentials WHERE public_id = ?
+         )
+         AND NOT EXISTS (
+           SELECT 1
+           FROM credentials AS other
+           WHERE other.spotify_client_id = spotify_backoff.spotify_client_id
+             AND other.public_id <> ?
+         )`
+      )
+      .bind(publicId, publicId),
+    db
+      .prepare('DELETE FROM oauth_sessions WHERE credential_public_id = ?')
+      .bind(publicId),
+    db.prepare('DELETE FROM credentials WHERE public_id = ?').bind(publicId)
+  ]);
+}
+
+export async function reconcileDeletionTombstones(
+  db: D1Database,
+  deletionDb: D1Database,
+  nowMs: number
+): Promise<number> {
+  const tombstones = await deletionDb
+    .prepare(
+      `SELECT public_id, deleted_at_ms, expires_at_ms
+       FROM deletion_tombstones
+       ORDER BY public_id
+       LIMIT 1000`
+    )
+    .all<{
+      public_id: string;
+      deleted_at_ms: number;
+      expires_at_ms: number;
+    }>();
+
+  for (const tombstone of tombstones.results) {
+    await deleteCredentialData(db, tombstone.public_id);
+  }
+  await deletionDb
+    .prepare('DELETE FROM deletion_tombstones WHERE expires_at_ms <= ?')
+    .bind(nowMs)
+    .run();
+  return tombstones.results.length;
 }
 
 export async function readCredentialSecrets(

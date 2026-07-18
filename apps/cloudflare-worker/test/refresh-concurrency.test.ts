@@ -5,6 +5,7 @@ import { decryptSecret, encryptSecret } from '../src/crypto';
 import {
   createCredential,
   getCredentialByPublicId,
+  reauthorizeCredential,
   type Credential
 } from '../src/db';
 import { pairingDigest } from '../src/pairing';
@@ -275,6 +276,119 @@ describe('single-flight token refresh', () => {
     });
     expect(reloaded?.refreshLeaseId).toBeNull();
     expect(recovered).toEqual({ ok: true, value: 'recovered-access-token' });
+  });
+
+  it('times out a stalled refresh before the lease can expire', async () => {
+    const credential = await createExpiredCredential();
+    const fetcher = vi.fn(
+      async (_input: string | Request | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new Error('aborted'));
+          });
+        })
+    );
+
+    const result = await getCredentialAccessToken(env.DB, credential, env, {
+      fetcher,
+      nowMs,
+      refreshTimeoutMs: 5
+    });
+    const stored = await getCredentialByPublicId(env.DB, publicId);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { kind: 'network_error' }
+    });
+    expect(stored?.refreshLeaseId).toBeNull();
+  });
+
+  it('does not let a stale pre-reauthorization row acquire a new-generation lease', async () => {
+    const stale = await createExpiredCredential();
+    const [refreshToken, accessToken] = await Promise.all([
+      encryptSecret(
+        'reauthorized-refresh-token',
+        { recordId: publicId, spotifyClientId, fieldName: 'refresh_token' },
+        'test',
+        encryptionKeys
+      ),
+      encryptSecret(
+        'reauthorized-access-token',
+        { recordId: publicId, spotifyClientId, fieldName: 'access_token' },
+        'test',
+        encryptionKeys
+      )
+    ]);
+    await reauthorizeCredential(env.DB, {
+      publicId,
+      spotifyClientId,
+      refreshToken,
+      accessToken,
+      accessTokenExpiresAtMs: nowMs + 3_600_000,
+      refreshAuthorizedAtMs: nowMs,
+      nowMs
+    });
+    const fetcher = vi.fn(async () =>
+      Response.json(
+        { error: 'invalid_grant' },
+        { status: 400 }
+      )
+    );
+
+    const result = await getCredentialAccessToken(env.DB, stale, env, {
+      fetcher,
+      nowMs,
+      sleep: async () => undefined
+    });
+    const stored = await getCredentialByPublicId(env.DB, publicId);
+
+    expect(result).toEqual({ ok: true, value: 'reauthorized-access-token' });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(stored).toMatchObject({
+      authStatus: 'active',
+      tokenVersion: 2
+    });
+  });
+
+  it('refreshes once and retries playback after an early Spotify 401', async () => {
+    await createExpiredCredential();
+    await env.DB.prepare(
+      'UPDATE credentials SET access_token_expires_at_ms = ? WHERE public_id = ?'
+    )
+      .bind(nowMs + 3_600_000, publicId)
+      .run();
+    const credential = await getCredentialByPublicId(env.DB, publicId);
+    const fetcher = vi.fn(
+      async (input: string | Request | URL) => {
+        const url = String(input);
+        if (url.endsWith('/v1/me/player') && fetcher.mock.calls.length === 1) {
+          return new Response(null, { status: 401 });
+        }
+        if (url.endsWith('/api/token')) {
+          return Response.json({
+            access_token: 'replacement-access-token',
+            token_type: 'Bearer',
+            expires_in: 3600
+          });
+        }
+        return Response.json({
+          is_playing: false,
+          progress_ms: 0,
+          item: null
+        });
+      }
+    );
+
+    const result = await fetchCredentialPlayback(env.DB, credential!, env, {
+      fetcher,
+      nowMs
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { source: 'spotify', itemType: 'none' }
+    });
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 });
 

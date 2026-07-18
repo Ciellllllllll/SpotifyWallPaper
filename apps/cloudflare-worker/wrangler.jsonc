@@ -3,6 +3,9 @@
   "name": "spotify-wallpaper-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-18",
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
   "vars": {
     "ENVIRONMENT": "development",
     "PUBLIC_BASE_URL": "http://127.0.0.1:8787"
@@ -32,6 +35,22 @@
     {
       "name": "AUTH_RATE_LIMITER",
       "namespace_id": "1001",
+      "simple": {
+        "limit": 1000,
+        "period": 60
+      }
+    },
+    {
+      "name": "PLAYBACK_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 1000,
+        "period": 60
+      }
+    },
+    {
+      "name": "CONTROL_RATE_LIMITER",
+      "namespace_id": "1003",
       "simple": {
         "limit": 1000,
         "period": 60
@@ -80,6 +99,22 @@
             "limit": 60,
             "period": 60
           }
+        },
+        {
+          "name": "PLAYBACK_RATE_LIMITER",
+          "namespace_id": "1102",
+          "simple": {
+            "limit": 120,
+            "period": 60
+          }
+        },
+        {
+          "name": "CONTROL_RATE_LIMITER",
+          "namespace_id": "1103",
+          "simple": {
+            "limit": 60,
+            "period": 60
+          }
         }
       ]
     },
@@ -115,6 +150,22 @@
           "namespace_id": "1201",
           "simple": {
             "limit": 20,
+            "period": 60
+          }
+        },
+        {
+          "name": "PLAYBACK_RATE_LIMITER",
+          "namespace_id": "1202",
+          "simple": {
+            "limit": 120,
+            "period": 60
+          }
+        },
+        {
+          "name": "CONTROL_RATE_LIMITER",
+          "namespace_id": "1203",
+          "simple": {
+            "limit": 60,
             "period": 60
           }
         }

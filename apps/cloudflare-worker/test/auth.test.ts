@@ -34,6 +34,8 @@ describe('GET /setup', () => {
     expect(html).toContain('id="pairing-token"');
     expect(html).toContain("input.value = ''");
     expect(html).toContain("Authorization: `Bearer ${token}`");
+    expect(html).toContain("method: 'DELETE'");
+    expect(html).toContain("fetch('/api/account'");
     expect(html).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie/i);
     expect(html).not.toMatch(/<script[^>]+src=/i);
   });

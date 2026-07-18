@@ -4,6 +4,8 @@ import {
   handleAuthStart,
   handleReauthorize
 } from './auth';
+import { handleApiRequest } from './api';
+import { reconcileDeletionTombstones } from './db';
 import { setupPage } from './pages';
 
 interface HealthValue {
@@ -23,7 +25,7 @@ const notFound = (): Response => {
 };
 
 export default {
-  async fetch(request: Request, _env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/health') {
       const body: ApiResult<HealthValue> = {
@@ -38,15 +40,27 @@ export default {
       return setupPage();
     }
     if (request.method === 'POST' && url.pathname === '/auth/start') {
-      return handleAuthStart(request, _env);
+      return handleAuthStart(request, env);
     }
     if (request.method === 'GET' && url.pathname === '/auth/callback') {
-      return handleAuthCallback(request, _env);
+      return handleAuthCallback(request, env);
     }
     if (request.method === 'POST' && url.pathname === '/auth/reauthorize') {
-      return handleReauthorize(request, _env);
+      return handleReauthorize(request, env);
     }
 
+    const apiResponse = await handleApiRequest(request, env);
+    if (apiResponse !== null) {
+      return apiResponse;
+    }
     return notFound();
+  },
+
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+    context: ExecutionContext
+  ): Promise<void> {
+    context.waitUntil(reconcileDeletionTombstones(env.DB, env.DELETION_DB, Date.now()));
   }
 } satisfies ExportedHandler<Env>;
