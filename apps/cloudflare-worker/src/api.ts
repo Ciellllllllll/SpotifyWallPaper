@@ -58,6 +58,9 @@ async function handlePlayback(request: Request, env: Env): Promise<Response> {
   }
 
   try {
+    if (!(await preAuthenticationRateLimit(request, env.PRE_AUTH_RATE_LIMITER))) {
+      return corsIfAllowed(rateLimited(), request);
+    }
     const credential = await authenticate(request, env, true);
     if (credential === null) {
       return corsIfAllowed(unauthorized(), request);
@@ -84,6 +87,9 @@ async function handleControl(request: Request, env: Env): Promise<Response> {
   }
 
   try {
+    if (!(await preAuthenticationRateLimit(request, env.PRE_AUTH_RATE_LIMITER))) {
+      return corsIfAllowed(rateLimited(), request);
+    }
     const credential = await authenticate(request, env, true);
     if (credential === null) {
       return corsIfAllowed(unauthorized(), request);
@@ -151,6 +157,9 @@ async function handleAccountDeletion(
   }
 
   try {
+    if (!(await preAuthenticationRateLimit(request, env.PRE_AUTH_RATE_LIMITER))) {
+      return rateLimited();
+    }
     const credential = await authenticate(request, env, false);
     if (credential === null) {
       return unauthorized();
@@ -298,6 +307,18 @@ async function parseControlRequest(
 async function rateLimit(binding: RateLimit, key: string): Promise<boolean> {
   const result = await binding.limit({ key });
   return result.success;
+}
+
+async function preAuthenticationRateLimit(
+  request: Request,
+  binding: RateLimit
+): Promise<boolean> {
+  const address = request.headers.get('CF-Connecting-IP');
+  const key =
+    address !== null && /^[0-9A-Fa-f:.]{2,64}$/.test(address)
+      ? address.toLowerCase()
+      : 'unknown';
+  return rateLimit(binding, `preauth:${key}`);
 }
 
 function exactKeys(value: Record<string, unknown>, expected: string[]): boolean {

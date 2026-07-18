@@ -6,6 +6,10 @@ import {
 } from './auth';
 import { handleApiRequest } from './api';
 import { reconcileDeletionTombstones } from './db';
+import {
+  recordRequestMetric,
+  recordScheduledMetric
+} from './metrics';
 import { setupPage } from './pages';
 
 interface HealthValue {
@@ -24,8 +28,60 @@ const notFound = (): Response => {
   return Response.json(body, { status: 404 });
 };
 
+type RouteHandler = (request: Request, env: Env) => Promise<Response>;
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    return fetchWithBoundary(request, env);
+  },
+
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+    context: ExecutionContext
+  ): Promise<void> {
+    context.waitUntil(runDeletionReconciler(env));
+  }
+} satisfies ExportedHandler<Env>;
+
+export async function fetchWithBoundary(
+  request: Request,
+  env: Env,
+  route: RouteHandler = routeRequest
+): Promise<Response> {
+  const startedAtMs = Date.now();
+  try {
+    const response = await route(request, env);
+    safeRecordRequestMetric(env, request, response, Date.now() - startedAtMs);
+    return response;
+  } catch {
+    const response = Response.json(
+      {
+        ok: false,
+        error: {
+          kind: 'unavailable',
+          message: 'The backend is temporarily unavailable.',
+          status: 500
+        }
+      } satisfies ApiResult<never>,
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Content-Security-Policy':
+            "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+          'Referrer-Policy': 'no-referrer',
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY'
+        }
+      }
+    );
+    safeRecordRequestMetric(env, request, response, Date.now() - startedAtMs);
+    return response;
+  }
+}
+
+async function routeRequest(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/health') {
       const body: ApiResult<HealthValue> = {
@@ -54,13 +110,30 @@ export default {
       return apiResponse;
     }
     return notFound();
-  },
+}
 
-  async scheduled(
-    _controller: ScheduledController,
-    env: Env,
-    context: ExecutionContext
-  ): Promise<void> {
-    context.waitUntil(reconcileDeletionTombstones(env.DB, env.DELETION_DB, Date.now()));
+async function runDeletionReconciler(env: Env): Promise<void> {
+  try {
+    const reconciled = await reconcileDeletionTombstones(
+      env.DB,
+      env.DELETION_DB,
+      Date.now()
+    );
+    recordScheduledMetric(env, 'success', reconciled);
+  } catch {
+    recordScheduledMetric(env, 'failed', 0);
   }
-} satisfies ExportedHandler<Env>;
+}
+
+function safeRecordRequestMetric(
+  env: Env,
+  request: Request,
+  response: Response,
+  elapsedMs: number
+): void {
+  try {
+    recordRequestMetric(env, request, response, elapsedMs);
+  } catch {
+    // Metrics are best-effort and must not escape the Worker boundary.
+  }
+}

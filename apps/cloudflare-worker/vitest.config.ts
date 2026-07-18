@@ -12,6 +12,7 @@ process.env.OAUTH_STATE_HMAC_KEY = testOauthStateKey;
 
 export default defineConfig({
   test: {
+    exclude: ['node-test/**'],
     setupFiles: ['./test/setup.ts']
   },
   plugins: [

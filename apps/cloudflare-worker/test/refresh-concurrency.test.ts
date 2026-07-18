@@ -31,6 +31,45 @@ beforeEach(async () => {
 });
 
 describe('single-flight token refresh', () => {
+  it('records only a fixed successful refresh outcome', async () => {
+    const credential = await createExpiredCredential();
+    const writeDataPoint = vi.fn();
+    const metricsEnv = {
+      ...env,
+      METRICS: { writeDataPoint }
+    } as unknown as Env;
+
+    const result = await getCredentialAccessToken(
+      env.DB,
+      credential,
+      metricsEnv,
+      {
+        nowMs,
+        fetcher: vi.fn(async () =>
+          Response.json({
+            access_token: 'new-access-token',
+            token_type: 'Bearer',
+            expires_in: 3600
+          })
+        )
+      }
+    );
+
+    expect(result.ok).toBe(true);
+    expect(writeDataPoint).toHaveBeenCalledOnce();
+    expect(writeDataPoint.mock.calls[0]?.[0]?.blobs).toEqual([
+      'development',
+      'refresh',
+      'not_applicable',
+      'not_applicable',
+      'not_applicable',
+      'success'
+    ]);
+    expect(JSON.stringify(writeDataPoint.mock.calls)).not.toContain(
+      'new-access-token'
+    );
+  });
+
   it('makes exactly one refresh request for fifty concurrent callers', async () => {
     const credential = await createExpiredCredential();
     const fetcher = vi.fn(async (_input: string | Request | URL, init?: RequestInit) => {

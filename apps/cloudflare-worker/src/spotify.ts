@@ -25,6 +25,10 @@ import {
   type RefreshLease
 } from './db';
 import { readBoundedText } from './http';
+import {
+  recordRefreshMetric,
+  type RefreshMetricOutcome
+} from './metrics';
 import { emptySpotifyPlayback, normalizeSpotifyPlayback } from './normalize';
 
 const playbackEndpoint = 'https://api.spotify.com/v1/me/player';
@@ -312,7 +316,7 @@ async function refreshAccessToken(
   nowMs: number
 ): Promise<ApiResult<string>> {
   try {
-    return await runRefreshAccessToken(
+    const result = await runRefreshAccessToken(
       db,
       credential,
       lease,
@@ -320,7 +324,10 @@ async function refreshAccessToken(
       options,
       nowMs
     );
+    recordRefreshMetric(env, refreshMetricOutcome(result));
+    return result;
   } catch {
+    recordRefreshMetric(env, 'failed');
     return unavailable();
   } finally {
     try {
@@ -334,6 +341,24 @@ async function refreshAccessToken(
     } catch {
       // Lease expiry remains the final recovery path if D1 is unavailable.
     }
+  }
+}
+
+function refreshMetricOutcome(
+  result: ApiResult<string>
+): RefreshMetricOutcome {
+  if (result.ok) {
+    return 'success';
+  }
+  switch (result.error.kind) {
+    case 'unauthorized':
+      return 'reauthorization_required';
+    case 'rate_limited':
+      return 'rate_limited';
+    case 'network_error':
+      return 'network_error';
+    default:
+      return 'failed';
   }
 }
 
