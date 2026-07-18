@@ -5,6 +5,7 @@ import {
   findCredentialByPairingToken,
   getCredentialByPublicId,
   isDeletionTombstoned,
+  markDeletionTombstoneReconciled,
   writeDeletionTombstone,
   type Credential
 } from './db';
@@ -165,6 +166,11 @@ async function handleAccountDeletion(
       nowMs + deletionRetentionMs
     );
     await deleteCredentialData(env.DB, credential.publicId);
+    await markDeletionTombstoneReconciled(
+      env.DELETION_DB,
+      credential.publicId,
+      nowMs
+    );
     return apiResult({ ok: true, value: null });
   } catch {
     return unavailable();

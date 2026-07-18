@@ -537,13 +537,31 @@ export async function writeDeletionTombstone(
 ): Promise<void> {
   await deletionDb
     .prepare(
-      `INSERT INTO deletion_tombstones (public_id, deleted_at_ms, expires_at_ms)
-       VALUES (?, ?, ?)
+      `INSERT INTO deletion_tombstones (
+         public_id, deleted_at_ms, expires_at_ms, reconciled_at_ms
+       )
+       VALUES (?, ?, ?, NULL)
        ON CONFLICT (public_id) DO UPDATE SET
          deleted_at_ms = MIN(deletion_tombstones.deleted_at_ms, excluded.deleted_at_ms),
-         expires_at_ms = MAX(deletion_tombstones.expires_at_ms, excluded.expires_at_ms)`
+         expires_at_ms = MAX(deletion_tombstones.expires_at_ms, excluded.expires_at_ms),
+         reconciled_at_ms = NULL`
     )
     .bind(publicId, deletedAtMs, expiresAtMs)
+    .run();
+}
+
+export async function markDeletionTombstoneReconciled(
+  deletionDb: D1Database,
+  publicId: string,
+  reconciledAtMs: number
+): Promise<void> {
+  await deletionDb
+    .prepare(
+      `UPDATE deletion_tombstones
+       SET reconciled_at_ms = ?
+       WHERE public_id = ?`
+    )
+    .bind(reconciledAtMs, publicId)
     .run();
 }
 
@@ -589,35 +607,34 @@ export async function reconcileDeletionTombstones(
   deletionDb: D1Database,
   nowMs: number
 ): Promise<number> {
-  let reconciled = 0;
-  let cursor = '';
-  while (true) {
-    const tombstones = await deletionDb
-      .prepare(
-        `SELECT public_id
-         FROM deletion_tombstones
-         WHERE public_id > ?
-         ORDER BY public_id
-         LIMIT 1000`
-      )
-      .bind(cursor)
-      .all<{ public_id: string }>();
+  const tombstones = await deletionDb
+    .prepare(
+      `SELECT public_id
+       FROM deletion_tombstones
+       WHERE reconciled_at_ms IS NULL
+       ORDER BY public_id
+       LIMIT 100`
+    )
+    .all<{ public_id: string }>();
 
-    for (const tombstone of tombstones.results) {
-      await deleteCredentialData(db, tombstone.public_id);
-    }
-    reconciled += tombstones.results.length;
-    if (tombstones.results.length < 1000) {
-      break;
-    }
-    cursor = tombstones.results[tombstones.results.length - 1]!.public_id;
+  for (const tombstone of tombstones.results) {
+    await deleteCredentialData(db, tombstone.public_id);
+    await markDeletionTombstoneReconciled(
+      deletionDb,
+      tombstone.public_id,
+      nowMs
+    );
   }
 
   await deletionDb
-    .prepare('DELETE FROM deletion_tombstones WHERE expires_at_ms <= ?')
+    .prepare(
+      `DELETE FROM deletion_tombstones
+       WHERE expires_at_ms <= ?
+         AND reconciled_at_ms IS NOT NULL`
+    )
     .bind(nowMs)
     .run();
-  return reconciled;
+  return tombstones.results.length;
 }
 
 export async function readCredentialSecrets(

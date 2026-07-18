@@ -269,11 +269,11 @@ describe('account deletion', () => {
     expect(await getCredentialByPublicId(env.DB, pairing.publicId)).toBeNull();
     expect(
       await env.DELETION_DB.prepare(
-        'SELECT public_id FROM deletion_tombstones WHERE public_id = ?'
+        'SELECT reconciled_at_ms FROM deletion_tombstones WHERE public_id = ?'
       )
         .bind(pairing.publicId)
-        .first('public_id')
-    ).toBe(pairing.publicId);
+        .first('reconciled_at_ms')
+    ).toEqual(expect.any(Number));
   });
 
   it('reconciles a surviving primary row after a partial deletion failure', async () => {
@@ -290,23 +290,26 @@ describe('account deletion', () => {
     expect(await getCredentialByPublicId(env.DB, pairing.publicId)).toBeNull();
   });
 
-  it('reconciles beyond the first 1,000 tombstones before expiring the ledger', async () => {
+  it('resumes bounded reconciliation after a restore resets completion markers', async () => {
     await env.DELETION_DB.prepare(
       `WITH RECURSIVE sequence(value) AS (
          SELECT 0
          UNION ALL
          SELECT value + 1 FROM sequence WHERE value < 999
        )
-       INSERT INTO deletion_tombstones (public_id, deleted_at_ms, expires_at_ms)
-       SELECT printf('restore-%04d', value), ?, ? FROM sequence`
+       INSERT INTO deletion_tombstones (
+         public_id, deleted_at_ms, expires_at_ms, reconciled_at_ms
+       )
+       SELECT printf('restore-%04d', value), ?, ?, ? FROM sequence`
     )
-      .bind(nowMs - 100, nowMs - 1)
+      .bind(nowMs - 100, nowMs + 1000, nowMs - 50)
       .run();
     await env.DELETION_DB.prepare(
-      `INSERT INTO deletion_tombstones (public_id, deleted_at_ms, expires_at_ms)
-       VALUES ('restore-1000', ?, ?)`
+      `INSERT INTO deletion_tombstones (
+         public_id, deleted_at_ms, expires_at_ms, reconciled_at_ms
+       ) VALUES ('restore-1000', ?, ?, ?)`
     )
-      .bind(nowMs - 100, nowMs - 1)
+      .bind(nowMs - 100, nowMs + 1000, nowMs - 50)
       .run();
     await env.DB.prepare(
       `INSERT INTO credentials (
@@ -317,19 +320,73 @@ describe('account deletion', () => {
       .bind(nowMs - 100, nowMs - 100, nowMs - 100)
       .run();
 
-    const reconciled = await reconcileDeletionTombstones(
-      env.DB,
-      env.DELETION_DB,
-      nowMs
-    );
+    expect(
+      await reconcileDeletionTombstones(
+        env.DB,
+        env.DELETION_DB,
+        nowMs
+      )
+    ).toBe(0);
+    expect(await getCredentialByPublicId(env.DB, 'restore-1000')).not.toBeNull();
+
+    await env.DELETION_DB.prepare(
+      'UPDATE deletion_tombstones SET reconciled_at_ms = NULL'
+    ).run();
+    let reconciled = 0;
+    while (true) {
+      const batch = await reconcileDeletionTombstones(
+        env.DB,
+        env.DELETION_DB,
+        nowMs
+      );
+      expect(batch).toBeLessThanOrEqual(100);
+      reconciled += batch;
+      if (batch === 0) {
+        break;
+      }
+    }
 
     expect(reconciled).toBe(1001);
     expect(await getCredentialByPublicId(env.DB, 'restore-1000')).toBeNull();
+    await reconcileDeletionTombstones(
+      env.DB,
+      env.DELETION_DB,
+      nowMs + 2000
+    );
     expect(
       await env.DELETION_DB.prepare(
         'SELECT COUNT(*) AS count FROM deletion_tombstones'
       ).first<number>('count')
     ).toBe(0);
+  });
+
+  it('does not expire an unreconciled tombstone', async () => {
+    await env.DELETION_DB.prepare(
+      `INSERT INTO deletion_tombstones (public_id, deleted_at_ms, expires_at_ms)
+       VALUES ('pending-delete', ?, ?)`
+    )
+      .bind(nowMs - 100, nowMs - 1)
+      .run();
+    const failingPrimary = {
+      prepare() {
+        throw new Error('primary unavailable');
+      }
+    } as unknown as D1Database;
+
+    await expect(
+      reconcileDeletionTombstones(
+        failingPrimary,
+        env.DELETION_DB,
+        nowMs
+      )
+    ).rejects.toThrow('primary unavailable');
+
+    expect(
+      await env.DELETION_DB.prepare(
+        `SELECT public_id FROM deletion_tombstones
+         WHERE public_id = 'pending-delete'`
+      ).first('public_id')
+    ).toBe('pending-delete');
   });
 });
 

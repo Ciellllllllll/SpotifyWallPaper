@@ -258,7 +258,8 @@ describe('deletion ledger', () => {
     expect(columns.results.map(({ name }) => name)).toEqual([
       'public_id',
       'deleted_at_ms',
-      'expires_at_ms'
+      'expires_at_ms',
+      'reconciled_at_ms'
     ]);
   });
 
