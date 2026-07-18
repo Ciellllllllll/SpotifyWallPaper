@@ -69,6 +69,11 @@ Resource-intensive commands should run through `h5i capture run`.
 
 - Confirm the Spotify app registers the exact production custom-domain callback ending in `/auth/callback`.
 - Confirm Development Mode owner Premium, one-Client-ID-per-new-developer, and five-user allowlist restrictions are communicated before authorization.
+- Confirm `/setup` links `/privacy` and `/terms`, requires explicit acceptance
+  for initial authorization and reauthorization, and rejects missing consent
+  without creating an OAuth session.
+- Confirm `swpb_oauth` is documented as a strictly necessary ten-minute
+  first-party cookie and no tracking cookie is created.
 - Confirm `/setup` initial authorization displays a `swpb1.` Pairing Token once with `Cache-Control: no-store`.
 - Confirm the Pairing Token appears in no URL, cookie, Web Storage, IndexedDB, log, metric, screenshot, or persisted backend row.
 - Confirm playback and every control use `Authorization: Bearer` and normalized Spotify responses.
@@ -78,6 +83,10 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm reauthorization from `/setup` retains the existing Pairing Token.
 - Confirm `DELETE /api/account` immediately invalidates the Pairing Token and removes live credentials.
 - Confirm the separate non-secret deletion tombstone remains for 35 days and is replayed after a D1 restore.
+- Confirm one failed tombstone does not block later rows and that retry,
+  pending, oldest-pending, and failed counts reach aggregate metrics.
+- Confirm consumed OAuth sessions are deleted and abandoned expired sessions
+  are purged by scheduled maintenance.
 - Confirm the user is told to disconnect the app separately in Spotify account settings.
 - Confirm mock, legacy direct, loopback Rust, and public Worker modes all remain usable independently.
 
@@ -116,13 +125,17 @@ Resource-intensive commands should run through `h5i capture run`.
 - Update release notes with implemented features, known gaps, and verification commands.
 - Update the phase report with docs read, tests run, risks, and next task.
 
-## General Workshop Publication Gate
+## Spotify Distribution Gates
 
 Confirm the legacy auth workflow has no Pages write/deploy capability and any
 historical Pages deployment is disabled.
 
-Do not publish generally until the phase report contains evidence for every
-item:
+Do not begin a Spotify-connected Limited beta until policy or a
+policy-compatible build, operator-reviewed Privacy/EULA, infrastructure,
+smoke, alert-delivery, Security, and SpecGuard evidence are recorded.
+
+Do not publish generally until the phase report also contains evidence for
+every item:
 
 - Spotify approval or a documented policy-compatible redesign covering BYO
   authorization, sound-recording/visual synchronization, product naming, and
@@ -130,7 +143,9 @@ item:
 - Original, unmodified Spotify artwork with no crop, blur, animation,
   distortion, or overlay, plus required Spotify logo attribution and link.
 - Published privacy notice with real operator and private incident contacts.
+- Published operator-reviewed EULA and pre-authorization consent.
 - Fixed production custom domain and exact Spotify callback registration.
-- Completed limited beta.
+- Verified non-budget operational alert configuration and delivery.
+- Completed Spotify-connected limited beta.
 - Completed 72-hour Wallpaper Engine soak.
 - Verified cost, abuse, deletion-reconciliation, and incident alerts.

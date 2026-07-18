@@ -12,6 +12,7 @@ import {
   getCredentialByPublicId,
   insertOAuthSession,
   markCredentialReauthorizationRequired,
+  purgeExpiredOAuthSessions,
   readCredentialSecrets
 } from '../src/db';
 import { generatePairingToken, pairingDigest } from '../src/pairing';
@@ -87,6 +88,36 @@ describe('OAuth sessions', () => {
     await expect(
       consumeOAuthSession(env.DB, 'state-digest', 'browser-digest', nowMs + 101)
     ).resolves.toBeNull();
+  });
+
+  it('purges abandoned expired sessions without touching active sessions', async () => {
+    for (const [stateDigest, expiresAtMs] of [
+      ['expired-state', nowMs - 1],
+      ['active-state', nowMs + 60_000]
+    ] as const) {
+      await insertOAuthSession(env.DB, {
+        stateDigest,
+        browserDigest: `${stateDigest}-browser`,
+        spotifyClientId: 'spotify-client-id',
+        credentialPublicId: null,
+        codeVerifier: {
+          ciphertext: 'encrypted-verifier',
+          nonce: 'nonce',
+          keyId: 'current'
+        },
+        createdAtMs: nowMs - 60_000,
+        expiresAtMs
+      });
+    }
+
+    await expect(purgeExpiredOAuthSessions(env.DB, nowMs)).resolves.toBe(1);
+    expect(
+      await env.DB.prepare(
+        'SELECT state_digest FROM oauth_sessions ORDER BY state_digest'
+      ).all()
+    ).toMatchObject({
+      results: [{ state_digest: 'active-state' }]
+    });
   });
 });
 
@@ -259,7 +290,9 @@ describe('deletion ledger', () => {
       'public_id',
       'deleted_at_ms',
       'expires_at_ms',
-      'reconciled_at_ms'
+      'reconciled_at_ms',
+      'reconciliation_attempts',
+      'last_attempt_at_ms'
     ]);
   });
 

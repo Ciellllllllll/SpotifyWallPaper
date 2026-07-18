@@ -106,8 +106,10 @@ describe('authenticated playback API', () => {
         method: 'POST',
         headers: {
           Origin: baseUrl,
-          Authorization: `Bearer ${pairing.token}`
-        }
+          Authorization: `Bearer ${pairing.token}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({ legalAccepted: 'yes' })
       }),
       env
     );
@@ -326,7 +328,12 @@ describe('account deletion', () => {
         env.DELETION_DB,
         nowMs
       )
-    ).toBe(0);
+    ).toMatchObject({
+      attemptedCount: 0,
+      reconciledCount: 0,
+      failedCount: 0,
+      pendingCount: 0
+    });
     expect(await getCredentialByPublicId(env.DB, 'restore-1000')).not.toBeNull();
 
     await env.DELETION_DB.prepare(
@@ -339,9 +346,9 @@ describe('account deletion', () => {
         env.DELETION_DB,
         nowMs
       );
-      expect(batch).toBeLessThanOrEqual(100);
-      reconciled += batch;
-      if (batch === 0) {
+      expect(batch.attemptedCount).toBeLessThanOrEqual(100);
+      reconciled += batch.reconciledCount;
+      if (batch.attemptedCount === 0) {
         break;
       }
     }
@@ -379,14 +386,139 @@ describe('account deletion', () => {
         env.DELETION_DB,
         nowMs
       )
-    ).rejects.toThrow('primary unavailable');
+    ).resolves.toMatchObject({
+      attemptedCount: 1,
+      reconciledCount: 0,
+      failedCount: 1,
+      pendingCount: 1,
+      maxRetryCount: 1
+    });
 
     expect(
       await env.DELETION_DB.prepare(
-        `SELECT public_id FROM deletion_tombstones
+        `SELECT public_id, reconciliation_attempts FROM deletion_tombstones
          WHERE public_id = 'pending-delete'`
-      ).first('public_id')
-    ).toBe('pending-delete');
+      ).first<{ public_id: string; reconciliation_attempts: number }>()
+    ).toEqual({
+      public_id: 'pending-delete',
+      reconciliation_attempts: 1
+    });
+  });
+
+  it('isolates a failed tombstone and continues reconciling later rows', async () => {
+    await env.DELETION_DB.prepare(
+      `INSERT INTO deletion_tombstones (public_id, deleted_at_ms, expires_at_ms)
+       VALUES ('blocked-delete', ?, ?), ('healthy-delete', ?, ?)`
+    )
+      .bind(nowMs - 200, nowMs + 1000, nowMs - 100, nowMs + 1000)
+      .run();
+    const primary = {
+      prepare(sql: string) {
+        return {
+          bind(...values: unknown[]) {
+            return { sql, values };
+          }
+        };
+      },
+      async batch(statements: Array<{ values: unknown[] }>) {
+        if (statements.some((statement) => statement.values.includes('blocked-delete'))) {
+          throw new Error('one row is unavailable');
+        }
+        return [];
+      }
+    } as unknown as D1Database;
+
+    const result = await reconcileDeletionTombstones(
+      primary,
+      env.DELETION_DB,
+      nowMs
+    );
+
+    expect(result).toEqual({
+      attemptedCount: 2,
+      reconciledCount: 1,
+      failedCount: 1,
+      pendingCount: 1,
+      oldestPendingAgeMs: 200,
+      maxRetryCount: 1
+    });
+    expect(
+      await env.DELETION_DB.prepare(
+        `SELECT reconciled_at_ms FROM deletion_tombstones
+         WHERE public_id = 'healthy-delete'`
+      ).first('reconciled_at_ms')
+    ).toBe(nowMs);
+  });
+
+  it('prioritizes untried tombstones after a full batch of failures', async () => {
+    await env.DELETION_DB.prepare(
+      `WITH RECURSIVE sequence(value) AS (
+         SELECT 0
+         UNION ALL
+         SELECT value + 1 FROM sequence WHERE value < 99
+       )
+       INSERT INTO deletion_tombstones (public_id, deleted_at_ms, expires_at_ms)
+       SELECT printf('blocked-%03d', value), ?, ? FROM sequence`
+    )
+      .bind(nowMs - 200, nowMs + 1000)
+      .run();
+    await env.DELETION_DB.prepare(
+      `INSERT INTO deletion_tombstones (public_id, deleted_at_ms, expires_at_ms)
+       VALUES ('zz-healthy', ?, ?)`
+    )
+      .bind(nowMs - 100, nowMs + 1000)
+      .run();
+    const primary = {
+      prepare(sql: string) {
+        return {
+          bind(...values: unknown[]) {
+            return { sql, values };
+          }
+        };
+      },
+      async batch(statements: Array<{ values: unknown[] }>) {
+        if (
+          statements.some((statement) =>
+            statement.values.some(
+              (value) => typeof value === 'string' && value.startsWith('blocked-')
+            )
+          )
+        ) {
+          throw new Error('blocked row');
+        }
+        return [];
+      }
+    } as unknown as D1Database;
+
+    const first = await reconcileDeletionTombstones(
+      primary,
+      env.DELETION_DB,
+      nowMs
+    );
+    const second = await reconcileDeletionTombstones(
+      primary,
+      env.DELETION_DB,
+      nowMs + 1
+    );
+
+    expect(first).toMatchObject({
+      attemptedCount: 100,
+      reconciledCount: 0,
+      failedCount: 100,
+      pendingCount: 101
+    });
+    expect(second).toMatchObject({
+      attemptedCount: 100,
+      reconciledCount: 1,
+      failedCount: 99,
+      pendingCount: 100
+    });
+    expect(
+      await env.DELETION_DB.prepare(
+        `SELECT reconciled_at_ms FROM deletion_tombstones
+         WHERE public_id = 'zz-healthy'`
+      ).first('reconciled_at_ms')
+    ).toBe(nowMs + 1);
   });
 });
 

@@ -83,6 +83,45 @@ describe('Wallpaper Engine project.json', () => {
     });
   });
 
+  it('removes credential-bearing property values from the release project', () => {
+    withTemporaryProject((projectPath) => {
+      const project = JSON.parse(readFileSync(projectPath, 'utf8')) as WallpaperProject;
+      const properties = project.general?.properties ?? {};
+      const secrets = {
+        clientId: 'client-id-canary-8db9e3',
+        refreshToken: 'arbitrary-refresh-canary-4f6a2c',
+        pairingToken: 'arbitrary-pairing-canary-b83d17',
+        settingsJson: 'settings-secret-canary-1de75a'
+      };
+      properties.spotify_client_id.value = secrets.clientId;
+      properties.spotify_refresh_token.value = secrets.refreshToken;
+      properties.spotify_pairing_token.value = secrets.pairingToken;
+      properties.settings_json.value = JSON.stringify({
+        nested: {
+          credential: secrets.settingsJson
+        }
+      });
+      writeFileSync(projectPath, JSON.stringify(project), 'utf8');
+
+      const result = runWorkshopPreparation(
+        projectPath,
+        'https://api.wallpaper.example'
+      );
+      const preparedText = readFileSync(projectPath, 'utf8');
+      const prepared = JSON.parse(preparedText) as WallpaperProject;
+      const preparedProperties = prepared.general?.properties ?? {};
+
+      expect(result.status).toBe(0);
+      expect(preparedProperties.spotify_client_id?.value).toBe('');
+      expect(preparedProperties.spotify_refresh_token?.value).toBe('');
+      expect(preparedProperties.spotify_pairing_token?.value).toBe('');
+      expect(preparedProperties.settings_json?.value).toBe('');
+      for (const secret of Object.values(secrets)) {
+        expect(preparedText).not.toContain(secret);
+      }
+    });
+  });
+
   it.each([
     undefined,
     '',

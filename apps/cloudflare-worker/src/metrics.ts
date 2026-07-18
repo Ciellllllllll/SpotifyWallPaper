@@ -5,7 +5,9 @@ export type RefreshMetricOutcome =
   | 'network_error'
   | 'failed';
 
-type ScheduledMetricOutcome = 'success' | 'failed';
+import type { DeletionReconciliationResult } from './db';
+
+type ScheduledMetricOutcome = 'success' | 'partial_failure' | 'failed';
 
 interface MetricsEnv {
   ENVIRONMENT: string;
@@ -62,7 +64,7 @@ export function recordRefreshMetric(
 export function recordScheduledMetric(
   env: Env,
   outcome: ScheduledMetricOutcome,
-  reconciledCount: number
+  result: DeletionReconciliationResult
 ): void {
   try {
     writeMetric(env, {
@@ -74,7 +76,15 @@ export function recordScheduledMetric(
         'not_applicable',
         outcome
       ],
-      doubles: [boundedMetricNumber(reconciledCount), 1],
+      doubles: [
+        boundedMetricNumber(result.attemptedCount),
+        boundedMetricNumber(result.reconciledCount),
+        boundedMetricNumber(result.failedCount),
+        boundedMetricNumber(result.pendingCount),
+        boundedMetricNumber(result.oldestPendingAgeMs),
+        boundedMetricNumber(result.maxRetryCount),
+        1
+      ],
       indexes: ['deletion_reconciler']
     });
   } catch {

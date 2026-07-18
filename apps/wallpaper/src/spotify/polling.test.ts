@@ -100,6 +100,46 @@ describe('Spotify polling decisions', () => {
     expect(retained.previousPlayback).toBe(previous);
   });
 
+  it('moves A to previous on A-to-B and retains A on same-item B updates', () => {
+    const trackA = { ...mockPlayback, id: 'track-a', title: 'Track A' };
+    const trackB = { ...mockPlayback, id: 'track-b', title: 'Track B' };
+    const updatedTrackB = { ...trackB, progressMs: trackB.progressMs + 1000 };
+
+    const changed = playbackHistoryAfterPoll(
+      { playback: trackA, previousPlayback: null },
+      { ok: true, value: trackB }
+    );
+    const updated = playbackHistoryAfterPoll(changed, {
+      ok: true,
+      value: updatedTrackB
+    });
+
+    expect(changed).toEqual({
+      playback: trackB,
+      previousPlayback: trackA
+    });
+    expect(updated).toEqual({
+      playback: updatedTrackB,
+      previousPlayback: trackA
+    });
+  });
+
+  it('moves B to previous when B-to-C arrives during an existing transition', () => {
+    const trackA = { ...mockPlayback, id: 'track-a', title: 'Track A' };
+    const trackB = { ...mockPlayback, id: 'track-b', title: 'Track B' };
+    const trackC = { ...mockPlayback, id: 'track-c', title: 'Track C' };
+
+    const changed = playbackHistoryAfterPoll(
+      { playback: trackB, previousPlayback: trackA },
+      { ok: true, value: trackC }
+    );
+
+    expect(changed).toEqual({
+      playback: trackC,
+      previousPlayback: trackB
+    });
+  });
+
   it('cools down the primary playback endpoint after a fallback success', async () => {
     const calls: string[] = [];
     const fetcher = (async (url: RequestInfo | URL) => {

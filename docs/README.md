@@ -34,6 +34,12 @@ This directory splits the project specification into small files so Codex and Su
 
 - `user-guide.md`: setup, Spotify, Wallpaper Engine, configurator, settings, Rainmeter, and troubleshooting.
 - `qa-checklist.md`: automated and manual QA checklist for release/regression verification.
+- `privacy.md`: public backend beta data handling, cookie, retention, and
+  contact requirements.
+- `eula.md`: repository copy of the public backend beta EULA served at
+  `/terms`.
+- `release-notes-public-backend-beta.md`: public backend beta status and
+  release blockers.
 - `release-notes-v0.0.1.md`: current milestone release notes, known gaps, and verification commands.
 
 ## Rule for agents

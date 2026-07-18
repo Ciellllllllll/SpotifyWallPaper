@@ -1,6 +1,8 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import eulaDocument from '../../../docs/eula.md?raw';
+import privacyDocument from '../../../docs/privacy.md?raw';
 import worker from '../src/index';
 
 const baseUrl = 'http://127.0.0.1:8787';
@@ -31,6 +33,13 @@ describe('GET /setup', () => {
     expectSecurityHeaders(response, html, true);
     expect(html).toContain('action="/auth/start"');
     expect(html).toContain('name="spotifyClientId"');
+    expect(html).toContain('name="legalAccepted"');
+    expect(html).toContain('href="/privacy"');
+    expect(html).toContain('href="/terms"');
+    expect(html).toContain('active Spotify Premium');
+    expect(html).toContain('one Client ID per developer');
+    expect(html).toContain('five authenticated users');
+    expect(html).toContain('grandfathered');
     expect(html).toContain('id="pairing-token"');
     expect(html).toContain("input.value = ''");
     expect(html).toContain("Authorization: `Bearer ${token}`");
@@ -41,12 +50,47 @@ describe('GET /setup', () => {
   });
 });
 
+describe('GET /privacy and /terms', () => {
+  it('publishes hardened pre-authorization privacy and EULA pages', async () => {
+    const privacy = await callWorker(new Request(`${baseUrl}/privacy`));
+    const privacyHtml = await privacy.text();
+    const terms = await callWorker(new Request(`${baseUrl}/terms`));
+    const termsHtml = await terms.text();
+
+    expect(privacy.status).toBe(200);
+    expectSecurityHeaders(privacy, privacyHtml);
+    expect(privacyHtml).toContain('swpb_oauth');
+    expect(privacyHtml).toContain('strictly necessary');
+    expect(privacyHtml).toContain('ten minutes');
+    expect(privacyHtml).toContain('third-party tracking');
+    expect(privacyHtml).toContain('href="/terms"');
+    expect(extractLegalDocument(privacyHtml)).toBe(privacyDocument.trim());
+
+    expect(terms.status).toBe(200);
+    expectSecurityHeaders(terms, termsHtml);
+    expect(termsHtml).toContain('no warranties on behalf of Spotify');
+    expect(termsHtml).toContain('modify or create derivative works');
+    expect(termsHtml).toContain('decompile, reverse engineer, or disassemble');
+    expect(termsHtml).toContain('Spotify is a third-party beneficiary');
+    expect(extractLegalDocument(termsHtml)).toBe(eulaDocument.trim());
+  });
+});
+
 describe('POST /auth/start', () => {
   it('rejects cross-origin, malformed, and caller-expanded requests', async () => {
     expect((await startAuth({ origin: 'https://attacker.example' })).response.status).toBe(403);
     expect((await startAuth({ clientId: '' })).response.status).toBe(400);
     expect((await startAuth({ clientId: 'not valid!' })).response.status).toBe(400);
     expect((await startAuth({ extra: 'scope=user-read-email' })).response.status).toBe(400);
+  });
+
+  it('requires explicit privacy and EULA acceptance before creating a session', async () => {
+    const started = await startAuth({ legalAccepted: false });
+
+    expect(started.response.status).toBe(400);
+    expect(
+      await env.DB.prepare('SELECT COUNT(*) AS count FROM oauth_sessions').first('count')
+    ).toBe(0);
   });
 
   it('creates a fixed PKCE authorization request and encrypted session', async () => {
@@ -126,6 +170,9 @@ describe('GET /auth/callback', () => {
     expect(stored).not.toContain('spotify-refresh-token');
     expect(stored).not.toMatch(/swpb1\./);
     expect(credential?.auth_status).toBe('active');
+    expect(
+      await env.DB.prepare('SELECT COUNT(*) AS count FROM oauth_sessions').first('count')
+    ).toBe(0);
   });
 
   it('rejects browser mismatch and replay without exposing callback values', async () => {
@@ -196,6 +243,34 @@ describe('GET /auth/callback', () => {
     expect(exchange).not.toHaveBeenCalled();
     expect(html).not.toContain('expired-session-code');
     expect(html).not.toContain(expired.state);
+  });
+
+  it('rate limits callbacks before hashing or writing D1 and returns no callback values', async () => {
+    const limit = vi.fn(async () => ({ success: false }));
+    const limitedEnv = {
+      ...env,
+      AUTH_RATE_LIMITER: { limit }
+    } as unknown as Env;
+    const response = await worker.fetch(
+      new Request(
+        `${baseUrl}/auth/callback?code=sensitive-callback-code&state=sensitive-state`,
+        {
+          headers: {
+            Cookie: 'swpb_oauth=sensitive-browser-nonce',
+            'CF-Connecting-IP': '192.0.2.20'
+          }
+        }
+      ),
+      limitedEnv
+    );
+    const body = await response.text();
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(limit).toHaveBeenCalledWith({ key: 'auth:192.0.2.20' });
+    expect(body).not.toContain('sensitive-callback-code');
+    expect(body).not.toContain('sensitive-state');
+    expect(body).not.toContain('sensitive-browser-nonce');
   });
 
   it('rejects a token response missing any requested scope', async () => {
@@ -295,13 +370,39 @@ describe('POST /auth/reauthorize', () => {
         method: 'POST',
         headers: {
           Origin: baseUrl,
-          Authorization: 'Bearer malformed'
-        }
+          Authorization: 'Bearer malformed',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({ legalAccepted: 'yes' })
       })
     );
 
     expect(crossOrigin.status).toBe(403);
     expect(malformed.status).toBe(401);
+  });
+
+  it('requires renewed privacy and EULA acceptance before creating a session', async () => {
+    const initial = await startAuth();
+    mockTokenExchange(validTokenResponse());
+    const initialResponse = await callback(initial, 'initial-consent-code');
+    const pairingToken = (await initialResponse.text()).match(
+      /swpb1\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}/
+    )?.[0];
+    expect(pairingToken).toBeDefined();
+
+    const response = await callWorker(
+      new Request(`${baseUrl}/auth/reauthorize`, {
+        method: 'POST',
+        headers: {
+          Origin: baseUrl,
+          Authorization: `Bearer ${pairingToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams()
+      })
+    );
+
+    expect(response.status).toBe(400);
   });
 
   it('retains the existing Pairing Token identity and does not emit a replacement', async () => {
@@ -320,8 +421,10 @@ describe('POST /auth/reauthorize', () => {
         method: 'POST',
         headers: {
           Origin: baseUrl,
-          Authorization: `Bearer ${pairingToken}`
-        }
+          Authorization: `Bearer ${pairingToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({ legalAccepted: 'yes' })
       })
     );
     const reauthorizationBody = await reauthorization.json<{
@@ -371,10 +474,14 @@ async function startAuth(options: {
   origin?: string;
   clientId?: string;
   extra?: string;
+  legalAccepted?: boolean;
 } = {}): Promise<StartedAuthorization> {
   const body = new URLSearchParams({
     spotifyClientId: options.clientId ?? clientId
   });
+  if (options.legalAccepted !== false) {
+    body.set('legalAccepted', 'yes');
+  }
   if (options.extra !== undefined) {
     const [key, value] = options.extra.split('=');
     body.set(key, value);
@@ -466,4 +573,16 @@ async function pkceChallenge(verifier: string): Promise<string> {
     binary += String.fromCharCode(byte);
   }
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
+}
+
+function extractLegalDocument(html: string): string {
+  const encoded = html.match(/<pre id="legal-document">([\s\S]*?)<\/pre>/)?.[1];
+  expect(encoded).toBeDefined();
+  return encoded!
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '<')
+    .replace(/&amp;/g, '&')
+    .trim();
 }

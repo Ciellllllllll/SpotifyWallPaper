@@ -54,7 +54,14 @@ describe('aggregate public backend metrics', () => {
     } as unknown as Env;
 
     recordRefreshMetric(metricsEnv, 'reauthorization_required');
-    recordScheduledMetric(metricsEnv, 'success', 100);
+    recordScheduledMetric(metricsEnv, 'partial_failure', {
+      attemptedCount: 100,
+      reconciledCount: 98,
+      failedCount: 2,
+      pendingCount: 4,
+      oldestPendingAgeMs: 1_800_000,
+      maxRetryCount: 3
+    });
 
     expect(writeDataPoint.mock.calls.map(([point]) => point)).toEqual([
       {
@@ -76,9 +83,9 @@ describe('aggregate public backend metrics', () => {
           'not_applicable',
           'not_applicable',
           'not_applicable',
-          'success'
+          'partial_failure'
         ],
-        doubles: [100, 1],
+        doubles: [100, 98, 2, 4, 1_800_000, 3, 1],
         indexes: ['deletion_reconciler']
       }
     ]);
@@ -115,7 +122,14 @@ describe('aggregate public backend metrics', () => {
     });
 
     expect(() =>
-      recordScheduledMetric(metricsEnv, 'failed', 0)
+      recordScheduledMetric(metricsEnv, 'failed', {
+        attemptedCount: 0,
+        reconciledCount: 0,
+        failedCount: 0,
+        pendingCount: 0,
+        oldestPendingAgeMs: 0,
+        maxRetryCount: 0
+      })
     ).not.toThrow();
   });
 

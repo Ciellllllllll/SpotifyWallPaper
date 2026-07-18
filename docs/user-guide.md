@@ -25,6 +25,10 @@ Without Spotify settings, the wallpaper uses mock playback, mock audio, and safe
 The optional public backend beta uses BYO Client ID with Authorization Code and PKCE. Create one Spotify Developer app
 for your own use. Do not create, paste, or store a Spotify Client Secret in the wallpaper or setup page.
 
+Spotify-connected Limited beta access is not open yet. The flow below applies
+only after the phase report records the policy, legal, infrastructure, smoke,
+alert-delivery, Security, and SpecGuard gates.
+
 Required scopes for passive display:
 
 - `user-read-currently-playing`
@@ -48,7 +52,8 @@ domain release gate is complete. Use this flow:
    `/auth/callback`. It must have the same scheme and host as the official `/setup` page and no added trailing slash,
    query, or fragment.
 2. Open the official production origin followed by `/setup`.
-3. Enter your Spotify Client ID and choose Authorize Spotify.
+3. Read the linked Privacy Notice and EULA, explicitly accept both, enter your
+   Spotify Client ID, and choose Authorize Spotify.
 4. Log in to Spotify and approve the requested scopes.
 5. Copy the `swpb1.` Pairing Token shown after success. The page displays it only once.
 6. In Wallpaper Engine, select `Backend Proxy`, retain the release-provided backend origin, and paste the Pairing Token
@@ -64,7 +69,8 @@ if Spotify returns `invalid_grant`. The wallpaper keeps its last safe display an
 retrying indefinitely.
 
 1. Return to the same official `/setup` page.
-2. Under Reauthorize Spotify, enter the existing Pairing Token.
+2. Accept the current Privacy Notice and EULA, then under Reauthorize Spotify
+   enter the existing Pairing Token.
 3. Complete Spotify authorization again.
 
 Successful reauthorization retains the same Pairing Token and starts a new six-month authorization period. The

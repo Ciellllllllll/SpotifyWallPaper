@@ -400,6 +400,22 @@ client. Alerts must cover:
 - D1 rows read/written and Worker request/CPU cost; and
 - absence of expected aggregate metrics.
 
+For the initial beta, configure and test these minimum thresholds:
+
+- at least five Worker 5xx responses in five minutes;
+- at least five refresh `failed` or `network_error` outcomes in ten minutes;
+- at least twenty Worker rate-limit responses in five minutes;
+- any scheduled `failed` or `partial_failure` outcome;
+- deletion `oldestPendingAgeMs >= 1800000` (two 15-minute cron intervals),
+  `maxRetryCount >= 2`, or pending count increasing across two consecutive
+  scheduled points; and
+- no scheduled reconciler metric for 30 minutes, or no request metric for ten
+  minutes while the synthetic health check is active.
+
+The reconciler metric doubles are ordered as attempted, reconciled, failed,
+pending, oldest-pending age in milliseconds, maximum retry count, and event
+count. It contains no `publicId` or other credential identifier.
+
 Set three account budget alerts at 50%, 80%, and 100% of the approved monthly
 budget. Cloudflare budget alerts use dollar thresholds, so calculate the three
 amounts from `CLOUDFLARE_MONTHLY_BUDGET_USD` and configure each in the
@@ -424,6 +440,9 @@ if ($thresholds.Count -ne 3) { throw 'Budget threshold calculation failed.' }
 ```
 
 Route alerts to at least two maintainers and test delivery before production.
+Record delivery evidence for every non-budget alert above as well as the 50%,
+80%, and 100% budget alerts. A configured but untested alert does not satisfy
+the release gate.
 
 ## Rollback
 

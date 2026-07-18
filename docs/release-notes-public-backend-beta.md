@@ -4,7 +4,10 @@
 
 The optional Cloudflare Worker backend and Wallpaper integration are
 implemented for private staging and limited-beta preparation. General
-Wallpaper Engine Workshop publication is not approved.
+Wallpaper Engine Workshop publication is not approved. Spotify-connected
+Limited beta distribution is also blocked by the external policy, legal,
+infrastructure, and operations gates below; local/mock-only staging remains
+permitted.
 
 ## Added
 
@@ -13,6 +16,9 @@ Wallpaper Engine Workshop publication is not approved.
   the wallpaper.
 - Encrypted D1 credential storage, Access Token refresh, Spotify 429 backoff,
   reauthorization, controls, and account deletion.
+- Pre-authorization Privacy/EULA consent pages and Development Mode
+  restrictions on `/setup`.
+- Row-isolated deletion reconciliation with retry/backlog aggregate metrics.
 - Direct, loopback Rust, public Worker, and mock provider compatibility.
 - Separate preview and production deployment inventories, rate limits,
   aggregate metrics, CI, secret scanning, and operations runbooks.
@@ -57,10 +63,14 @@ GitHub Pages.
 - Original unmodified artwork with no crop, blur, animation, distortion, or
   overlay, plus required Spotify logo attribution and Spotify link.
 - Published privacy notice with real operator and incident contacts.
+- Published operator-reviewed EULA and verified pre-authorization consent.
 - Fixed production custom domain and exact registered callback.
-- Limited beta completion.
+- Non-budget operational alert configuration and delivery tests.
+- Spotify-connected Limited beta completion.
 - 72-hour Wallpaper Engine soak completion.
 - Verified cost, abuse, reconciliation, and incident alerts.
 
-Until all gates are evidenced in the phase report, the build must not be
-presented as generally publishable.
+Until the policy/legal/infrastructure/alert gates are evidenced in the phase
+report, the build must not be distributed to Spotify-connected Limited beta
+users. General publication additionally requires the completed Limited beta
+and 72-hour soak.

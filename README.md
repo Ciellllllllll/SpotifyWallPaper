@@ -5,8 +5,9 @@ Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-
 ## Guides And Repository Notes
 
 - `docs/` contains tracked specifications, runbooks, privacy, QA, and phase
-  records. The production operator must publish the privacy notice with real
-  operator/contact details before accepting beta users.
+  records. The production operator must publish the Privacy Notice and EULA
+  with real operator/contact details before accepting Spotify-connected beta
+  users.
 - This README carries the release-candidate setup and QA notes that must remain available from GitHub.
 - `examples/settings/` contains token-free sample settings JSON.
 
@@ -79,7 +80,8 @@ this repository until that release gate is complete. When the operator publishes
 2. Register exactly the backend callback URI: the published production origin followed by `/auth/callback`. It must use
    the same scheme and host as the official `/setup` page, with no added trailing slash, query, or fragment.
 3. Open the official production origin followed by `/setup`.
-4. Enter the Client ID and complete Spotify authorization.
+4. Read the served Privacy Notice and EULA, explicitly accept both, enter the
+   Client ID, and complete Spotify authorization.
 5. Copy the `swpb1.` Pairing Token shown on the success page. It is displayed only once.
 6. In Wallpaper Engine, set Spotify Playback Provider to `Backend Proxy`, keep the release-provided backend origin, and
    paste the token into Spotify Backend Pairing Token / `spotify_pairing_token`.
@@ -100,7 +102,8 @@ deleted credential. Separately remove the BYO app from Spotify account
 settings using the app name you registered; backend deletion cannot perform
 that Spotify-side disconnect.
 
-See `docs/privacy.md` for data handling and deletion retention.
+See `docs/privacy.md` for data handling and deletion retention and
+`docs/eula.md` for the beta EULA.
 
 ## Legacy Direct Authorization
 
@@ -148,9 +151,10 @@ the developer-owned Spotify app; do not reuse the public backend callback.
 
 ## Publication Status
 
-The public backend is implemented for staging and limited-beta preparation,
-not approved for general Workshop publication. General publication remains
-blocked until all of the following have recorded evidence:
+The public backend is implemented for private local/mock staging and
+limited-beta preparation. A Spotify-connected Limited beta and general
+Workshop publication are blocked until the applicable items below have
+recorded evidence:
 
 - Spotify approval or a documented policy-compatible redesign covering BYO
   authorization, sound-recording/visual synchronization, product naming, and
@@ -158,8 +162,10 @@ blocked until all of the following have recorded evidence:
 - Original, unmodified artwork with no crop, blur, animation, distortion, or
   overlay, plus the required Spotify logo attribution and Spotify link.
 - Published privacy notice with real operator and private incident contacts.
+- Published EULA and verified pre-authorization consent flow.
 - Fixed production custom domain and exact callback registration.
-- Completed limited beta.
+- Verified non-budget operational alert configuration and delivery.
+- Completed Spotify-connected limited beta.
 - Completed 72-hour Wallpaper Engine soak.
 - Verified cost, abuse, deletion-reconciliation, and incident alerts.
 

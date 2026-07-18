@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "build:workshop": "vite build && node prepare-workshop.mjs",
-    "preview": "vite preview --host 127.0.0.1",
+    "preview": "vite preview --host 127.0.0.1 --port 5173 --strictPort",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run"
   },

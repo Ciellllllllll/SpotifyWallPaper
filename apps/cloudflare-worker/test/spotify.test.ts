@@ -100,6 +100,28 @@ describe('Spotify playback requests', () => {
     });
   });
 
+  it('aborts a stalled playback request at the fixed timeout', async () => {
+    const fetcher = vi.fn(
+      async (_input: string | Request | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        })
+    );
+
+    const result = await fetchSpotifyPlayback(
+      'access-token',
+      fetcher,
+      fetchedAt,
+      5
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { kind: 'network_error' }
+    });
+    expect((fetcher.mock.calls[0]?.[1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+  });
+
   it('cancels a content-length-free response after the byte limit', async () => {
     let cancelled = false;
     const chunk = new Uint8Array(140_000).fill(0x61);
@@ -161,5 +183,26 @@ describe('Spotify control requests', () => {
       ['PUT', 'https://api.spotify.com/v1/me/player/shuffle?state=true'],
       ['PUT', 'https://api.spotify.com/v1/me/player/repeat?state=context']
     ]);
+  });
+
+  it('aborts a stalled control request at the fixed timeout', async () => {
+    const fetcher = vi.fn(
+      async (_input: string | Request | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        })
+    );
+
+    const result = await sendSpotifyCommand(
+      'access-token',
+      { type: 'pause' },
+      fetcher,
+      5
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { kind: 'network_error' }
+    });
   });
 });

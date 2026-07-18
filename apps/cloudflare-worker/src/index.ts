@@ -5,12 +5,16 @@ import {
   handleReauthorize
 } from './auth';
 import { handleApiRequest } from './api';
-import { reconcileDeletionTombstones } from './db';
+import {
+  purgeExpiredOAuthSessions,
+  reconcileDeletionTombstones,
+  type DeletionReconciliationResult
+} from './db';
 import {
   recordRequestMetric,
   recordScheduledMetric
 } from './metrics';
-import { setupPage } from './pages';
+import { privacyPage, setupPage, termsPage } from './pages';
 
 interface HealthValue {
   service: 'spotify-wallpaper-backend';
@@ -95,6 +99,12 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
     if (request.method === 'GET' && url.pathname === '/setup') {
       return setupPage();
     }
+    if (request.method === 'GET' && url.pathname === '/privacy') {
+      return privacyPage();
+    }
+    if (request.method === 'GET' && url.pathname === '/terms') {
+      return termsPage();
+    }
     if (request.method === 'POST' && url.pathname === '/auth/start') {
       return handleAuthStart(request, env);
     }
@@ -114,14 +124,27 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
 
 async function runDeletionReconciler(env: Env): Promise<void> {
   try {
-    const reconciled = await reconcileDeletionTombstones(
+    await purgeExpiredOAuthSessions(env.DB, Date.now());
+    const result = await reconcileDeletionTombstones(
       env.DB,
       env.DELETION_DB,
       Date.now()
     );
-    recordScheduledMetric(env, 'success', reconciled);
+    recordScheduledMetric(
+      env,
+      result.failedCount === 0 ? 'success' : 'partial_failure',
+      result
+    );
   } catch {
-    recordScheduledMetric(env, 'failed', 0);
+    const failedResult: DeletionReconciliationResult = {
+      attemptedCount: 0,
+      reconciledCount: 0,
+      failedCount: 0,
+      pendingCount: 0,
+      oldestPendingAgeMs: 0,
+      maxRetryCount: 0
+    };
+    recordScheduledMetric(env, 'failed', failedResult);
   }
 }
 

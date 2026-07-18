@@ -24,7 +24,7 @@ export interface OAuthSession {
   codeVerifier: EncryptedSecret;
   createdAtMs: number;
   expiresAtMs: number;
-  consumedAtMs: number;
+  consumedAtMs: number | null;
 }
 
 export interface CredentialInput {
@@ -104,7 +104,7 @@ interface OAuthSessionRow {
   encryption_key_id: string;
   created_at_ms: number;
   expires_at_ms: number;
-  consumed_at_ms: number;
+  consumed_at_ms: number | null;
 }
 
 interface CredentialRow {
@@ -163,18 +163,28 @@ export async function consumeOAuthSession(
 ): Promise<OAuthSession | null> {
   const row = await db
     .prepare(
-      `UPDATE oauth_sessions
-       SET consumed_at_ms = ?
+      `DELETE FROM oauth_sessions
        WHERE state_digest = ?
          AND browser_digest = ?
          AND consumed_at_ms IS NULL
          AND expires_at_ms >= ?
        RETURNING *`
     )
-    .bind(nowMs, stateDigest, browserDigest, nowMs)
+    .bind(stateDigest, browserDigest, nowMs)
     .first<OAuthSessionRow>();
 
   return row === null ? null : mapOAuthSession(row);
+}
+
+export async function purgeExpiredOAuthSessions(
+  db: D1Database,
+  nowMs: number
+): Promise<number> {
+  const result = await db
+    .prepare('DELETE FROM oauth_sessions WHERE expires_at_ms < ?')
+    .bind(nowMs)
+    .run();
+  return result.meta.changes;
 }
 
 export async function createCredential(
@@ -544,7 +554,9 @@ export async function writeDeletionTombstone(
        ON CONFLICT (public_id) DO UPDATE SET
          deleted_at_ms = MIN(deletion_tombstones.deleted_at_ms, excluded.deleted_at_ms),
          expires_at_ms = MAX(deletion_tombstones.expires_at_ms, excluded.expires_at_ms),
-         reconciled_at_ms = NULL`
+         reconciled_at_ms = NULL,
+         reconciliation_attempts = 0,
+         last_attempt_at_ms = NULL`
     )
     .bind(publicId, deletedAtMs, expiresAtMs)
     .run();
@@ -558,10 +570,27 @@ export async function markDeletionTombstoneReconciled(
   await deletionDb
     .prepare(
       `UPDATE deletion_tombstones
-       SET reconciled_at_ms = ?
+       SET reconciled_at_ms = ?,
+           last_attempt_at_ms = ?
        WHERE public_id = ?`
     )
-    .bind(reconciledAtMs, publicId)
+    .bind(reconciledAtMs, reconciledAtMs, publicId)
+    .run();
+}
+
+async function markDeletionTombstoneFailed(
+  deletionDb: D1Database,
+  publicId: string,
+  attemptedAtMs: number
+): Promise<void> {
+  await deletionDb
+    .prepare(
+      `UPDATE deletion_tombstones
+       SET reconciliation_attempts = reconciliation_attempts + 1,
+           last_attempt_at_ms = ?
+       WHERE public_id = ?`
+    )
+    .bind(attemptedAtMs, publicId)
     .run();
 }
 
@@ -602,28 +631,56 @@ export async function deleteCredentialData(
   ]);
 }
 
+export interface DeletionReconciliationResult {
+  attemptedCount: number;
+  reconciledCount: number;
+  failedCount: number;
+  pendingCount: number;
+  oldestPendingAgeMs: number;
+  maxRetryCount: number;
+}
+
 export async function reconcileDeletionTombstones(
   db: D1Database,
   deletionDb: D1Database,
   nowMs: number
-): Promise<number> {
+): Promise<DeletionReconciliationResult> {
   const tombstones = await deletionDb
     .prepare(
       `SELECT public_id
        FROM deletion_tombstones
        WHERE reconciled_at_ms IS NULL
-       ORDER BY public_id
+       ORDER BY
+         CASE WHEN last_attempt_at_ms IS NULL THEN 0 ELSE 1 END,
+         last_attempt_at_ms,
+         public_id
        LIMIT 100`
     )
     .all<{ public_id: string }>();
 
+  let reconciledCount = 0;
+  let failedCount = 0;
   for (const tombstone of tombstones.results) {
-    await deleteCredentialData(db, tombstone.public_id);
-    await markDeletionTombstoneReconciled(
-      deletionDb,
-      tombstone.public_id,
-      nowMs
-    );
+    try {
+      await deleteCredentialData(db, tombstone.public_id);
+      await markDeletionTombstoneReconciled(
+        deletionDb,
+        tombstone.public_id,
+        nowMs
+      );
+      reconciledCount += 1;
+    } catch {
+      failedCount += 1;
+      try {
+        await markDeletionTombstoneFailed(
+          deletionDb,
+          tombstone.public_id,
+          nowMs
+        );
+      } catch {
+        // A ledger write failure must not stop later tombstones in this batch.
+      }
+    }
   }
 
   await deletionDb
@@ -634,7 +691,32 @@ export async function reconcileDeletionTombstones(
     )
     .bind(nowMs)
     .run();
-  return tombstones.results.length;
+
+  const pending = await deletionDb
+    .prepare(
+      `SELECT COUNT(*) AS pending_count,
+              MIN(deleted_at_ms) AS oldest_deleted_at_ms,
+              MAX(reconciliation_attempts) AS max_retry_count
+       FROM deletion_tombstones
+       WHERE reconciled_at_ms IS NULL`
+    )
+    .first<{
+      pending_count: number;
+      oldest_deleted_at_ms: number | null;
+      max_retry_count: number | null;
+    }>();
+  const pendingCount = pending?.pending_count ?? 0;
+  const oldestDeletedAtMs = pending?.oldest_deleted_at_ms ?? nowMs;
+
+  return {
+    attemptedCount: tombstones.results.length,
+    reconciledCount,
+    failedCount,
+    pendingCount,
+    oldestPendingAgeMs:
+      pendingCount === 0 ? 0 : Math.max(0, nowMs - oldestDeletedAtMs),
+    maxRetryCount: pending?.max_retry_count ?? 0
+  };
 }
 
 export async function readCredentialSecrets(

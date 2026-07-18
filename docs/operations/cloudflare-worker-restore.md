@@ -118,11 +118,12 @@ Both final lists must report no unapplied migrations.
 
 ## 5. Reset deletion reconciliation checkpoints
 
-Reset every retained tombstone, including rows reconciled before the restore:
+Reset every retained tombstone and its retry telemetry, including rows
+reconciled before the restore:
 
 ```powershell
 npx wrangler d1 execute $env:CLOUDFLARE_DELETION_D1_NAME --remote `
-  --command "UPDATE deletion_tombstones SET reconciled_at_ms = NULL;" `
+  --command "UPDATE deletion_tombstones SET reconciled_at_ms = NULL, reconciliation_attempts = 0, last_attempt_at_ms = NULL;" `
   --env $env:CLOUDFLARE_DEPLOY_ENV `
   --config $env:CLOUDFLARE_GENERATED_CONFIG
 ```

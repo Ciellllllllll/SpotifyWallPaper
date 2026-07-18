@@ -1,4 +1,6 @@
 import { randomBase64Url } from './crypto';
+import eulaDocument from '../../../docs/eula.md';
+import privacyDocument from '../../../docs/privacy.md';
 
 const securityHeaders = {
   'Cache-Control': 'no-store',
@@ -21,20 +23,29 @@ body{font-family:system-ui,sans-serif;max-width:42rem;margin:3rem auto;padding:0
 form{display:grid;gap:.75rem;margin:2rem 0}
 input,button{font:inherit;padding:.7rem}
 button{cursor:pointer}
+.legal{display:flex;align-items:flex-start;gap:.5rem}
+.legal input{margin-top:.2rem}
 #reauthorize-status{min-height:1.5rem}
 </style>
 </head>
 <body>
 <main>
 <h1>Spotify Wallpaper Setup</h1>
+<section aria-labelledby="development-mode">
+<h2 id="development-mode">Spotify Development Mode requirements</h2>
+<p>The app owner needs active Spotify Premium. Spotify normally permits one Client ID per developer and five authenticated users per app. Existing resources may be grandfathered under Spotify's migration rules. Add every user to the app allowlist before authorizing.</p>
+<p><a href="https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide">Read Spotify's February 2026 migration guide</a>.</p>
+</section>
 <form action="/auth/start" method="post">
 <label for="spotify-client-id">Spotify Client ID</label>
 <input id="spotify-client-id" name="spotifyClientId" autocomplete="off" required>
+<label class="legal"><input type="checkbox" name="legalAccepted" value="yes" required> I have read and accept the <a href="/terms">EULA</a> and acknowledge the <a href="/privacy">Privacy Notice</a>.</label>
 <button type="submit">Authorize Spotify</button>
 </form>
 <form id="reauthorize-form">
 <label for="pairing-token">Existing Pairing Token</label>
 <input id="pairing-token" type="password" autocomplete="off" required>
+<label class="legal"><input id="reauthorize-legal" type="checkbox" required> I accept the current <a href="/terms">EULA</a> and acknowledge the <a href="/privacy">Privacy Notice</a>.</label>
 <button type="submit">Reauthorize Spotify</button>
 </form>
 <form id="delete-account-form">
@@ -53,7 +64,11 @@ document.getElementById('reauthorize-form').addEventListener('submit', async (ev
   try {
     const response = await fetch('/auth/reauthorize', {
       method: 'POST',
-      headers: { Authorization: \`Bearer \${token}\` },
+      headers: {
+        Authorization: \`Bearer \${token}\`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({ legalAccepted: 'yes' }),
       credentials: 'same-origin',
       redirect: 'error',
       referrerPolicy: 'no-referrer'
@@ -94,6 +109,50 @@ document.getElementById('delete-account-form').addEventListener('submit', async 
 </html>`,
     nonce,
     true
+  );
+}
+
+export function privacyPage(): Response {
+  const nonce = randomBase64Url(16);
+  return htmlResponse(
+    200,
+    `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Notice</title>
+<style nonce="${nonce}">body{font-family:system-ui,sans-serif;max-width:48rem;margin:3rem auto;padding:0 1rem;color:#171717}pre{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere}</style>
+</head>
+<body><main>
+<p><a href="/terms">Read the EULA</a> before authorizing.</p>
+<pre id="legal-document">${escapeHtml(privacyDocument.trim())}</pre>
+</main></body>
+</html>`,
+    nonce,
+    false
+  );
+}
+
+export function termsPage(): Response {
+  const nonce = randomBase64Url(16);
+  return htmlResponse(
+    200,
+    `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>End User License Agreement</title>
+<style nonce="${nonce}">body{font-family:system-ui,sans-serif;max-width:48rem;margin:3rem auto;padding:0 1rem;color:#171717}pre{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere}</style>
+</head>
+<body><main>
+<p><a href="/privacy">Read the Privacy Notice</a> before authorizing.</p>
+<pre id="legal-document">${escapeHtml(eulaDocument.trim())}</pre>
+</main></body>
+</html>`,
+    nonce,
+    false
   );
 }
 
@@ -169,7 +228,8 @@ function htmlResponse(
         `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; ` +
         `base-uri 'none'; form-action 'self'; frame-ancestors 'none'` +
         (allowSameOriginConnect ? "; connect-src 'self'" : ''),
-      'Content-Type': 'text/html; charset=utf-8'
+      'Content-Type': 'text/html; charset=utf-8',
+      'X-Frame-Options': 'DENY'
     }
   });
 }

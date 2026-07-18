@@ -31,6 +31,8 @@ Development Mode is limited by Spotify and is not a scalable managed public-app 
 ```text
 GET    /health
 GET    /setup
+GET    /privacy
+GET    /terms
 POST   /auth/start
 GET    /auth/callback
 POST   /auth/reauthorize
@@ -43,11 +45,17 @@ Playback and control accept `Authorization: Bearer swpb1.<publicId>.<secret>`. P
 
 ## OAuth
 
-- `/auth/start` accepts a bounded Spotify Client ID from a same-origin POST.
+- `/setup` shows Development Mode limits plus links to the Privacy Notice and
+  EULA before authorization.
+- `/auth/start` accepts a bounded Spotify Client ID and explicit legal
+  acceptance from a same-origin POST.
+- `/auth/reauthorize` also requires explicit acceptance of the current legal
+  documents.
 - Redirect URI and scopes are fixed by the Worker.
 - State, browser nonce, and PKCE verifier use cryptographically secure randomness.
 - D1 stores state/browser digests and an encrypted PKCE verifier.
-- Sessions expire within ten minutes and are consumed atomically once.
+- Sessions expire within ten minutes, are deleted atomically when consumed,
+  and abandoned expired sessions are purged by scheduled maintenance.
 - Callback and setup pages set `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, restrictive CSP, frame denial, and `nosniff`.
 - Cloudflare invocation logs are disabled because callback URLs contain authorization codes.
 - Pairing Token generation occurs only after successful Spotify token exchange.
@@ -132,7 +140,9 @@ Playback/control CORS permits Wallpaper Engine `Origin: null` and explicit local
 
 Setup/account management is same-origin and rejects `Origin: null`. Wallpaper requests use `redirect: 'error'`, `credentials: 'omit'`, and `referrerPolicy: 'no-referrer'`. The wallpaper permits HTTP loopback and the exact release-configured HTTPS origin only.
 
-Cloudflare Rate Limiting bindings protect auth by IP and API routes by `publicId`. Spotify's persisted `Retry-After` remains authoritative.
+Cloudflare Rate Limiting bindings protect auth start, callback, and
+reauthorization by IP and API routes by `publicId`. Spotify's persisted
+`Retry-After` remains authoritative.
 
 ## Reauthorization and deletion
 
@@ -141,6 +151,12 @@ Spotify Refresh Tokens expire six months from the original authorization time. T
 Setup JavaScript may submit the existing Pairing Token through an Authorization header to begin reauthorization. It never stores the token in DOM copies, URLs, Web Storage, IndexedDB, cookies, or errors.
 
 Account deletion first writes a 35-day non-secret `publicId` tombstone to a separate deletion-ledger D1 database, then removes the primary OAuth sessions, token ciphertext, Client ID, Pairing digest, leases, and cache. Every authenticated request checks the ledger first. A scheduled reconciler reapplies tombstones to the primary database, including after Time Travel restoration.
+
+The reconciler isolates each failed tombstone so one permanent primary-D1
+failure cannot block later deletions. The ledger records retry count and last
+attempt time. Aggregate scheduled metrics report attempted, reconciled,
+failed, pending, oldest-pending age, and maximum retry counts without
+identifiers.
 
 ## Operations
 
@@ -152,6 +168,20 @@ Account deletion first writes a 35-day non-secret `publicId` tombstone to a sepa
 
 ## Completion and publication
 
-Implementation completion requires automated Worker/wallpaper/Rust gates, staging integration, secret-surface inspection, independent Security and SpecGuard approval, and a 72-hour Wallpaper Engine soak.
+Implementation completion requires automated Worker/wallpaper/Rust gates,
+staging integration, secret-surface inspection, independent Security and
+SpecGuard approval, and a 72-hour Wallpaper Engine soak.
 
-Limited beta may use private test distribution after Security and SpecGuard approval. General Workshop publication additionally requires a dated Spotify policy decision recorded in the public-backend phase report, including reviewer/owner and evidence location. Implementation completion alone does not authorize publication.
+Private local or mock-only staging may proceed without Spotify users. A
+Spotify-connected Limited beta is blocked until either a dated Spotify policy
+decision or a policy-compatible build covers BYO authorization, visual
+synchronization, product naming, Spotify Marks/links, and artwork treatment.
+It also requires published operator/privacy/incident contacts, the Privacy
+Notice and EULA consent flow, real preview infrastructure, smoke tests, alert
+delivery tests, and independent Security/SpecGuard approval.
+
+General Workshop publication additionally requires the completed Limited beta,
+72-hour Wallpaper Engine soak, and every publication checklist item recorded
+with reviewer/owner and evidence location in the public-backend phase report.
+Implementation completion alone does not authorize Spotify-connected
+distribution.

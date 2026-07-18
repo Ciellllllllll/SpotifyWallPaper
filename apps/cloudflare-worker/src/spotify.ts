@@ -38,6 +38,7 @@ const refreshLeaseMs = 30_000;
 const refreshLifetimeMs = 180 * 24 * 60 * 60 * 1000;
 const maxResponseBytes = 262_144;
 const maxRetryAfterMs = 24 * 60 * 60 * 1000;
+const spotifyRequestTimeoutMs = 10_000;
 
 export type SpotifyPlaybackCommand =
   | { type: 'play' }
@@ -52,6 +53,7 @@ export type SpotifyPlaybackCommand =
 export interface SpotifyRequestOptions {
   fetcher?: typeof fetch;
   nowMs?: number;
+  requestTimeoutMs?: number;
   refreshTimeoutMs?: number;
   sleep?: (milliseconds: number) => Promise<void>;
 }
@@ -59,7 +61,8 @@ export interface SpotifyRequestOptions {
 export async function fetchSpotifyPlayback(
   accessToken: string,
   fetcher: typeof fetch = fetch,
-  fetchedAt = new Date().toISOString()
+  fetchedAt = new Date().toISOString(),
+  timeoutMs = spotifyRequestTimeoutMs
 ): Promise<ApiResult<NormalizedPlayback>> {
   let response: Response;
   try {
@@ -67,7 +70,8 @@ export async function fetchSpotifyPlayback(
       headers: {
         Authorization: `Bearer ${accessToken}`
       },
-      redirect: 'error'
+      redirect: 'error',
+      signal: AbortSignal.timeout(timeoutMs)
     });
   } catch {
     return networkError();
@@ -95,7 +99,8 @@ export async function fetchSpotifyPlayback(
 export async function sendSpotifyCommand(
   accessToken: string,
   command: SpotifyPlaybackCommand,
-  fetcher: typeof fetch = fetch
+  fetcher: typeof fetch = fetch,
+  timeoutMs = spotifyRequestTimeoutMs
 ): Promise<ApiResult<null>> {
   const request = commandRequest(command);
   let response: Response;
@@ -105,7 +110,8 @@ export async function sendSpotifyCommand(
       headers: {
         Authorization: `Bearer ${accessToken}`
       },
-      redirect: 'error'
+      redirect: 'error',
+      signal: AbortSignal.timeout(timeoutMs)
     });
   } catch {
     return networkError();
@@ -201,7 +207,8 @@ export async function fetchCredentialPlayback(
   let result = await fetchSpotifyPlayback(
     token.value,
     options.fetcher,
-    new Date(nowMs).toISOString()
+    new Date(nowMs).toISOString(),
+    options.requestTimeoutMs
   );
   if (!result.ok && result.error.kind === 'unauthorized') {
     result = await retryPlaybackAfterUnauthorized(
@@ -233,7 +240,12 @@ export async function sendCredentialSpotifyCommand(
   if (!token.ok) {
     return token;
   }
-  let result = await sendSpotifyCommand(token.value, command, options.fetcher);
+  let result = await sendSpotifyCommand(
+    token.value,
+    command,
+    options.fetcher,
+    options.requestTimeoutMs
+  );
   if (!result.ok && result.error.kind === 'unauthorized') {
     result = await retryCommandAfterUnauthorized(
       db,
@@ -275,7 +287,8 @@ async function retryPlaybackAfterUnauthorized(
     ? fetchSpotifyPlayback(
         token.value,
         options.fetcher,
-        new Date(nowMs).toISOString()
+        new Date(nowMs).toISOString(),
+        options.requestTimeoutMs
       )
     : token;
 }
@@ -303,7 +316,12 @@ async function retryCommandAfterUnauthorized(
     nowMs
   });
   return token.ok
-    ? sendSpotifyCommand(token.value, command, options.fetcher)
+    ? sendSpotifyCommand(
+        token.value,
+        command,
+        options.fetcher,
+        options.requestTimeoutMs
+      )
     : token;
 }
 

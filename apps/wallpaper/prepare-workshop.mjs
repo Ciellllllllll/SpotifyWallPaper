@@ -11,18 +11,27 @@ try {
   const properties = project?.general?.properties;
   const provider = properties?.spotify_playback_provider;
   const backendUrl = properties?.spotify_backend_url;
+  const clientId = properties?.spotify_client_id;
+  const refreshToken = properties?.spotify_refresh_token;
   const pairingToken = properties?.spotify_pairing_token;
+  const settingsJson = properties?.settings_json;
   if (
     provider?.type !== 'combo' ||
     backendUrl?.type !== 'textinput' ||
-    pairingToken?.type !== 'textinput'
+    clientId?.type !== 'textinput' ||
+    refreshToken?.type !== 'textinput' ||
+    pairingToken?.type !== 'textinput' ||
+    settingsJson?.type !== 'textinput'
   ) {
     throw new Error('Wallpaper project is missing required backend properties.');
   }
 
   provider.value = 'backend';
   backendUrl.value = officialOrigin;
+  clientId.value = '';
+  refreshToken.value = '';
   pairingToken.value = '';
+  settingsJson.value = '';
   await writeFile(projectPath, `${JSON.stringify(project, null, 2)}\n`, 'utf8');
 } catch {
   console.error('Workshop project preparation failed.');

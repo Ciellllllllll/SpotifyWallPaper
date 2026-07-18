@@ -54,9 +54,9 @@ export async function handleAuthStart(request: Request, env: Env): Promise<Respo
       : fixedError(503, 'Spotify authorization could not start.');
   }
 
-  const clientId = await readClientId(request);
+  const clientId = await readAuthStartClientId(request);
   if (clientId === null) {
-    return fixedError(400, 'A valid Spotify Client ID is required.');
+    return fixedError(400, 'Valid setup input and legal acceptance are required.');
   }
 
   try {
@@ -90,6 +90,9 @@ export async function handleReauthorize(request: Request, env: Env): Promise<Res
   const token = bearerToken(request);
   if (token === null) {
     return fixedError(401, 'A valid Pairing Token is required.');
+  }
+  if (!(await readLegalAcceptance(request))) {
+    return fixedError(400, 'Legal acceptance is required.');
   }
 
   try {
@@ -133,6 +136,12 @@ export async function handleReauthorize(request: Request, env: Env): Promise<Res
 }
 
 export async function handleAuthCallback(request: Request, env: Env): Promise<Response> {
+  const rateLimit = await checkAuthRateLimit(request, env);
+  if (rateLimit !== 'allowed') {
+    return rateLimit === 'limited'
+      ? authRateLimited()
+      : fixedError(503, 'Spotify authorization could not complete.');
+  }
   const callback = parseCallback(request);
   if (callback === null) {
     return callbackPage(400, 'error');
@@ -320,7 +329,7 @@ async function createAuthorizationSession(
   };
 }
 
-async function readClientId(request: Request): Promise<string | null> {
+async function readAuthStartClientId(request: Request): Promise<string | null> {
   try {
     if (
       request.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase() !==
@@ -339,8 +348,12 @@ async function readClientId(request: Request): Promise<string | null> {
     }).decode(bytes);
     const form = new URLSearchParams(body);
     if (
-      [...form.keys()].some((key) => key !== 'spotifyClientId') ||
-      form.getAll('spotifyClientId').length !== 1
+      [...form.keys()].some(
+        (key) => key !== 'spotifyClientId' && key !== 'legalAccepted'
+      ) ||
+      form.getAll('spotifyClientId').length !== 1 ||
+      form.getAll('legalAccepted').length !== 1 ||
+      form.get('legalAccepted') !== 'yes'
     ) {
       return null;
     }
@@ -348,6 +361,33 @@ async function readClientId(request: Request): Promise<string | null> {
     return clientId !== null && clientIdPattern.test(clientId) ? clientId : null;
   } catch {
     return null;
+  }
+}
+
+async function readLegalAcceptance(request: Request): Promise<boolean> {
+  try {
+    if (
+      request.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase() !==
+      'application/x-www-form-urlencoded'
+    ) {
+      return false;
+    }
+    const bytes = await readBoundedBytes(request, 256);
+    if (bytes === null) {
+      return false;
+    }
+    const body = new TextDecoder('utf-8', {
+      fatal: true,
+      ignoreBOM: true
+    }).decode(bytes);
+    const form = new URLSearchParams(body);
+    return (
+      [...form.keys()].every((key) => key === 'legalAccepted') &&
+      form.getAll('legalAccepted').length === 1 &&
+      form.get('legalAccepted') === 'yes'
+    );
+  } catch {
+    return false;
   }
 }
 
