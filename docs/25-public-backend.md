@@ -138,7 +138,7 @@ The Worker returns normalized playback only. `source` remains `spotify` and `fet
 
 Playback/control CORS permits Wallpaper Engine `Origin: null` and explicit local preview origins only. Allowed methods and headers are fixed, `Authorization` is required, and credentialed cookie CORS is disabled. CORS is not authentication.
 
-Setup/account management is same-origin and rejects `Origin: null`. Wallpaper requests use `redirect: 'error'`, `credentials: 'omit'`, and `referrerPolicy: 'no-referrer'`. The wallpaper permits HTTP loopback and the exact release-configured HTTPS origin only.
+Setup/account management is same-origin and rejects `Origin: null`. The native setup form also uses a ten-minute, `HttpOnly`, `Secure`, `SameSite=Strict` double-submit nonce so a browser that omits the `Origin` header can still authorize safely; cross-origin requests cannot read or send the required nonce. Wallpaper requests use `redirect: 'error'`, `credentials: 'omit'`, and `referrerPolicy: 'no-referrer'`. The wallpaper permits HTTP loopback and the exact release-configured HTTPS origin only.
 
 Cloudflare Rate Limiting bindings protect auth start, callback, and
 reauthorization by IP and API routes by `publicId`. Spotify's persisted

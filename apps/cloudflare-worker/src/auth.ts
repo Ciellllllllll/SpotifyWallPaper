@@ -16,7 +16,12 @@ import {
   insertOAuthSession,
   reauthorizeCredential
 } from './db';
-import { readBoundedBytes, readBoundedText } from './http';
+import {
+  isSetupOriginAbsent,
+  isSetupSameOrigin,
+  readBoundedBytes,
+  readBoundedText
+} from './http';
 import { callbackPage, fixedError } from './pages';
 import {
   activePairingKey,
@@ -44,7 +49,11 @@ interface TokenResponse {
 }
 
 export async function handleAuthStart(request: Request, env: Env): Promise<Response> {
-  if (!isSameOrigin(request, env)) {
+  const form = await readAuthStartForm(request);
+  if (
+    !isSetupSameOrigin(request, env) &&
+    !(isSetupOriginAbsent(request, env) && hasValidSetupNonce(request, form?.setupNonce))
+  ) {
     return fixedError(403, 'Same-origin setup is required.');
   }
   const rateLimit = await checkAuthRateLimit(request, env);
@@ -54,22 +63,26 @@ export async function handleAuthStart(request: Request, env: Env): Promise<Respo
       : fixedError(503, 'Spotify authorization could not start.');
   }
 
-  const clientId = await readAuthStartClientId(request);
-  if (clientId === null) {
+  if (form === null) {
     return fixedError(400, 'Valid setup input and legal acceptance are required.');
   }
 
   try {
-    const authorization = await createAuthorizationSession(env, clientId, null);
+    const authorization = await createAuthorizationSession(env, form.spotifyClientId, null);
+    const headers = new Headers({
+      'Cache-Control': 'no-store',
+      Location: authorization.authorizeUrl,
+      'Referrer-Policy': 'no-referrer',
+      'X-Content-Type-Options': 'nosniff'
+    });
+    headers.append('Set-Cookie', authorization.cookie);
+    headers.append(
+      'Set-Cookie',
+      'swpb_setup=; Path=/auth/start; Max-Age=0; HttpOnly; Secure; SameSite=Strict'
+    );
     return new Response(null, {
       status: 303,
-      headers: {
-        'Cache-Control': 'no-store',
-        Location: authorization.authorizeUrl,
-        'Referrer-Policy': 'no-referrer',
-        'Set-Cookie': authorization.cookie,
-        'X-Content-Type-Options': 'nosniff'
-      }
+      headers
     });
   } catch {
     return fixedError(500, 'Spotify authorization could not start.');
@@ -77,7 +90,7 @@ export async function handleAuthStart(request: Request, env: Env): Promise<Respo
 }
 
 export async function handleReauthorize(request: Request, env: Env): Promise<Response> {
-  if (!isSameOrigin(request, env)) {
+  if (!isSetupSameOrigin(request, env)) {
     return fixedError(403, 'Same-origin setup is required.');
   }
   const rateLimit = await checkAuthRateLimit(request, env);
@@ -329,7 +342,9 @@ async function createAuthorizationSession(
   };
 }
 
-async function readAuthStartClientId(request: Request): Promise<string | null> {
+async function readAuthStartForm(
+  request: Request
+): Promise<{ spotifyClientId: string; setupNonce: string } | null> {
   try {
     if (
       request.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase() !==
@@ -349,19 +364,37 @@ async function readAuthStartClientId(request: Request): Promise<string | null> {
     const form = new URLSearchParams(body);
     if (
       [...form.keys()].some(
-        (key) => key !== 'spotifyClientId' && key !== 'legalAccepted'
+        (key) =>
+          key !== 'spotifyClientId' && key !== 'legalAccepted' && key !== 'setupNonce'
       ) ||
       form.getAll('spotifyClientId').length !== 1 ||
       form.getAll('legalAccepted').length !== 1 ||
+      form.getAll('setupNonce').length !== 1 ||
       form.get('legalAccepted') !== 'yes'
     ) {
       return null;
     }
-    const clientId = form.get('spotifyClientId');
-    return clientId !== null && clientIdPattern.test(clientId) ? clientId : null;
+    const spotifyClientId = form.get('spotifyClientId');
+    const setupNonce = form.get('setupNonce');
+    if (
+      spotifyClientId === null ||
+      !clientIdPattern.test(spotifyClientId) ||
+      setupNonce === null
+    ) {
+      return null;
+    }
+    decodeBase64Url(setupNonce, 32);
+    return { spotifyClientId, setupNonce };
   } catch {
     return null;
   }
+}
+
+function hasValidSetupNonce(request: Request, setupNonce: string | undefined): boolean {
+  return (
+    setupNonce !== undefined &&
+    readCookie(request.headers.get('Cookie'), 'swpb_setup') === setupNonce
+  );
 }
 
 async function readLegalAcceptance(request: Request): Promise<boolean> {
@@ -501,18 +534,6 @@ function bearerToken(request: Request): string | null {
   }
   const token = authorization.slice('Bearer '.length);
   return token.length > 0 ? token : null;
-}
-
-function isSameOrigin(request: Request, env: Env): boolean {
-  try {
-    const expected = new URL(env.PUBLIC_BASE_URL);
-    return (
-      new URL(request.url).origin === expected.origin &&
-      request.headers.get('Origin') === expected.origin
-    );
-  } catch {
-    return false;
-  }
 }
 
 function redirectUri(env: Env): string {

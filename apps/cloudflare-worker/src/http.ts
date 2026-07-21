@@ -19,6 +19,17 @@ export function isSetupSameOrigin(request: Request, env: Env): boolean {
   }
 }
 
+export function isSetupOriginAbsent(request: Request, env: Env): boolean {
+  try {
+    return (
+      new URL(request.url).origin === new URL(env.PUBLIC_BASE_URL).origin &&
+      request.headers.get('Origin') === null
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function handleCorsPreflight(
   request: Request,
   allowedMethod: 'GET' | 'POST'

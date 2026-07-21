@@ -10,6 +10,7 @@ const securityHeaders = {
 
 export function setupPage(): Response {
   const nonce = randomBase64Url(16);
+  const setupNonce = randomBase64Url(32);
   return htmlResponse(
     200,
     `<!doctype html>
@@ -39,6 +40,7 @@ button{cursor:pointer}
 <form action="/auth/start" method="post">
 <label for="spotify-client-id">Spotify Client ID</label>
 <input id="spotify-client-id" name="spotifyClientId" autocomplete="off" required>
+<input type="hidden" name="setupNonce" value="${setupNonce}">
 <label class="legal"><input type="checkbox" name="legalAccepted" value="yes" required> I have read and accept the <a href="/terms">EULA</a> and acknowledge the <a href="/privacy">Privacy Notice</a>.</label>
 <button type="submit">Authorize Spotify</button>
 </form>
@@ -108,7 +110,11 @@ document.getElementById('delete-account-form').addEventListener('submit', async 
 </body>
 </html>`,
     nonce,
-    true
+    true,
+    {
+      'Set-Cookie':
+        `swpb_setup=${setupNonce}; Path=/auth/start; Max-Age=600; HttpOnly; Secure; SameSite=Strict`
+    }
   );
 }
 
