@@ -161,7 +161,8 @@ export function termsPage(): Response {
 export function callbackPage(
   status: number,
   outcome: 'authorized' | 'error' | 'reauthorized',
-  pairingToken?: string
+  pairingToken?: string,
+  failure?: 'browser' | 'spotify' | 'token' | 'server'
 ): Response {
   const nonce = randomBase64Url(16);
   const content =
@@ -169,7 +170,7 @@ export function callbackPage(
       ? `<h1>Spotify authorized</h1><p>Use this Pairing Token in Wallpaper Engine:</p><pre>${escapeHtml(pairingToken)}</pre>`
       : outcome === 'reauthorized'
         ? '<h1>Spotify reauthorized</h1><p>You can return to Wallpaper Engine.</p>'
-        : '<h1>Authorization failed</h1><p>Return to setup and try again.</p>';
+        : callbackFailureContent(failure);
 
   return htmlResponse(
     status,
@@ -191,6 +192,23 @@ export function callbackPage(
         'swpb_oauth=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax'
     }
   );
+}
+
+function callbackFailureContent(
+  failure: 'browser' | 'spotify' | 'token' | 'server' | undefined
+): string {
+  switch (failure) {
+    case 'browser':
+      return '<h1>Authorization failed</h1><p>Browser verification expired or was blocked. Open setup in a new tab and try again.</p>';
+    case 'spotify':
+      return '<h1>Authorization failed</h1><p>Spotify did not complete authorization. Check that this Spotify account is allowed for the app, then try again.</p>';
+    case 'token':
+      return '<h1>Authorization failed</h1><p>Spotify login was accepted, but access could not be completed. Check the Client ID and exact Redirect URI, then try again.</p>';
+    case 'server':
+      return '<h1>Authorization failed</h1><p>The backend could not complete authorization. Return to setup and try again.</p>';
+    default:
+      return '<h1>Authorization failed</h1><p>The authorization response was invalid. Return to setup and try again.</p>';
+  }
 }
 
 export function fixedError(status: number, message: string): Response {

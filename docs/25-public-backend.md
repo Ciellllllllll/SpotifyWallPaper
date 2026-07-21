@@ -56,6 +56,10 @@ Playback and control accept `Authorization: Bearer swpb1.<publicId>.<secret>`. P
 - D1 stores state/browser digests and an encrypted PKCE verifier.
 - Sessions expire within ten minutes, are deleted atomically when consumed,
   and abandoned expired sessions are purged by scheduled maintenance.
+- When an opaque-origin browser omits the callback Cookie, the Worker accepts
+  a first-time authorization only with the single-use, expiry-bound OAuth
+  state and PKCE verification. Reauthorization always requires a matching
+  callback Cookie. A malformed or duplicate callback Cookie is rejected.
 - Callback and setup pages set `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, restrictive CSP, frame denial, and `nosniff`.
 - Cloudflare invocation logs are disabled because callback URLs contain authorization codes.
 - Pairing Token generation occurs only after successful Spotify token exchange.

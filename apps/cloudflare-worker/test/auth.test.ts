@@ -174,6 +174,19 @@ describe('POST /auth/start', () => {
 });
 
 describe('GET /auth/callback', () => {
+  it('completes PKCE when an opaque-origin browser omits the callback cookie', async () => {
+    const started = await startAuth();
+    mockTokenExchange(validTokenResponse());
+
+    const response = await callWorker(
+      new Request(
+        `${baseUrl}/auth/callback?code=opaque-origin-code&state=${encodeURIComponent(started.state)}`
+      )
+    );
+
+    expect(response.status).toBe(200);
+  });
+
   it('exchanges PKCE, stores encrypted tokens, and reveals one Pairing Token', async () => {
     const started = await startAuth();
     const exchange = mockTokenExchange({
@@ -236,6 +249,7 @@ describe('GET /auth/callback', () => {
     const mismatchHtml = await mismatch.text();
     expect(mismatch.status).toBe(400);
     expectSecurityHeaders(mismatch, mismatchHtml);
+    expect(mismatchHtml).toContain('Browser verification expired or was blocked.');
     expect(mismatchHtml).not.toContain('sensitive-code');
     expect(mismatchHtml).not.toContain(started.state);
 
@@ -248,6 +262,21 @@ describe('GET /auth/callback', () => {
     expect(replayHtml).not.toContain(started.state);
   });
 
+  it('rejects malformed callback cookies instead of treating them as missing', async () => {
+    const started = await startAuth();
+    const exchange = mockTokenExchange(validTokenResponse());
+
+    const response = await callWorker(
+      new Request(
+        `${baseUrl}/auth/callback?code=duplicate-cookie-code&state=${encodeURIComponent(started.state)}`,
+        { headers: { Cookie: 'swpb_oauth=first; swpb_oauth=second' } }
+      )
+    );
+
+    expect(response.status).toBe(400);
+    expect(exchange).not.toHaveBeenCalled();
+  });
+
   it('redacts Spotify denial and malformed token responses', async () => {
     const denied = await startAuth();
     const denialResponse = await callWorker(
@@ -257,6 +286,7 @@ describe('GET /auth/callback', () => {
     );
     const denialHtml = await denialResponse.text();
     expect(denialResponse.status).toBe(400);
+    expect(denialHtml).toContain('Spotify did not complete authorization.');
     expect(denialHtml).not.toContain('access_denied');
     expect(denialHtml).not.toContain(denied.state);
 
@@ -269,6 +299,7 @@ describe('GET /auth/callback', () => {
     const malformedResponse = await callback(malformed, 'malformed-response-code');
     const malformedHtml = await malformedResponse.text();
     expect(malformedResponse.status).toBe(502);
+    expect(malformedHtml).toContain('Spotify login was accepted, but access could not be completed.');
     expect(malformedHtml).not.toContain('access-without-refresh');
     expect(malformedHtml).not.toContain('malformed-response-code');
     expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM credentials').first('count')).toBe(0);
@@ -481,6 +512,11 @@ describe('POST /auth/reauthorize', () => {
     const authorizeUrl = new URL(reauthorizationBody.value.authorizeUrl);
     const state = authorizeUrl.searchParams.get('state')!;
     const browserNonce = cookieValue(requiredHeader(reauthorization, 'set-cookie'));
+
+    const missingCookie = await callWorker(
+      new Request(`${baseUrl}/auth/callback?code=reauthorization-code&state=${state}`)
+    );
+    expect(missingCookie.status).toBe(400);
 
     mockTokenExchange({
       ...validTokenResponse(),

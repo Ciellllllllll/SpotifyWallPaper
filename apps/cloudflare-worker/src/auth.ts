@@ -153,7 +153,7 @@ export async function handleAuthCallback(request: Request, env: Env): Promise<Re
   }
   const callback = parseCallback(request);
   if (callback === null) {
-    return callbackPage(400, 'error');
+    return callbackPage(400, 'error', undefined, 'browser');
   }
 
   try {
@@ -162,11 +162,10 @@ export async function handleAuthCallback(request: Request, env: Env): Promise<Re
       'oauth-state',
       env.OAUTH_STATE_HMAC_KEY
     );
-    const browserDigest = await keyedDigest(
-      callback.browserNonce,
-      'oauth-browser',
-      env.OAUTH_STATE_HMAC_KEY
-    );
+    const browserDigest =
+      callback.browserNonce === null
+        ? null
+        : await keyedDigest(callback.browserNonce, 'oauth-browser', env.OAUTH_STATE_HMAC_KEY);
     const nowMs = Date.now();
     const session = await consumeOAuthSession(
       env.DB,
@@ -174,14 +173,17 @@ export async function handleAuthCallback(request: Request, env: Env): Promise<Re
       browserDigest,
       nowMs
     );
-    if (session === null || callback.denied) {
-      return callbackPage(400, 'error');
+    if (session === null) {
+      return callbackPage(400, 'error', undefined, 'browser');
+    }
+    if (callback.denied) {
+      return callbackPage(400, 'error', undefined, 'spotify');
     }
     if (
       session.credentialPublicId !== null &&
       (await isDeletionTombstoned(env.DELETION_DB, session.credentialPublicId))
     ) {
-      return callbackPage(400, 'error');
+      return callbackPage(400, 'error', undefined, 'browser');
     }
 
     const encryptionKeyring = parseSecretKeyring(env.TOKEN_ENCRYPTION_KEYRING);
@@ -201,7 +203,7 @@ export async function handleAuthCallback(request: Request, env: Env): Promise<Re
       redirectUri(env)
     );
     if (tokens === null) {
-      return callbackPage(502, 'error');
+      return callbackPage(502, 'error', undefined, 'token');
     }
 
     const accessTokenExpiresAtMs = nowMs + tokens.expiresInSeconds * 1000;
@@ -280,9 +282,11 @@ export async function handleAuthCallback(request: Request, env: Env): Promise<Re
       refreshAuthorizedAtMs: nowMs,
       nowMs
     });
-    return updated ? callbackPage(200, 'reauthorized') : callbackPage(400, 'error');
+    return updated
+      ? callbackPage(200, 'reauthorized')
+      : callbackPage(400, 'error', undefined, 'browser');
   } catch {
-    return callbackPage(500, 'error');
+    return callbackPage(500, 'error', undefined, 'server');
   }
 }
 
@@ -418,7 +422,7 @@ async function readLegalAcceptance(request: Request): Promise<boolean> {
 
 function parseCallback(request: Request): {
   state: string;
-  browserNonce: string;
+  browserNonce: string | null;
   code: string;
   denied: boolean;
 } | null {
@@ -442,9 +446,14 @@ function parseCallback(request: Request): {
   const state = states[0];
   const code = codes[0] ?? '';
   const browserNonce = readCookie(request.headers.get('Cookie'), oauthCookieName);
+  if (browserNonce === null) {
+    return null;
+  }
   try {
     decodeBase64Url(state, 32);
-    decodeBase64Url(browserNonce, 32);
+    if (browserNonce !== undefined) {
+      decodeBase64Url(browserNonce, 32);
+    }
   } catch {
     return null;
   }
@@ -454,7 +463,7 @@ function parseCallback(request: Request): {
 
   return {
     state,
-    browserNonce,
+    browserNonce: browserNonce ?? null,
     code,
     denied: errors.length === 1
   };
@@ -542,16 +551,16 @@ function redirectUri(env: Env): string {
   return `${base.origin}/auth/callback`;
 }
 
-function readCookie(header: string | null, name: string): string {
+function readCookie(header: string | null, name: string): string | null | undefined {
   if (header === null) {
-    return '';
+    return undefined;
   }
   const values = header
     .split(';')
     .map((part) => part.trim())
     .filter((part) => part.startsWith(`${name}=`))
     .map((part) => part.slice(name.length + 1));
-  return values.length === 1 ? values[0] : '';
+  return values.length === 0 ? undefined : values.length === 1 ? values[0] : null;
 }
 
 function boundedToken(value: unknown): value is string {
