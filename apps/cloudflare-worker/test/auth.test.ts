@@ -233,7 +233,7 @@ describe('GET /auth/callback', () => {
     ).toBe(0);
   });
 
-  it('rejects browser mismatch and replay without exposing callback values', async () => {
+  it('completes first-time PKCE with a stale callback cookie and rejects replay', async () => {
     const started = await startAuth();
     mockTokenExchange(validTokenResponse());
     const mismatch = await callWorker(
@@ -247,14 +247,11 @@ describe('GET /auth/callback', () => {
       )
     );
     const mismatchHtml = await mismatch.text();
-    expect(mismatch.status).toBe(400);
+    expect(mismatch.status).toBe(200);
     expectSecurityHeaders(mismatch, mismatchHtml);
-    expect(mismatchHtml).toContain('Browser verification expired or was blocked.');
     expect(mismatchHtml).not.toContain('sensitive-code');
     expect(mismatchHtml).not.toContain(started.state);
 
-    const success = await callback(started, 'valid-code');
-    expect(success.status).toBe(200);
     const replay = await callback(started, 'replayed-code');
     const replayHtml = await replay.text();
     expect(replay.status).toBe(400);
@@ -262,7 +259,7 @@ describe('GET /auth/callback', () => {
     expect(replayHtml).not.toContain(started.state);
   });
 
-  it('rejects malformed callback cookies instead of treating them as missing', async () => {
+  it('completes first-time PKCE with a malformed callback cookie', async () => {
     const started = await startAuth();
     const exchange = mockTokenExchange(validTokenResponse());
 
@@ -273,8 +270,8 @@ describe('GET /auth/callback', () => {
       )
     );
 
-    expect(response.status).toBe(400);
-    expect(exchange).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(exchange).toHaveBeenCalledOnce();
   });
 
   it('redacts Spotify denial and malformed token responses', async () => {
@@ -517,6 +514,13 @@ describe('POST /auth/reauthorize', () => {
       new Request(`${baseUrl}/auth/callback?code=reauthorization-code&state=${state}`)
     );
     expect(missingCookie.status).toBe(400);
+
+    const mismatchedCookie = await callWorker(
+      new Request(`${baseUrl}/auth/callback?code=reauthorization-code&state=${state}`, {
+        headers: { Cookie: 'swpb_oauth=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }
+      })
+    );
+    expect(mismatchedCookie.status).toBe(400);
 
     mockTokenExchange({
       ...validTokenResponse(),

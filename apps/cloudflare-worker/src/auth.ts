@@ -171,7 +171,8 @@ export async function handleAuthCallback(request: Request, env: Env): Promise<Re
       env.DB,
       stateDigest,
       browserDigest,
-      nowMs
+      nowMs,
+      true
     );
     if (session === null) {
       return callbackPage(400, 'error', undefined, 'browser');
@@ -446,12 +447,9 @@ function parseCallback(request: Request): {
   const state = states[0];
   const code = codes[0] ?? '';
   const browserNonce = readCookie(request.headers.get('Cookie'), oauthCookieName);
-  if (browserNonce === null) {
-    return null;
-  }
   try {
     decodeBase64Url(state, 32);
-    if (browserNonce !== undefined) {
+    if (typeof browserNonce === 'string') {
       decodeBase64Url(browserNonce, 32);
     }
   } catch {
@@ -560,7 +558,11 @@ function readCookie(header: string | null, name: string): string | null | undefi
     .map((part) => part.trim())
     .filter((part) => part.startsWith(`${name}=`))
     .map((part) => part.slice(name.length + 1));
-  return values.length === 0 ? undefined : values.length === 1 ? values[0] : null;
+  return values.length === 0
+    ? undefined
+    : values.length === 1 && values[0] !== ''
+      ? values[0]
+      : null;
 }
 
 function boundedToken(value: unknown): value is string {

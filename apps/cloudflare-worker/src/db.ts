@@ -159,21 +159,22 @@ export async function consumeOAuthSession(
   db: D1Database,
   stateDigest: string,
   browserDigest: string | null,
-  nowMs: number
+  nowMs: number,
+  allowInitialWithoutBrowser = false
 ): Promise<OAuthSession | null> {
   const row = await db
     .prepare(
       `DELETE FROM oauth_sessions
        WHERE state_digest = ?
          AND (
-           (? IS NOT NULL AND browser_digest = ?)
-           OR (? IS NULL AND credential_public_id IS NULL)
+           browser_digest = ?
+           OR (? = 1 AND credential_public_id IS NULL)
          )
          AND consumed_at_ms IS NULL
          AND expires_at_ms >= ?
        RETURNING *`
     )
-    .bind(stateDigest, browserDigest, browserDigest, browserDigest, nowMs)
+    .bind(stateDigest, browserDigest, allowInitialWithoutBrowser ? 1 : 0, nowMs)
     .first<OAuthSessionRow>();
 
   return row === null ? null : mapOAuthSession(row);
