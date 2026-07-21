@@ -97,7 +97,7 @@ async function routeRequest(request: Request, env: Env): Promise<Response> {
       return Response.json(body);
     }
     if (request.method === 'GET' && url.pathname === '/setup') {
-      return setupPage();
+      return setupPage(env);
     }
     if (request.method === 'GET' && url.pathname === '/privacy') {
       return privacyPage();

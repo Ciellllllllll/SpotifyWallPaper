@@ -33,7 +33,7 @@ export function createOAuthState(): string {
 
 export async function keyedDigest(
   value: string,
-  purpose: 'oauth-browser' | 'oauth-state',
+  purpose: 'oauth-browser' | 'oauth-state' | 'setup-form',
   encodedKey: string
 ): Promise<string> {
   try {
@@ -55,6 +55,36 @@ export async function keyedDigest(
     return encodeBase64Url(new Uint8Array(digest));
   } catch {
     throw new Error('Digest generation failed.');
+  }
+}
+
+export async function createSetupProof(encodedKey: string, nowMs = Date.now()): Promise<string> {
+  const expiresAtMs = nowMs + 10 * 60 * 1000;
+  const payload = `${expiresAtMs}.${randomBase64Url(32)}`;
+  const signature = await keyedDigest(payload, 'setup-form', encodedKey);
+  return `${payload}.${signature}`;
+}
+
+export async function verifySetupProof(
+  value: string,
+  encodedKey: string,
+  nowMs = Date.now()
+): Promise<boolean> {
+  const parts = value.split('.');
+  if (parts.length !== 3 || !/^\d{13}$/.test(parts[0])) {
+    return false;
+  }
+  const [expiresAtText, nonce, signature] = parts;
+  const expiresAtMs = Number(expiresAtText);
+  if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs < nowMs) {
+    return false;
+  }
+  try {
+    decodeBase64Url(nonce, 32);
+    decodeBase64Url(signature, 32);
+    return signature === (await keyedDigest(`${expiresAtText}.${nonce}`, 'setup-form', encodedKey));
+  } catch {
+    return false;
   }
 }
 

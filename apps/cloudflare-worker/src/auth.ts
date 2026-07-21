@@ -6,7 +6,8 @@ import {
   encryptSecret,
   keyedDigest,
   parseSecretKeyring,
-  randomBase64Url
+  randomBase64Url,
+  verifySetupProof
 } from './crypto';
 import {
   consumeOAuthSession,
@@ -17,7 +18,6 @@ import {
   reauthorizeCredential
 } from './db';
 import {
-  isSetupOriginAbsent,
   isSetupSameOrigin,
   readBoundedBytes,
   readBoundedText
@@ -52,7 +52,7 @@ export async function handleAuthStart(request: Request, env: Env): Promise<Respo
   const form = await readAuthStartForm(request);
   if (
     !isSetupSameOrigin(request, env) &&
-    !(isSetupOriginAbsent(request, env) && hasValidSetupNonce(request, form?.setupNonce))
+    !(await hasValidSetupProof(form?.setupProof, env))
   ) {
     return fixedError(403, 'Same-origin setup is required.');
   }
@@ -76,10 +76,6 @@ export async function handleAuthStart(request: Request, env: Env): Promise<Respo
       'X-Content-Type-Options': 'nosniff'
     });
     headers.append('Set-Cookie', authorization.cookie);
-    headers.append(
-      'Set-Cookie',
-      'swpb_setup=; Path=/auth/start; Max-Age=0; HttpOnly; Secure; SameSite=Strict'
-    );
     return new Response(null, {
       status: 303,
       headers
@@ -344,7 +340,7 @@ async function createAuthorizationSession(
 
 async function readAuthStartForm(
   request: Request
-): Promise<{ spotifyClientId: string; setupNonce: string } | null> {
+): Promise<{ spotifyClientId: string; setupProof: string } | null> {
   try {
     if (
       request.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase() !==
@@ -365,36 +361,32 @@ async function readAuthStartForm(
     if (
       [...form.keys()].some(
         (key) =>
-          key !== 'spotifyClientId' && key !== 'legalAccepted' && key !== 'setupNonce'
+          key !== 'spotifyClientId' && key !== 'legalAccepted' && key !== 'setupProof'
       ) ||
       form.getAll('spotifyClientId').length !== 1 ||
       form.getAll('legalAccepted').length !== 1 ||
-      form.getAll('setupNonce').length !== 1 ||
+      form.getAll('setupProof').length !== 1 ||
       form.get('legalAccepted') !== 'yes'
     ) {
       return null;
     }
     const spotifyClientId = form.get('spotifyClientId');
-    const setupNonce = form.get('setupNonce');
+    const setupProof = form.get('setupProof');
     if (
       spotifyClientId === null ||
       !clientIdPattern.test(spotifyClientId) ||
-      setupNonce === null
+      setupProof === null
     ) {
       return null;
     }
-    decodeBase64Url(setupNonce, 32);
-    return { spotifyClientId, setupNonce };
+    return { spotifyClientId, setupProof };
   } catch {
     return null;
   }
 }
 
-function hasValidSetupNonce(request: Request, setupNonce: string | undefined): boolean {
-  return (
-    setupNonce !== undefined &&
-    readCookie(request.headers.get('Cookie'), 'swpb_setup') === setupNonce
-  );
+async function hasValidSetupProof(setupProof: string | undefined, env: Env): Promise<boolean> {
+  return setupProof !== undefined && (await verifySetupProof(setupProof, env.OAUTH_STATE_HMAC_KEY));
 }
 
 async function readLegalAcceptance(request: Request): Promise<boolean> {

@@ -34,10 +34,11 @@ describe('GET /setup', () => {
     expect(html).toContain('action="/auth/start"');
     expect(html).toContain('name="spotifyClientId"');
     expect(html).toContain('name="legalAccepted"');
-    expect(html).toContain('name="setupNonce"');
-    expect(response.headers.get('set-cookie')).toMatch(
-      /^swpb_setup=[A-Za-z0-9_-]{43}; Path=\/auth\/start; Max-Age=600; HttpOnly; Secure; SameSite=Strict$/
+    expect(html).toContain('name="setupProof"');
+    expect(html).toMatch(
+      /name="setupProof" value="\d{13}\.[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}"/
     );
+    expect(response.headers.get('set-cookie')).toBeNull();
     expect(html).toContain('href="/privacy"');
     expect(html).toContain('href="/terms"');
     expect(html).toContain('active Spotify Premium');
@@ -81,17 +82,24 @@ describe('GET /privacy and /terms', () => {
 });
 
 describe('POST /auth/start', () => {
-  it('rejects cross-origin, malformed, and caller-expanded requests', async () => {
-    expect((await startAuth({ origin: 'https://attacker.example' })).response.status).toBe(403);
+  it('rejects requests without a valid setup proof, malformed, and caller-expanded requests', async () => {
     expect(
-      (await startAuth({ origin: 'null', fetchSite: 'same-origin' })).response.status
+      (await startAuth({ origin: 'https://attacker.example', setupProof: null })).response.status
     ).toBe(403);
-    expect((await startAuth({ origin: null, setupNonce: null })).response.status).toBe(403);
+    expect(
+      (
+        await startAuth({
+          origin: 'https://attacker.example',
+          setupProof: null
+        })
+      ).response.status
+    ).toBe(403);
+    expect((await startAuth({ origin: null, setupProof: null })).response.status).toBe(403);
     expect(
       (
         await startAuth({
           origin: null,
-          setupNonce: 'A'.repeat(43)
+          setupProof: 'A'.repeat(101)
         })
       ).response.status
     ).toBe(403);
@@ -100,8 +108,20 @@ describe('POST /auth/start', () => {
     expect((await startAuth({ extra: 'scope=user-read-email' })).response.status).toBe(400);
   });
 
-  it('accepts a setup nonce when Origin is absent', async () => {
+  it('accepts a setup proof when Origin is absent', async () => {
     const started = await startAuth({ origin: null });
+
+    expect(started.response.status).toBe(303);
+  });
+
+  it('accepts a setup proof when Chrome sends Origin null without a Cookie', async () => {
+    const started = await startAuth({ origin: 'null' });
+
+    expect(started.response.status).toBe(303);
+  });
+
+  it('accepts a setup proof when Chrome sends a nonstandard Origin', async () => {
+    const started = await startAuth({ origin: 'chrome-extension://example' });
 
     expect(started.response.status).toBe(303);
   });
@@ -137,9 +157,6 @@ describe('POST /auth/start', () => {
     );
     expect(cookie).toMatch(
       /swpb_oauth=[A-Za-z0-9_-]{43}; Path=\/auth\/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax/
-    );
-    expect(cookie).toContain(
-      'swpb_setup=; Path=/auth/start; Max-Age=0; HttpOnly; Secure; SameSite=Strict'
     );
 
     const session = await env.DB.prepare('SELECT * FROM oauth_sessions').first<
@@ -504,12 +521,12 @@ async function startAuth(options: {
   extra?: string;
   legalAccepted?: boolean;
   fetchSite?: string;
-  setupNonce?: string | null;
+  setupProof?: string | null;
 } = {}): Promise<StartedAuthorization> {
-  const setup = await setupNonce();
+  const setup = await setupProof();
   const body = new URLSearchParams({ spotifyClientId: options.clientId ?? clientId });
-  if (options.setupNonce !== null) {
-    body.set('setupNonce', options.setupNonce ?? setup.nonce);
+  if (options.setupProof !== null) {
+    body.set('setupProof', options.setupProof ?? setup);
   }
   if (options.legalAccepted !== false) {
     body.set('legalAccepted', 'yes');
@@ -520,8 +537,7 @@ async function startAuth(options: {
   }
 
   const headers = new Headers({
-    'Content-Type': 'application/x-www-form-urlencoded',
-    Cookie: setup.cookie
+    'Content-Type': 'application/x-www-form-urlencoded'
   });
   if (options.origin !== null) {
     headers.set('Origin', options.origin ?? baseUrl);
@@ -548,11 +564,10 @@ async function startAuth(options: {
   };
 }
 
-async function setupNonce(): Promise<{ nonce: string; cookie: string }> {
+async function setupProof(): Promise<string> {
   const response = await callWorker(new Request(`${baseUrl}/setup`));
-  const cookie = requiredHeader(response, 'set-cookie');
-  const nonce = cookie.match(/^swpb_setup=([^;]+)/)?.[1] ?? '';
-  return { nonce, cookie };
+  const html = await response.text();
+  return html.match(/name="setupProof" value="([A-Za-z0-9_.-]+)"/)?.[1] ?? '';
 }
 
 async function callback(started: StartedAuthorization, code: string): Promise<Response> {

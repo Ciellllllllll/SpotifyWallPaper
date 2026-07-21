@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createSetupProof,
   createOAuthState,
   decryptSecret,
   encryptSecret,
-  randomBase64Url
+  randomBase64Url,
+  verifySetupProof
 } from '../src/crypto';
 import {
   generatePairingToken,
@@ -38,6 +40,18 @@ describe('secret generation', () => {
 
   it('uses exact byte lengths for generic random values', () => {
     expect(randomBase64Url(12)).toMatch(/^[A-Za-z0-9_-]{16}$/);
+  });
+
+  it('creates a signed setup proof that expires after ten minutes', async () => {
+    const nowMs = 1_700_000_000_000;
+    const proof = await createSetupProof(pairingKey, nowMs);
+
+    expect(proof).toMatch(/^\d{13}\.[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/);
+    await expect(verifySetupProof(proof, pairingKey, nowMs)).resolves.toBe(true);
+    await expect(verifySetupProof(proof, pairingKey, nowMs + 600_001)).resolves.toBe(false);
+    await expect(
+      verifySetupProof(`${proof.slice(0, -1)}${proof.endsWith('A') ? 'Q' : 'A'}`, pairingKey, nowMs)
+    ).resolves.toBe(false);
   });
 });
 
