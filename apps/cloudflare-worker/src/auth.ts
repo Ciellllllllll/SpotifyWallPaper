@@ -48,6 +48,20 @@ interface TokenResponse {
   expiresInSeconds: number;
 }
 
+type TokenExchangeResult =
+  | { ok: true; tokens: TokenResponse }
+  | {
+      ok: false;
+      failure:
+        | 'token-rejected'
+        | 'token-client'
+        | 'token-rate-limited'
+        | 'token-unavailable'
+        | 'token-response'
+        | 'token-scopes'
+        | 'token-network';
+    };
+
 export async function handleAuthStart(request: Request, env: Env): Promise<Response> {
   const form = await readAuthStartForm(request);
   if (
@@ -197,15 +211,16 @@ export async function handleAuthCallback(request: Request, env: Env): Promise<Re
       },
       encryptionKeyring
     );
-    const tokens = await exchangeAuthorizationCode(
+    const tokenExchange = await exchangeAuthorizationCode(
       callback.code,
       verifier,
       session.spotifyClientId,
       redirectUri(env)
     );
-    if (tokens === null) {
-      return callbackPage(502, 'error', undefined, 'token');
+    if (!tokenExchange.ok) {
+      return callbackPage(502, 'error', undefined, tokenExchange.failure);
     }
+    const tokens = tokenExchange.tokens;
 
     const accessTokenExpiresAtMs = nowMs + tokens.expiresInSeconds * 1000;
     if (session.credentialPublicId === null) {
@@ -472,7 +487,7 @@ async function exchangeAuthorizationCode(
   verifier: string,
   spotifyClientId: string,
   callbackUri: string
-): Promise<TokenResponse | null> {
+): Promise<TokenExchangeResult> {
   try {
     const response = await fetch(tokenEndpoint, {
       method: 'POST',
@@ -488,37 +503,56 @@ async function exchangeAuthorizationCode(
       }).toString(),
       redirect: 'error'
     });
+    if (response.status === 400) {
+      return { ok: false, failure: 'token-rejected' };
+    }
+    if (response.status === 401) {
+      return { ok: false, failure: 'token-client' };
+    }
+    if (response.status === 429) {
+      return { ok: false, failure: 'token-rate-limited' };
+    }
     if (!response.ok) {
-      return null;
+      return { ok: false, failure: 'token-unavailable' };
     }
 
     const text = await readBoundedText(response, 32_768);
     if (text === null) {
-      return null;
+      return { ok: false, failure: 'token-response' };
     }
-    const parsed: unknown = JSON.parse(text);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return { ok: false, failure: 'token-response' };
+    }
     if (parsed === null || Array.isArray(parsed) || typeof parsed !== 'object') {
-      return null;
+      return { ok: false, failure: 'token-response' };
     }
     const body = parsed as Record<string, unknown>;
     if (
       !boundedToken(body.access_token) ||
       !boundedToken(body.refresh_token) ||
       body.token_type !== 'Bearer' ||
-      !hasExactSpotifyScopes(body.scope) ||
       !Number.isInteger(body.expires_in) ||
       (body.expires_in as number) < 1 ||
       (body.expires_in as number) > 86_400
     ) {
-      return null;
+      return { ok: false, failure: 'token-response' };
+    }
+    if (!hasExactSpotifyScopes(body.scope)) {
+      return { ok: false, failure: 'token-scopes' };
     }
     return {
-      accessToken: body.access_token,
-      refreshToken: body.refresh_token,
-      expiresInSeconds: body.expires_in as number
+      ok: true,
+      tokens: {
+        accessToken: body.access_token,
+        refreshToken: body.refresh_token,
+        expiresInSeconds: body.expires_in as number
+      }
     };
   } catch {
-    return null;
+    return { ok: false, failure: 'token-network' };
   }
 }
 

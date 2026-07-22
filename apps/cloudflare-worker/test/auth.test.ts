@@ -296,7 +296,7 @@ describe('GET /auth/callback', () => {
     const malformedResponse = await callback(malformed, 'malformed-response-code');
     const malformedHtml = await malformedResponse.text();
     expect(malformedResponse.status).toBe(502);
-    expect(malformedHtml).toContain('Spotify login was accepted, but access could not be completed.');
+    expect(malformedHtml).toContain('Spotify returned an incomplete authorization response.');
     expect(malformedHtml).not.toContain('access-without-refresh');
     expect(malformedHtml).not.toContain('malformed-response-code');
     expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM credentials').first('count')).toBe(0);
@@ -358,7 +358,25 @@ describe('GET /auth/callback', () => {
 
     expect(response.status).toBe(502);
     expect(html).not.toContain('insufficient-scope-code');
+    expect(html).toContain('Spotify approved different permissions than this wallpaper requires.');
     expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM credentials').first('count')).toBe(0);
+  });
+
+  it('reports a safe token-exchange rejection category without exposing Spotify response text', async () => {
+    const started = await startAuth();
+    const spotifyResponseText = 'spotify-internal-error-that-must-not-be-displayed';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(spotifyResponseText, { status: 400 }))
+    );
+
+    const response = await callback(started, 'token-rejected-code');
+    const html = await response.text();
+
+    expect(response.status).toBe(502);
+    expect(html).toContain('Spotify rejected the token exchange. Check the application settings and try again.');
+    expect(html).not.toContain(spotifyResponseText);
+    expect(html).not.toContain('token-rejected-code');
   });
 
   it('cancels an undeclared multibyte token response after the byte limit', async () => {

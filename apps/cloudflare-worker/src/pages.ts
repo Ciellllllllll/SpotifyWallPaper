@@ -162,7 +162,17 @@ export function callbackPage(
   status: number,
   outcome: 'authorized' | 'error' | 'reauthorized',
   pairingToken?: string,
-  failure?: 'browser' | 'spotify' | 'token' | 'server'
+  failure?:
+    | 'browser'
+    | 'spotify'
+    | 'token-rejected'
+    | 'token-client'
+    | 'token-rate-limited'
+    | 'token-unavailable'
+    | 'token-response'
+    | 'token-scopes'
+    | 'token-network'
+    | 'server'
 ): Response {
   const nonce = randomBase64Url(16);
   const content =
@@ -195,15 +205,38 @@ export function callbackPage(
 }
 
 function callbackFailureContent(
-  failure: 'browser' | 'spotify' | 'token' | 'server' | undefined
+  failure:
+    | 'browser'
+    | 'spotify'
+    | 'token-rejected'
+    | 'token-client'
+    | 'token-rate-limited'
+    | 'token-unavailable'
+    | 'token-response'
+    | 'token-scopes'
+    | 'token-network'
+    | 'server'
+    | undefined
 ): string {
   switch (failure) {
     case 'browser':
       return '<h1>Authorization failed</h1><p>Browser verification expired or was blocked. Open setup in a new tab and try again.</p>';
     case 'spotify':
       return '<h1>Authorization failed</h1><p>Spotify did not complete authorization. Check that this Spotify account is allowed for the app, then try again.</p>';
-    case 'token':
-      return '<h1>Authorization failed</h1><p>Spotify login was accepted, but access could not be completed. Check the Client ID and exact Redirect URI, then try again.</p>';
+    case 'token-rejected':
+      return '<h1>Authorization failed</h1><p>Spotify rejected the token exchange. Check the application settings and try again.</p>';
+    case 'token-client':
+      return '<h1>Authorization failed</h1><p>Spotify rejected this Client ID during token exchange. Check the application settings and try again.</p>';
+    case 'token-rate-limited':
+      return '<h1>Authorization failed</h1><p>Spotify is temporarily rate limiting authorization. Wait a few minutes, then try again.</p>';
+    case 'token-unavailable':
+      return '<h1>Authorization failed</h1><p>Spotify was temporarily unavailable during token exchange. Try again later.</p>';
+    case 'token-response':
+      return '<h1>Authorization failed</h1><p>Spotify returned an incomplete authorization response. Check the application settings and try again.</p>';
+    case 'token-scopes':
+      return '<h1>Authorization failed</h1><p>Spotify approved different permissions than this wallpaper requires.</p>';
+    case 'token-network':
+      return '<h1>Authorization failed</h1><p>The backend could not reach Spotify to complete token exchange. Try again later.</p>';
     case 'server':
       return '<h1>Authorization failed</h1><p>The backend could not complete authorization. Return to setup and try again.</p>';
     default:
