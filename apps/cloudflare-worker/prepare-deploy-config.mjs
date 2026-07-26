@@ -117,6 +117,7 @@ function requirePublicOrigin(value) {
     url.hash ||
     (url.pathname && url.pathname !== '/') ||
     url.hostname === 'localhost' ||
+    url.hostname.endsWith('.workers.dev') ||
     url.hostname.endsWith('.invalid') ||
     !url.hostname.includes('.')
   ) {

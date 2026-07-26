@@ -65,27 +65,42 @@ export async function createSetupProof(encodedKey: string, nowMs = Date.now()): 
   return `${payload}.${signature}`;
 }
 
+export type SetupProofVerification = 'valid' | 'expired' | 'invalid';
+
+export async function classifySetupProof(
+  value: string,
+  encodedKey: string,
+  nowMs = Date.now()
+): Promise<SetupProofVerification> {
+  const parts = value.split('.');
+  if (parts.length !== 3 || !/^\d{13}$/.test(parts[0])) {
+    return 'invalid';
+  }
+  const [expiresAtText, nonce, signature] = parts;
+  const expiresAtMs = Number(expiresAtText);
+  if (!Number.isSafeInteger(expiresAtMs)) {
+    return 'invalid';
+  }
+  if (expiresAtMs < nowMs) {
+    return 'expired';
+  }
+  try {
+    decodeBase64Url(nonce, 32);
+    decodeBase64Url(signature, 32);
+    return signature === (await keyedDigest(`${expiresAtText}.${nonce}`, 'setup-form', encodedKey))
+      ? 'valid'
+      : 'invalid';
+  } catch {
+    return 'invalid';
+  }
+}
+
 export async function verifySetupProof(
   value: string,
   encodedKey: string,
   nowMs = Date.now()
 ): Promise<boolean> {
-  const parts = value.split('.');
-  if (parts.length !== 3 || !/^\d{13}$/.test(parts[0])) {
-    return false;
-  }
-  const [expiresAtText, nonce, signature] = parts;
-  const expiresAtMs = Number(expiresAtText);
-  if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs < nowMs) {
-    return false;
-  }
-  try {
-    decodeBase64Url(nonce, 32);
-    decodeBase64Url(signature, 32);
-    return signature === (await keyedDigest(`${expiresAtText}.${nonce}`, 'setup-form', encodedKey));
-  } catch {
-    return false;
-  }
+  return (await classifySetupProof(value, encodedKey, nowMs)) === 'valid';
 }
 
 export function parseSecretKeyring(serialized: string): SecretKeyring {

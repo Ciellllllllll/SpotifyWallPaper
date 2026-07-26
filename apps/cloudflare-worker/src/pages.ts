@@ -36,6 +36,7 @@ button{cursor:pointer}
 <h2 id="development-mode">Spotify Development Mode requirements</h2>
 <p>The app owner needs active Spotify Premium. Spotify normally permits one Client ID per developer and five authenticated users per app. Existing resources may be grandfathered under Spotify's migration rules. Add every user to the app allowlist before authorizing.</p>
 <p><a href="https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide">Read Spotify's February 2026 migration guide</a>.</p>
+<p>Complete authorization within ten minutes. If the page does not navigate, retry in a clean Chrome profile with extensions disabled and inspect the Network /auth/start status.</p>
 </section>
 <form action="/auth/start" method="post">
 <label for="spotify-client-id">Spotify Client ID</label>
@@ -111,6 +112,29 @@ document.getElementById('delete-account-form').addEventListener('submit', async 
 </html>`,
     nonce,
     true
+  );
+}
+
+export function authStartFailurePage(
+  status: 400 | 403 | 429 | 500 | 503,
+  code:
+    | 'SETUP_PROOF_EXPIRED'
+    | 'SETUP_PROOF_INVALID'
+    | 'AUTH_INPUT_INVALID'
+    | 'AUTH_RATE_LIMITED'
+    | 'AUTH_BACKEND_UNAVAILABLE'
+): Response {
+  const nonce = randomBase64Url(16);
+  return htmlResponse(
+    status,
+    `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Spotify Wallpaper Authorization</title><style nonce="${nonce}">body{font-family:system-ui,sans-serif;max-width:42rem;margin:3rem auto;padding:0 1rem;color:#171717}code{font-weight:700}</style></head>
+<body><main><h1>Authorization could not start</h1><p><code>${code}</code></p><p>${authStartFailureMessage(code)}</p><p><a href="/setup">Return to setup</a></p></main></body>
+</html>`,
+    nonce,
+    false,
+    status === 429 ? { 'Retry-After': '60' } : {}
   );
 }
 
@@ -220,7 +244,7 @@ function callbackFailureContent(
 ): string {
   switch (failure) {
     case 'browser':
-      return '<h1>Authorization failed</h1><p>Browser verification expired or was blocked. Open setup in a new tab and try again.</p>';
+      return '<h1>Authorization failed</h1><p><code>OAUTH_BROWSER_VERIFICATION_INVALID</code></p><p>Browser verification expired or was blocked. Open setup in a new tab and try again.</p>';
     case 'spotify':
       return '<h1>Authorization failed</h1><p>Spotify did not complete authorization. Check that this Spotify account is allowed for the app, then try again.</p>';
     case 'token-rejected':
@@ -241,6 +265,28 @@ function callbackFailureContent(
       return '<h1>Authorization failed</h1><p>The backend could not complete authorization. Return to setup and try again.</p>';
     default:
       return '<h1>Authorization failed</h1><p>The authorization response was invalid. Return to setup and try again.</p>';
+  }
+}
+
+function authStartFailureMessage(
+  code:
+    | 'SETUP_PROOF_EXPIRED'
+    | 'SETUP_PROOF_INVALID'
+    | 'AUTH_INPUT_INVALID'
+    | 'AUTH_RATE_LIMITED'
+    | 'AUTH_BACKEND_UNAVAILABLE'
+): string {
+  switch (code) {
+    case 'SETUP_PROOF_EXPIRED':
+      return 'This setup page expired. Return to setup and try again within ten minutes.';
+    case 'SETUP_PROOF_INVALID':
+      return 'Browser verification was invalid. Return to setup and try again.';
+    case 'AUTH_INPUT_INVALID':
+      return 'Enter a valid Spotify Client ID and accept the legal documents.';
+    case 'AUTH_RATE_LIMITED':
+      return 'Too many authorization attempts were made. Wait one minute before trying again.';
+    case 'AUTH_BACKEND_UNAVAILABLE':
+      return 'The authorization service is temporarily unavailable. Return to setup and try again later.';
   }
 }
 

@@ -1,13 +1,13 @@
 import {
   createOAuthState,
+  classifySetupProof,
   decodeBase64Url,
   decryptSecret,
   encodeBase64Url,
   encryptSecret,
   keyedDigest,
   parseSecretKeyring,
-  randomBase64Url,
-  verifySetupProof
+  randomBase64Url
 } from './crypto';
 import {
   consumeOAuthSession,
@@ -22,7 +22,7 @@ import {
   readBoundedBytes,
   readBoundedText
 } from './http';
-import { callbackPage, fixedError } from './pages';
+import { authStartFailurePage, callbackPage, fixedError } from './pages';
 import {
   activePairingKey,
   generatePairingToken,
@@ -64,21 +64,18 @@ type TokenExchangeResult =
 
 export async function handleAuthStart(request: Request, env: Env): Promise<Response> {
   const form = await readAuthStartForm(request);
-  if (
-    !isSetupSameOrigin(request, env) &&
-    !(await hasValidSetupProof(form?.setupProof, env))
-  ) {
-    return fixedError(403, 'Same-origin setup is required.');
+  const proof = await classifySetupProof(form.setupProof ?? '', env.OAUTH_STATE_HMAC_KEY);
+  if (proof !== 'valid') {
+    return authStartFailurePage(403, proof === 'expired' ? 'SETUP_PROOF_EXPIRED' : 'SETUP_PROOF_INVALID');
+  }
+  if (form.kind !== 'valid') {
+    return authStartFailurePage(400, 'AUTH_INPUT_INVALID');
   }
   const rateLimit = await checkAuthRateLimit(request, env);
   if (rateLimit !== 'allowed') {
     return rateLimit === 'limited'
-      ? authRateLimited()
-      : fixedError(503, 'Spotify authorization could not start.');
-  }
-
-  if (form === null) {
-    return fixedError(400, 'Valid setup input and legal acceptance are required.');
+      ? authStartFailurePage(429, 'AUTH_RATE_LIMITED')
+      : authStartFailurePage(503, 'AUTH_BACKEND_UNAVAILABLE');
   }
 
   try {
@@ -95,7 +92,7 @@ export async function handleAuthStart(request: Request, env: Env): Promise<Respo
       headers
     });
   } catch {
-    return fixedError(500, 'Spotify authorization could not start.');
+    return authStartFailurePage(500, 'AUTH_BACKEND_UNAVAILABLE');
   }
 }
 
@@ -176,17 +173,20 @@ export async function handleAuthCallback(request: Request, env: Env): Promise<Re
       'oauth-state',
       env.OAUTH_STATE_HMAC_KEY
     );
+    if (callback.browserCookie.kind === 'invalid') {
+      return callbackPage(400, 'error', undefined, 'browser');
+    }
     const browserDigest =
-      callback.browserNonce === null
-        ? null
-        : await keyedDigest(callback.browserNonce, 'oauth-browser', env.OAUTH_STATE_HMAC_KEY);
+      callback.browserCookie.kind === 'valid'
+        ? await keyedDigest(callback.browserCookie.value, 'oauth-browser', env.OAUTH_STATE_HMAC_KEY)
+        : null;
     const nowMs = Date.now();
     const session = await consumeOAuthSession(
       env.DB,
       stateDigest,
       browserDigest,
       nowMs,
-      true
+      callback.browserCookie.kind === 'missing'
     );
     if (session === null) {
       return callbackPage(400, 'error', undefined, 'browser');
@@ -360,24 +360,29 @@ async function createAuthorizationSession(
 
 async function readAuthStartForm(
   request: Request
-): Promise<{ spotifyClientId: string; setupProof: string } | null> {
+): Promise<
+  | { kind: 'valid'; spotifyClientId: string; setupProof: string }
+  | { kind: 'invalid'; setupProof: string | null }
+> {
   try {
     if (
       request.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase() !==
       'application/x-www-form-urlencoded'
     ) {
-      return null;
+      return { kind: 'invalid', setupProof: null };
     }
 
     const bytes = await readBoundedBytes(request, 2048);
     if (bytes === null) {
-      return null;
+      return { kind: 'invalid', setupProof: null };
     }
     const body = new TextDecoder('utf-8', {
       fatal: true,
       ignoreBOM: true
     }).decode(bytes);
     const form = new URLSearchParams(body);
+    const setupProof =
+      form.getAll('setupProof').length === 1 ? form.get('setupProof') : null;
     if (
       [...form.keys()].some(
         (key) =>
@@ -385,28 +390,23 @@ async function readAuthStartForm(
       ) ||
       form.getAll('spotifyClientId').length !== 1 ||
       form.getAll('legalAccepted').length !== 1 ||
-      form.getAll('setupProof').length !== 1 ||
+      setupProof === null ||
       form.get('legalAccepted') !== 'yes'
     ) {
-      return null;
+      return { kind: 'invalid', setupProof };
     }
     const spotifyClientId = form.get('spotifyClientId');
-    const setupProof = form.get('setupProof');
     if (
       spotifyClientId === null ||
       !clientIdPattern.test(spotifyClientId) ||
       setupProof === null
     ) {
-      return null;
+      return { kind: 'invalid', setupProof };
     }
-    return { spotifyClientId, setupProof };
+    return { kind: 'valid', spotifyClientId, setupProof };
   } catch {
-    return null;
+    return { kind: 'invalid', setupProof: null };
   }
-}
-
-async function hasValidSetupProof(setupProof: string | undefined, env: Env): Promise<boolean> {
-  return setupProof !== undefined && (await verifySetupProof(setupProof, env.OAUTH_STATE_HMAC_KEY));
 }
 
 async function readLegalAcceptance(request: Request): Promise<boolean> {
@@ -438,7 +438,10 @@ async function readLegalAcceptance(request: Request): Promise<boolean> {
 
 function parseCallback(request: Request): {
   state: string;
-  browserNonce: string | null;
+  browserCookie:
+    | { kind: 'missing' }
+    | { kind: 'invalid' }
+    | { kind: 'valid'; value: string };
   code: string;
   denied: boolean;
 } | null {
@@ -462,13 +465,19 @@ function parseCallback(request: Request): {
   const state = states[0];
   const code = codes[0] ?? '';
   const browserNonce = readCookie(request.headers.get('Cookie'), oauthCookieName);
+  const browserCookie =
+    browserNonce === undefined
+      ? { kind: 'missing' as const }
+      : browserNonce === null
+        ? { kind: 'invalid' as const }
+        : { kind: 'valid' as const, value: browserNonce };
   try {
     decodeBase64Url(state, 32);
-    if (typeof browserNonce === 'string') {
-      decodeBase64Url(browserNonce, 32);
+    if (browserCookie.kind === 'valid') {
+      decodeBase64Url(browserCookie.value, 32);
     }
   } catch {
-    return null;
+    return { state, browserCookie: { kind: 'invalid' }, code, denied: errors.length === 1 };
   }
   if (codes.length === 1 && !authorizationCodePattern.test(code)) {
     return null;
@@ -476,7 +485,7 @@ function parseCallback(request: Request): {
 
   return {
     state,
-    browserNonce: browserNonce ?? null,
+    browserCookie,
     code,
     denied: errors.length === 1
   };

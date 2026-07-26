@@ -111,6 +111,13 @@ describe('Cloudflare deployment configuration', () => {
       'trailing slash'
     ],
     [
+      {
+        CLOUDFLARE_PRODUCTION_PUBLIC_BASE_URL:
+          'https://spotify-wallpaper-api-preview.example.workers.dev'
+      },
+      'workers.dev'
+    ],
+    [
       { CLOUDFLARE_PRODUCTION_PRIMARY_D1_ID: 'not-a-uuid' },
       'invalid primary ID'
     ],

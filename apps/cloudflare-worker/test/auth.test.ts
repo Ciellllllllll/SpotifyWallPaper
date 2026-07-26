@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import eulaDocument from '../../../docs/eula.md?raw';
 import privacyDocument from '../../../docs/privacy.md?raw';
+import { createSetupProof } from '../src/crypto';
 import worker from '../src/index';
 
 const baseUrl = 'http://127.0.0.1:8787';
@@ -45,6 +46,9 @@ describe('GET /setup', () => {
     expect(html).toContain('one Client ID per developer');
     expect(html).toContain('five authenticated users');
     expect(html).toContain('grandfathered');
+    expect(html).toContain('Complete authorization within ten minutes.');
+    expect(html).toContain('clean Chrome profile');
+    expect(html).toContain('/auth/start status');
     expect(html).toContain('id="pairing-token"');
     expect(html).toContain("input.value = ''");
     expect(html).toContain("Authorization: `Bearer ${token}`");
@@ -82,30 +86,29 @@ describe('GET /privacy and /terms', () => {
 });
 
 describe('POST /auth/start', () => {
-  it('rejects requests without a valid setup proof, malformed, and caller-expanded requests', async () => {
-    expect(
-      (await startAuth({ origin: 'https://attacker.example', setupProof: null })).response.status
-    ).toBe(403);
-    expect(
-      (
-        await startAuth({
-          origin: 'https://attacker.example',
-          setupProof: null
-        })
-      ).response.status
-    ).toBe(403);
-    expect((await startAuth({ origin: null, setupProof: null })).response.status).toBe(403);
-    expect(
-      (
-        await startAuth({
-          origin: null,
-          setupProof: 'A'.repeat(101)
-        })
-      ).response.status
-    ).toBe(403);
-    expect((await startAuth({ clientId: '' })).response.status).toBe(400);
-    expect((await startAuth({ clientId: 'not valid!' })).response.status).toBe(400);
-    expect((await startAuth({ extra: 'scope=user-read-email' })).response.status).toBe(400);
+  it('returns secret-free HTML diagnostics for setup-proof and input failures', async () => {
+    const expiredProof = await createSetupProof(
+      env.OAUTH_STATE_HMAC_KEY,
+      Date.now() - 600_001
+    );
+    const cases = [
+      { options: { origin: 'https://attacker.example', setupProof: null }, status: 403, code: 'SETUP_PROOF_INVALID' },
+      { options: { origin: null, setupProof: 'A'.repeat(101) }, status: 403, code: 'SETUP_PROOF_INVALID' },
+      { options: { origin: null, setupProof: expiredProof }, status: 403, code: 'SETUP_PROOF_EXPIRED' },
+      { options: { clientId: '' }, status: 400, code: 'AUTH_INPUT_INVALID' },
+      { options: { clientId: 'not valid!' }, status: 400, code: 'AUTH_INPUT_INVALID' },
+      { options: { extra: 'scope=user-read-email' }, status: 400, code: 'AUTH_INPUT_INVALID' }
+    ] as const;
+
+    for (const { options, status, code } of cases) {
+      const started = await startAuth(options);
+      const html = await started.response.text();
+      expect(started.response.status).toBe(status);
+      expectSecurityHeaders(started.response, html);
+      expect(html).toContain(code);
+      expect(html).toContain('href="/setup"');
+      expect(html).not.toContain(clientId);
+    }
   });
 
   it('accepts a setup proof when Origin is absent', async () => {
@@ -233,9 +236,9 @@ describe('GET /auth/callback', () => {
     ).toBe(0);
   });
 
-  it('completes first-time PKCE with a stale callback cookie and rejects replay', async () => {
+  it('rejects a mismatched callback cookie for first-time PKCE without consuming the session', async () => {
     const started = await startAuth();
-    mockTokenExchange(validTokenResponse());
+    const exchange = mockTokenExchange(validTokenResponse());
     const mismatch = await callWorker(
       new Request(
         `${baseUrl}/auth/callback?code=${encodeURIComponent('sensitive-code')}&state=${started.state}`,
@@ -247,31 +250,39 @@ describe('GET /auth/callback', () => {
       )
     );
     const mismatchHtml = await mismatch.text();
-    expect(mismatch.status).toBe(200);
+    expect(mismatch.status).toBe(400);
     expectSecurityHeaders(mismatch, mismatchHtml);
+    expect(mismatchHtml).toContain('OAUTH_BROWSER_VERIFICATION_INVALID');
     expect(mismatchHtml).not.toContain('sensitive-code');
     expect(mismatchHtml).not.toContain(started.state);
 
-    const replay = await callback(started, 'replayed-code');
-    const replayHtml = await replay.text();
-    expect(replay.status).toBe(400);
-    expect(replayHtml).not.toContain('replayed-code');
-    expect(replayHtml).not.toContain(started.state);
+    const success = await callback(started, 'valid-code');
+    expect(success.status).toBe(200);
+    expect(exchange).toHaveBeenCalledOnce();
   });
 
-  it('completes first-time PKCE with a malformed callback cookie', async () => {
+  it('rejects duplicate and malformed callback cookies for first-time PKCE', async () => {
     const started = await startAuth();
     const exchange = mockTokenExchange(validTokenResponse());
 
-    const response = await callWorker(
+    const duplicate = await callWorker(
       new Request(
         `${baseUrl}/auth/callback?code=duplicate-cookie-code&state=${encodeURIComponent(started.state)}`,
         { headers: { Cookie: 'swpb_oauth=first; swpb_oauth=second' } }
       )
     );
+    const malformed = await callWorker(
+      new Request(
+        `${baseUrl}/auth/callback?code=malformed-cookie-code&state=${encodeURIComponent(started.state)}`,
+        { headers: { Cookie: 'swpb_oauth=not-base64url=' } }
+      )
+    );
 
-    expect(response.status).toBe(200);
-    expect(exchange).toHaveBeenCalledOnce();
+    expect(duplicate.status).toBe(400);
+    expect((await duplicate.text())).toContain('OAUTH_BROWSER_VERIFICATION_INVALID');
+    expect(malformed.status).toBe(400);
+    expect((await malformed.text())).toContain('OAUTH_BROWSER_VERIFICATION_INVALID');
+    expect(exchange).not.toHaveBeenCalled();
   });
 
   it('redacts Spotify denial and malformed token responses', async () => {
@@ -423,6 +434,7 @@ describe('POST /auth/reauthorize', () => {
     const before = await env.DB.prepare('SELECT COUNT(*) AS count FROM oauth_sessions').first<
       number
     >('count');
+    const proof = await setupProof();
 
     const response = await worker.fetch(
       new Request(`${baseUrl}/auth/start`, {
@@ -432,7 +444,11 @@ describe('POST /auth/reauthorize', () => {
           'CF-Connecting-IP': '192.0.2.10',
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: new URLSearchParams({ spotifyClientId: clientId })
+        body: new URLSearchParams({
+          spotifyClientId: clientId,
+          legalAccepted: 'yes',
+          setupProof: proof
+        })
       }),
       limitedEnv
     );
