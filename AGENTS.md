@@ -17,13 +17,15 @@ Before changing files, every agent must read:
 2. `docs/00-codex-entrypoint.md`
 3. `docs/01-project-goals-and-non-goals.md`
 4. `docs/04-quality-gates.md`
-5. The domain document that matches the current task.
+5. `docs/05-repository-authority.md`
+6. The domain document that matches the current task.
 
 Architecture or cross-cutting work must also read:
 
 - `docs/02-repository-structure.md`
 - `docs/03-implementation-phases.md`
 - `docs/30-subagent-matrix.md`
+- `docs/superpowers/specs/2026-07-27-system-wide-refactoring-design.md`
 
 Public backend work must also read `docs/25-public-backend.md`.
 
@@ -51,7 +53,13 @@ The optional public Spotify proxy is a separate TypeScript Cloudflare Worker. It
 The Rust/WASM core must not own Spotify HTTP calls, DOM mutation, Canvas/WebGL drawing, or Wallpaper Engine API registration. It may validate settings, compute layout, generate themes, normalize visualizer data, and compute animation helper values.
 
 ## Required implementation order
-Follow `docs/03-implementation-phases.md`. Do not implement advanced effects before the MVP foundations are in place.
+For the active system-wide refactor, follow
+`docs/superpowers/specs/2026-07-27-system-wide-refactoring-design.md`.
+It owns the refactor phase sequence and review/commit boundaries.
+
+`docs/03-implementation-phases.md` preserves the product-construction order.
+Use it when adding product capability, and do not implement advanced effects
+before the MVP foundations are in place.
 
 Minimum order:
 
@@ -70,9 +78,10 @@ Minimum order:
 
 Lyrics/LRC support is deferred from the current v1 scope. Reintroduce it only after updating the current specs, settings schema, tests, and SpecGuard checklist in the same phase.
 
-## SubAgent reporting format
-At the end of each task or phase, report:
+## Reporting format
+At the end of each task or phase, report exactly:
 
+- Phase name
 - Summary
 - Changed files
 - Relevant docs read
@@ -80,7 +89,17 @@ At the end of each task or phase, report:
 - Known gaps
 - Tests run
 - Risks introduced
+- Review outcome
+- Fixes from review
+- Verification commands
 - Next recommended task
+
+## Repository authority
+`config/repository-authority.json` is the machine-readable ownership contract.
+`docs/05-repository-authority.md` explains its classifications, generated-source
+exception, ignore ownership, and migration safeguards. All Markdown beneath
+`docs/` is tracked repository material. Historical plans and reports are
+evidence, not current normative behavior.
 
 ## SpecGuard requirement
 SpecGuard must review every phase before it is considered complete. SpecGuard checks scope, secrets handling, performance, settings safety, and whether the implementation still works without Spotify connection by using mock data.

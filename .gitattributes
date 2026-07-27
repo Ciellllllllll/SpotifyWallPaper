@@ -1,1 +1,29 @@
 * text=auto eol=lf
+
+# Recovered historical evidence: preserve original bytes
+docs/12-rust-wasm-core.md -text
+docs/14-ui-layout.md -text
+docs/15-background-theme.md -text
+docs/16-visualizer.md -text
+docs/17-lyrics.md -text
+docs/18-transitions.md -text
+docs/21-rainmeter.md -text
+docs/release-notes-v0.0.1.md -text
+docs/superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md -text
+docs/phase-reports/final-implementation-report.md -text
+docs/phase-reports/lyrics-deferred-spec-update.md -text
+docs/phase-reports/one-click-spotify-auth-token.md -text
+docs/phase-reports/phase-0-scaffold-and-mock-preview.md -text
+docs/phase-reports/phase-1-spotify-mvp.md -text
+docs/phase-reports/phase-2-wallpaper-engine-bridge.md -text
+docs/phase-reports/phase-3-rust-wasm-core.md -text
+docs/phase-reports/phase-4-settings-layout-customization.md -text
+docs/phase-reports/phase-5-background-theme.md -text
+docs/phase-reports/phase-6-visualizer.md -text
+docs/phase-reports/phase-7-lyrics.md -text whitespace=-trailing-space
+docs/phase-reports/phase-8-transitions.md -text whitespace=-trailing-space
+docs/phase-reports/phase-9-player-clock.md -text
+docs/phase-reports/phase-10-tauri-configurator.md -text
+docs/phase-reports/phase-11-rainmeter.md -text
+docs/phase-reports/phase-12-final-qa-docs.md -text
+docs/phase-reports/post-v0.0.1-stabilization.md -text

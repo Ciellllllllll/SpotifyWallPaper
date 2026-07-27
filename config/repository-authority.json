@@ -1,0 +1,531 @@
+{
+  "schemaVersion": 1,
+  "markdownRoots": [
+    "docs"
+  ],
+  "documentGroups": [
+    {
+      "name": "repository-entry",
+      "classification": "normative",
+      "paths": [
+        "AGENTS.md"
+      ]
+    },
+    {
+      "name": "user-entry",
+      "classification": "operational",
+      "paths": [
+        "README.md"
+      ]
+    },
+    {
+      "name": "project-governance",
+      "classification": "normative",
+      "paths": [
+        "docs/README.md",
+        "docs/00-codex-entrypoint.md",
+        "docs/01-project-goals-and-non-goals.md",
+        "docs/02-repository-structure.md",
+        "docs/03-implementation-phases.md",
+        "docs/04-quality-gates.md",
+        "docs/05-repository-authority.md",
+        "docs/30-subagent-matrix.md"
+      ]
+    },
+    {
+      "name": "domain-specifications",
+      "classification": "normative",
+      "paths": [
+        "docs/10-spotify-integration.md",
+        "docs/11-wallpaper-engine.md",
+        "docs/12-rust-wasm-core.md",
+        "docs/13-settings-schema.md",
+        "docs/14-ui-layout.md",
+        "docs/15-background-theme.md",
+        "docs/16-visualizer.md",
+        "docs/17-lyrics.md",
+        "docs/18-transitions.md",
+        "docs/19-player-clock.md",
+        "docs/20-tauri-configurator.md",
+        "docs/21-rainmeter.md",
+        "docs/22-performance.md",
+        "docs/23-test-qa.md",
+        "docs/24-docs-and-reporting.md",
+        "docs/25-public-backend.md"
+      ]
+    },
+    {
+      "name": "operator-and-user-documents",
+      "classification": "operational",
+      "paths": [
+        "docs/eula.md",
+        "docs/how-to-use-h5i.md",
+        "docs/operations/cloudflare-worker-deploy.md",
+        "docs/operations/cloudflare-worker-incident-response.md",
+        "docs/operations/cloudflare-worker-key-rotation.md",
+        "docs/operations/cloudflare-worker-restore.md",
+        "docs/post-v0.0.1-stabilization.md",
+        "docs/privacy.md",
+        "docs/qa-checklist.md",
+        "docs/release-notes-public-backend-beta.md",
+        "docs/release-notes-v0.0.1.md",
+        "docs/user-guide.md"
+      ]
+    },
+    {
+      "name": "approved-designs",
+      "classification": "normative",
+      "paths": [
+        "docs/superpowers/specs/2026-07-27-system-wide-refactoring-design.md"
+      ]
+    },
+    {
+      "name": "current-plans",
+      "classification": "implementation-plan",
+      "paths": [
+        "docs/superpowers/plans/README.md",
+        "docs/superpowers/plans/2026-07-27-system-wide-refactor-phase-0-repository-specification-truth.md"
+      ]
+    },
+    {
+      "name": "historical-plans",
+      "classification": "historical-evidence",
+      "paths": [
+        "docs/superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md"
+      ]
+    },
+    {
+      "name": "phase-report-index",
+      "classification": "operational",
+      "paths": [
+        "docs/phase-reports/README.md"
+      ]
+    },
+    {
+      "name": "phase-reports",
+      "classification": "historical-evidence",
+      "paths": [
+        "docs/phase-reports/cloudflare-worker-public-backend.md",
+        "docs/phase-reports/final-implementation-report.md",
+        "docs/phase-reports/lyrics-deferred-spec-update.md",
+        "docs/phase-reports/one-click-spotify-auth-token.md",
+        "docs/phase-reports/phase-0-scaffold-and-mock-preview.md",
+        "docs/phase-reports/phase-1-spotify-mvp.md",
+        "docs/phase-reports/phase-2-wallpaper-engine-bridge.md",
+        "docs/phase-reports/phase-3-rust-wasm-core.md",
+        "docs/phase-reports/phase-4-settings-layout-customization.md",
+        "docs/phase-reports/phase-5-background-theme.md",
+        "docs/phase-reports/phase-6-visualizer.md",
+        "docs/phase-reports/phase-7-lyrics.md",
+        "docs/phase-reports/phase-8-transitions.md",
+        "docs/phase-reports/phase-9-player-clock.md",
+        "docs/phase-reports/phase-10-tauri-configurator.md",
+        "docs/phase-reports/phase-11-rainmeter.md",
+        "docs/phase-reports/phase-12-final-qa-docs.md",
+        "docs/phase-reports/post-v0.0.1-stabilization.md",
+        "docs/phase-reports/rc-2-wallpaper-engine-property-types.md",
+        "docs/phase-reports/system-wide-refactor-phase-0-repository-specification-truth.md"
+      ]
+    }
+  ],
+  "ignoredArtifacts": [
+    {
+      "ignorePattern": "/node_modules/",
+      "probePath": "node_modules/.repository-authority-probe",
+      "classification": "dependency-cache",
+      "owner": "root npm workspace",
+      "producer": "npm ci",
+      "sourceInputs": [
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/*/node_modules/",
+      "probePath": "apps/wallpaper/node_modules/.repository-authority-probe",
+      "classification": "dependency-cache",
+      "owner": "application workspaces",
+      "producer": "npm ci --workspaces",
+      "sourceInputs": [
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "ignorePattern": "/packages/*/node_modules/",
+      "probePath": "packages/shared-types/node_modules/.repository-authority-probe",
+      "classification": "dependency-cache",
+      "owner": "package workspaces",
+      "producer": "npm ci --workspaces",
+      "sourceInputs": [
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "ignorePattern": "/target/",
+      "probePath": "target/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "root Rust workspace",
+      "producer": "cargo build, cargo check, or cargo test",
+      "sourceInputs": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/configurator/src-tauri/target/",
+      "probePath": "apps/configurator/src-tauri/target/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "Tauri Rust workspace",
+      "producer": "Tauri Cargo build/check/test",
+      "sourceInputs": [
+        "apps/configurator/src-tauri/Cargo.toml",
+        "apps/configurator/src-tauri/Cargo.lock"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/configurator/src-tauri/gen/",
+      "probePath": "apps/configurator/src-tauri/gen/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "Tauri configurator",
+      "producer": "npm run tauri:build -w @spotify-wallpaper/configurator",
+      "sourceInputs": [
+        "apps/configurator/package.json",
+        "apps/configurator/src-tauri/tauri.conf.json"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/*/dist/",
+      "probePath": "apps/wallpaper/dist/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "web application workspaces",
+      "producer": "npm run build",
+      "sourceInputs": [
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/*/.vite/",
+      "probePath": "apps/wallpaper/.vite/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "Vite application workspaces",
+      "producer": "Vite dev/build commands",
+      "sourceInputs": [
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "ignorePattern": "/packages/*/dist/",
+      "probePath": "packages/shared-types/dist/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "shared package workspaces",
+      "producer": "npm run build -w @spotify-wallpaper/shared-types",
+      "sourceInputs": [
+        "packages/shared-types/package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/spotify-auth/pages/",
+      "probePath": "apps/spotify-auth/pages/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "Spotify auth static export",
+      "producer": "node apps/spotify-auth/prepare-pages.mjs",
+      "sourceInputs": [
+        "apps/spotify-auth/prepare-pages.mjs",
+        "apps/spotify-auth/package.json"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/wallpaper/public/wasm/",
+      "probePath": "apps/wallpaper/public/wasm/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "visual-core WASM package",
+      "producer": "npm run build:wasm",
+      "sourceInputs": [
+        "package.json",
+        "crates/visual-core/Cargo.toml",
+        "Cargo.lock"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/cloudflare-worker/.wrangler/",
+      "probePath": "apps/cloudflare-worker/.wrangler/.repository-authority-probe",
+      "classification": "local-tool-state",
+      "owner": "Cloudflare Worker local runtime",
+      "producer": "Wrangler dev/deploy",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/apps/cloudflare-worker/.wrangler.*.generated.json",
+      "probePath": "apps/cloudflare-worker/.wrangler.preview.generated.json",
+      "classification": "generated-output",
+      "owner": "Worker deployment configuration",
+      "producer": "npm run prepare:deploy:preview -w @spotify-wallpaper/cloudflare-worker",
+      "sourceInputs": [
+        "apps/cloudflare-worker/prepare-deploy-config.mjs",
+        "apps/cloudflare-worker/wrangler.jsonc"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/cloudflare-worker/.wrangler.*.generated.json.*.tmp",
+      "probePath": "apps/cloudflare-worker/.wrangler.preview.generated.json.1.probe.tmp",
+      "classification": "generated-output",
+      "owner": "Worker deployment configuration",
+      "producer": "atomic temporary output from prepare-deploy-config.mjs",
+      "sourceInputs": [
+        "apps/cloudflare-worker/prepare-deploy-config.mjs",
+        "apps/cloudflare-worker/wrangler.jsonc"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/cloudflare-worker/dist-preview/",
+      "probePath": "apps/cloudflare-worker/dist-preview/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "Worker preview dry-run",
+      "producer": "preview Wrangler dry-run from the deployment runbook",
+      "sourceInputs": [
+        "apps/cloudflare-worker/wrangler.jsonc",
+        "docs/operations/cloudflare-worker-deploy.md"
+      ]
+    },
+    {
+      "ignorePattern": "/apps/cloudflare-worker/dist-production/",
+      "probePath": "apps/cloudflare-worker/dist-production/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "Worker production dry-run",
+      "producer": "production Wrangler dry-run from the deployment runbook",
+      "sourceInputs": [
+        "apps/cloudflare-worker/wrangler.jsonc",
+        "docs/operations/cloudflare-worker-deploy.md"
+      ]
+    },
+    {
+      "ignorePattern": "/dist-preview/",
+      "probePath": "dist-preview/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "repository-level Worker preview evidence",
+      "producer": "preview Wrangler dry-run from the deployment runbook",
+      "sourceInputs": [
+        "apps/cloudflare-worker/wrangler.jsonc",
+        "docs/operations/cloudflare-worker-deploy.md"
+      ]
+    },
+    {
+      "ignorePattern": "/dist-production/",
+      "probePath": "dist-production/.repository-authority-probe",
+      "classification": "generated-output",
+      "owner": "repository-level Worker production evidence",
+      "producer": "production Wrangler dry-run from the deployment runbook",
+      "sourceInputs": [
+        "apps/cloudflare-worker/wrangler.jsonc",
+        "docs/operations/cloudflare-worker-deploy.md"
+      ]
+    },
+    {
+      "ignorePattern": "/**/.env",
+      "probePath": "apps/configurator/src-tauri/.env",
+      "classification": "local-secret",
+      "owner": "repository operator",
+      "producer": "local environment configuration at any depth",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/**/.env.*",
+      "probePath": "crates/visual-core/fixtures/.env.local",
+      "classification": "local-secret",
+      "owner": "repository operator",
+      "producer": "local environment configuration at any depth",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/**/.dev.vars",
+      "probePath": "apps/cloudflare-worker/nested/.dev.vars",
+      "classification": "local-secret",
+      "owner": "Worker operator",
+      "producer": "Wrangler local secret configuration at any depth",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/**/.dev.vars.*",
+      "probePath": "apps/cloudflare-worker/nested/.dev.vars.local",
+      "classification": "local-secret",
+      "owner": "Worker operator",
+      "producer": "Wrangler local secret configuration at any depth",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/**/.envrc",
+      "probePath": "apps/cloudflare-worker/nested/.envrc",
+      "classification": "local-secret",
+      "owner": "repository operator",
+      "producer": "direnv configuration at any depth",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/**/.envrc.*",
+      "probePath": "apps/cloudflare-worker/nested/.envrc.local",
+      "classification": "local-secret",
+      "owner": "repository operator",
+      "producer": "direnv configuration at any depth",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/**/.direnv/",
+      "probePath": "apps/configurator/src-tauri/.direnv/.repository-authority-probe",
+      "classification": "local-secret",
+      "owner": "repository operator",
+      "producer": "direnv generated environment at any depth",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/artifacts/",
+      "probePath": "artifacts/.repository-authority-probe",
+      "classification": "local-evidence",
+      "owner": "QA/release operator",
+      "producer": "local verification or packaging command",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/docs/phase-reports.zip",
+      "probePath": "docs/phase-reports.zip",
+      "classification": "local-archive",
+      "owner": "repository operator",
+      "producer": "manually recovered report archive",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/.codex-*.log",
+      "probePath": ".codex-repository-authority-probe.log",
+      "classification": "local-evidence",
+      "owner": "local development process",
+      "producer": "local diagnostic command",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/.codex/",
+      "probePath": ".codex/.repository-authority-probe",
+      "classification": "local-tool-state",
+      "owner": "Codex",
+      "producer": "Codex task/report state",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/.codegraph/",
+      "probePath": ".codegraph/.repository-authority-probe",
+      "classification": "local-tool-state",
+      "owner": "CodeGraph",
+      "producer": "codegraph index",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/.superpowers/",
+      "probePath": ".superpowers/.repository-authority-probe",
+      "classification": "local-tool-state",
+      "owner": "local agent tooling",
+      "producer": "local planning/tool state",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/goal/",
+      "probePath": "goal/.repository-authority-probe",
+      "classification": "local-tool-state",
+      "owner": "local task tooling",
+      "producer": "local goal state",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/.agents/",
+      "probePath": ".agents/.repository-authority-probe",
+      "classification": "local-tool-state",
+      "owner": "local agent tooling",
+      "producer": "local agent state",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/.claude/",
+      "probePath": ".claude/.repository-authority-probe",
+      "classification": "local-tool-state",
+      "owner": "local agent tooling",
+      "producer": "local Claude state",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/CLAUDE.md",
+      "probePath": "CLAUDE.md",
+      "classification": "local-tool-state",
+      "owner": "local agent tooling",
+      "producer": "local Claude instructions",
+      "sourceInputs": []
+    }
+  ],
+  "trackedIgnoreExceptions": [
+    {
+      "ignorePattern": "!/**/.env.example",
+      "probePath": "apps/wallpaper/.env.example"
+    },
+    {
+      "ignorePattern": "!/**/.dev.vars.example",
+      "probePath": "apps/cloudflare-worker/.dev.vars.example"
+    },
+    {
+      "ignorePattern": "!/**/.envrc.example",
+      "probePath": "apps/cloudflare-worker/.envrc.example"
+    }
+  ],
+  "trackedGeneratedSources": [
+    {
+      "path": "apps/cloudflare-worker/worker-configuration.d.ts",
+      "owner": "Cloudflare Worker type boundary",
+      "producer": "npm run types -w @spotify-wallpaper/cloudflare-worker",
+      "sourceInputs": [
+        "apps/cloudflare-worker/package.json",
+        "apps/cloudflare-worker/normalize-generated-types.mjs",
+        "apps/cloudflare-worker/wrangler.jsonc",
+        "package-lock.json"
+      ],
+      "verificationCommand": "npm run types -w @spotify-wallpaper/cloudflare-worker, then git diff --exit-code -- apps/cloudflare-worker/worker-configuration.d.ts"
+    }
+  ],
+  "preservation": {
+    "rawByteAttributesFile": ".gitattributes",
+    "recoveredDocuments": [
+      "docs/12-rust-wasm-core.md",
+      "docs/14-ui-layout.md",
+      "docs/15-background-theme.md",
+      "docs/16-visualizer.md",
+      "docs/17-lyrics.md",
+      "docs/18-transitions.md",
+      "docs/21-rainmeter.md",
+      "docs/release-notes-v0.0.1.md",
+      "docs/superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md",
+      "docs/phase-reports/final-implementation-report.md",
+      "docs/phase-reports/lyrics-deferred-spec-update.md",
+      "docs/phase-reports/one-click-spotify-auth-token.md",
+      "docs/phase-reports/phase-0-scaffold-and-mock-preview.md",
+      "docs/phase-reports/phase-1-spotify-mvp.md",
+      "docs/phase-reports/phase-2-wallpaper-engine-bridge.md",
+      "docs/phase-reports/phase-3-rust-wasm-core.md",
+      "docs/phase-reports/phase-4-settings-layout-customization.md",
+      "docs/phase-reports/phase-5-background-theme.md",
+      "docs/phase-reports/phase-6-visualizer.md",
+      "docs/phase-reports/phase-7-lyrics.md",
+      "docs/phase-reports/phase-8-transitions.md",
+      "docs/phase-reports/phase-9-player-clock.md",
+      "docs/phase-reports/phase-10-tauri-configurator.md",
+      "docs/phase-reports/phase-11-rainmeter.md",
+      "docs/phase-reports/phase-12-final-qa-docs.md",
+      "docs/phase-reports/post-v0.0.1-stabilization.md"
+    ],
+    "staticLocalPaths": [
+      "docs/phase-reports.zip",
+      "CLAUDE.md",
+      "goal",
+      ".superpowers",
+      ".claude"
+    ]
+  }
+}

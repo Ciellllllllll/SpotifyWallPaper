@@ -1,20 +1,47 @@
-node_modules/
-target/
-dist/
-apps/*/dist/
-apps/*/.vite/
-packages/*/dist/
-apps/wallpaper/public/wasm/
-apps/configurator/src-tauri/gen/
-.codex-*.log
-.codex/
-artifacts/
-apps/cloudflare-worker/.wrangler.*.generated.json
-apps/cloudflare-worker/dist-preview/
-apps/cloudflare-worker/dist-production/
-dist-preview/
-dist-production/
-AGENTS.md
-docs/
-CLAUDE.md
-.claude/h5i.md
+# Dependency caches
+/node_modules/
+/apps/*/node_modules/
+/packages/*/node_modules/
+
+# Rust and application build output
+/target/
+/apps/configurator/src-tauri/target/
+/apps/configurator/src-tauri/gen/
+/apps/*/dist/
+/apps/*/.vite/
+/packages/*/dist/
+/apps/spotify-auth/pages/
+/apps/wallpaper/public/wasm/
+
+# Cloudflare Worker local and generated output
+/apps/cloudflare-worker/.wrangler/
+/apps/cloudflare-worker/.wrangler.*.generated.json
+/apps/cloudflare-worker/.wrangler.*.generated.json.*.tmp
+/apps/cloudflare-worker/dist-preview/
+/apps/cloudflare-worker/dist-production/
+/dist-preview/
+/dist-production/
+
+# Local environment and secret-bearing files
+/**/.env
+/**/.env.*
+!/**/.env.example
+/**/.dev.vars
+/**/.dev.vars.*
+!/**/.dev.vars.example
+/**/.envrc
+/**/.envrc.*
+!/**/.envrc.example
+/**/.direnv/
+
+# Local evidence, archives, and agent/tool state
+/artifacts/
+/docs/phase-reports.zip
+/.codex-*.log
+/.codex/
+/.codegraph/
+/.superpowers/
+/goal/
+/.agents/
+/.claude/
+/CLAUDE.md

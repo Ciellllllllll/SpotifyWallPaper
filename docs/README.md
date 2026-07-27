@@ -9,6 +9,8 @@ This directory splits the project specification into small files so Codex and Su
 - `02-repository-structure.md`: expected monorepo layout and ownership.
 - `03-implementation-phases.md`: required implementation order.
 - `04-quality-gates.md`: completion criteria and review gates.
+- `05-repository-authority.md`: tracked specification authority, ignored
+  artifact ownership, generated-source exceptions, and migration safeguards.
 
 ## Domain documents
 
@@ -42,6 +44,39 @@ This directory splits the project specification into small files so Codex and Su
   release blockers.
 - `release-notes-v0.0.1.md`: current milestone release notes, known gaps, and verification commands.
 
+`post-v0.0.1-stabilization.md` is the current stabilization specification. The
+same-named file under `phase-reports/` is historical execution evidence.
+
+## Operations runbooks
+
+- `how-to-use-h5i.md`: required safe command-capture workflow for
+  resource-intensive verification.
+- `operations/cloudflare-worker-deploy.md`: preview/production deployment.
+- `operations/cloudflare-worker-key-rotation.md`: encryption and HMAC key
+  rotation.
+- `operations/cloudflare-worker-incident-response.md`: incident handling.
+- `operations/cloudflare-worker-restore.md`: restore and recovery.
+
+## Designs and implementation plans
+
+- `superpowers/specs/2026-07-27-system-wide-refactoring-design.md`: approved
+  normative design for the active repository-wide refactor.
+- `superpowers/plans/README.md`: current and executed-plan index.
+- `superpowers/plans/2026-07-27-system-wide-refactor-phase-0-repository-specification-truth.md`:
+  current Phase 0 execution plan.
+- `superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md`: executed
+  historical intent for the public-backend baseline.
+
+## Phase reports
+
+`phase-reports/README.md` catalogs implementation evidence. Phase reports
+describe what was attempted or measured at that time; they are not current
+normative behavior and are not a substitute for entry/domain specifications.
+
 ## Rule for agents
 
-Never rely on a single long prompt. Read the relevant document before implementing a feature. If a task touches multiple areas, read every touched domain document.
+Never rely on a single long prompt. Read the relevant document before
+implementing a feature. If a task touches multiple areas, read every touched
+domain document. Treat Git-tracked state as clean-clone truth and follow
+`05-repository-authority.md` when adding documents, ignores, generated sources,
+or phase evidence.

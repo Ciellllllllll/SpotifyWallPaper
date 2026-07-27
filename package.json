@@ -16,8 +16,12 @@
     "cloudflare:migrate:production": "npm run migrate:primary:production -w @spotify-wallpaper/cloudflare-worker && npm run migrate:deletion:production -w @spotify-wallpaper/cloudflare-worker",
     "scan:public-backend-secrets": "node scripts/check-public-backend-secrets.mjs apps/wallpaper/dist apps/cloudflare-worker/dist",
     "scan:public-backend-secrets:all": "node scripts/check-public-backend-secrets.mjs apps/wallpaper/dist apps/cloudflare-worker/dist apps/cloudflare-worker/dist-preview apps/cloudflare-worker/dist-production",
+    "test:repository-authority": "node --test scripts/repository-authority.test.mjs scripts/repository-preservation.test.mjs",
+    "check:repository-authority": "node scripts/check-repository-authority.mjs",
+    "check:repository-preservation": "node scripts/repository-preservation.mjs verify-recovered-index",
+    "verify:repository-authority": "npm run test:repository-authority && npm run check:repository-authority && npm run check:repository-preservation",
     "check": "npm run check -w @spotify-wallpaper/shared-types && npm run check -w @spotify-wallpaper/spotify-auth && npm run check -w @spotify-wallpaper/configurator && npm run check -w @spotify-wallpaper/wallpaper && npm run check -w @spotify-wallpaper/cloudflare-worker",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test:repository-authority && npm run test --workspaces --if-present"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

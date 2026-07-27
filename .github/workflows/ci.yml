@@ -19,6 +19,9 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Verify repository authority
+        run: npm run verify:repository-authority
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
