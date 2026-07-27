@@ -35,6 +35,8 @@ GET    /privacy
 GET    /terms
 POST   /auth/start
 GET    /auth/callback
+GET    /auth/confirm
+POST   /auth/confirm
 POST   /auth/reauthorize
 GET    /api/playback
 POST   /api/control
@@ -48,22 +50,136 @@ Playback and control accept `Authorization: Bearer swpb1.<publicId>.<secret>`. P
 - `/setup` shows Development Mode limits plus links to the Privacy Notice and
   EULA before authorization.
 - `/auth/start` accepts a bounded Spotify Client ID and explicit legal
-  acceptance from a same-origin POST.
+  acceptance from a setup-Cookie/proof-bound POST.
 - `/auth/reauthorize` also requires explicit acceptance of the current legal
   documents.
+- `/setup` is rate-limited before any D1 write and atomically permits at most
+  three unexpired sessions per keyed issuer digest under concurrent requests.
+  It creates a ten-minute, purpose-bound, single-use setup session. If an
+  exact, still-valid setup Cookie is presented to `GET /setup`, the Worker
+  atomically retires and replaces that Cookie's previous unconsumed session
+  instead of increasing the outstanding-session count. A missing, malformed,
+  or unmatched Cookie cannot retire another session. D1 stores only keyed
+  browser/issuer digests, legal-document versions, expiry, and consumption
+  state. The raw nonce is held in the exact
+  `__Host-swp-setup=<43-character-base64url-random>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=600`
+  Cookie with no `Domain`, and the signed HTML proof is bound to the session.
+- `/auth/start` is rate-limited before session lookup, requires the exact
+  setup Cookie, signed proof, and current legal acceptance, and atomically
+  consumes the setup session. It clears the setup Cookie on every terminal
+  result. A proof without its Cookie, cross-site browser form, replay, wrong
+  Cookie, wrong purpose, or expired session cannot create OAuth state.
+  `AUTH_FLOW_VERSION_MISMATCH` is a recoverable compatibility result rather
+  than a terminal session result: it occurs before D1 lookup/mutation and
+  preserves an exactly parsed hardened setup Cookie so the next hardened
+  `GET /setup` can retire/replace its row. A malformed setup Cookie is cleared.
+- The hardened flow uses exact, mutually exclusive protocol values:
+
+  ```text
+  setup proof       swps2.<sessionId>.<expiresAtMs>.<signature>
+  OAuth state       swpo2.<43-character-base64url-random>
+  confirmation      swpc1.<confirmationId>.<expiresAtMs>.<signature>
+  ```
+
+  `sessionId` and `confirmationId` are unpadded base64url encodings of 128
+  random bits (22 characters), `expiresAtMs` is exactly 13 ASCII decimal
+  digits, and each signature is an unpadded 32-byte HMAC-SHA-256 value (43
+  characters). The exact UTF-8 HMAC inputs are
+  `spotify-wallpaper:setup-session-v2:<sessionId>:<expiresAtMs>` and
+  `spotify-wallpaper:oauth-confirm-v1:<confirmationId>:<expiresAtMs>`.
+  OAuth state is 32 random bytes and its stored digest is HMAC-SHA-256 over
+  exact UTF-8
+  `spotify-wallpaper:oauth-state-v2:<complete-swpo2-state-value>`.
+  The OAuth Cookie is exactly
+  `__Host-swp-oauth-v2=<43-character-base64url-random>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600`
+  with no `Domain`. Each parser requires its exact prefix, part count,
+  alphabet, lengths, purpose, and database protocol version. Signed proof
+  verification uses WebCrypto verification or an equivalent constant-time
+  comparison after exact parsing and rate limiting.
+- Setup proof, confirmation proof, state digest, and all browser/issuer digests
+  use the Worker `OAUTH_STATE_HMAC_KEY`, an unpadded canonical base64url
+  encoding of exactly 32 key bytes that is separate from encryption and
+  Pairing HMAC keys. Every HMAC output is canonical unpadded base64url.
+  Setup, OAuth, and confirmation Cookie values are each exactly the canonical
+  43-character encoding of 32 CSPRNG bytes; duplicate Cookie names are
+  rejected. Their other exact UTF-8 HMAC inputs are:
+
+  ```text
+  spotify-wallpaper:setup-browser-v2:<setup-cookie-value>
+  spotify-wallpaper:setup-issuer-v2:<canonical-issuer>
+  spotify-wallpaper:oauth-browser-v2:<oauth-cookie-value>
+  spotify-wallpaper:oauth-confirm-browser-v1:<confirmation-cookie-value>
+  ```
+
+  `canonical-issuer` is the trusted Cloudflare client IP parsed strictly and
+  encoded as `v4:` plus eight lowercase hexadecimal digits or `v6:` plus 32
+  lowercase hexadecimal digits; IPv4-mapped IPv6 is normalized to `v4`.
+  Missing or invalid input fails closed before D1 access. These short-lived
+  HMAC records have no key ID or previous-key fallback. Rotating the key
+  intentionally invalidates all in-flight authorization sessions, which then
+  expire or are purged and must restart without downgrade.
+- The baseline Worker rejects `swps2` setup proofs because its parser accepts
+  only the legacy three-part `expiresAtMs.nonce.signature` shape. Its callback
+  rejects `swpo2` before D1 lookup because that value is not a raw 32-byte
+  base64url state. Hardened parsers reject every baseline proof, state, and
+  OAuth Cookie format. No handler retries, translates, or downgrades between
+  protocol versions. A request that crosses old/new edge isolates receives
+  either the approved baseline's fixed invalid-proof/callback/route-not-found
+  error or the hardened `AUTH_FLOW_VERSION_MISMATCH` response. The hardened
+  response and the Phase 4A compatibility stub provide a safe link back to a
+  freshly loaded setup or confirmation page. No cross-version failure permits
+  D1 mutation, Spotify token exchange, or credential creation.
 - Redirect URI and scopes are fixed by the Worker.
 - State, browser nonce, and PKCE verifier use cryptographically secure randomness.
 - D1 stores state/browser digests and an encrypted PKCE verifier.
-- Sessions expire within ten minutes, are deleted atomically when consumed,
-  and abandoned expired sessions are purged by scheduled maintenance.
+- OAuth sessions expire within ten minutes and are deleted or transitioned
+  atomically when consumed.
 - When an opaque-origin browser omits the callback Cookie, the Worker accepts
-  a first-time authorization only with the single-use, expiry-bound OAuth
-  state and PKCE verification. Reauthorization always requires a matching
-  callback Cookie. A malformed or duplicate callback Cookie is rejected.
-- Callback and setup pages set `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, restrictive CSP, frame denial, and `nosniff`.
+  a first-time callback only into a five-minute pending-confirmation state; it
+  does not exchange the authorization code or create credentials. The Worker
+  stores the code/verifier only as key-ID/AAD-bound ciphertext, sets the exact
+  `__Host-swp-confirm=<43-character-base64url-random>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
+  Cookie with no `Domain`, and redirects with `303` to the query-free
+  `GET /auth/confirm` URL. `Lax` is required so the Cookie survives the
+  cross-site Spotify callback's top-level safe-method redirect; confirmation
+  GET is non-mutating and confirmation POST still requires Cookie, proof,
+  explicit action, and legal acceptance.
+- `GET /auth/confirm` is rate-limited before D1 access and requires exactly one
+  valid confirmation Cookie. A keyed digest of that Cookie identifies exactly
+  one unexpired, unconsumed row under a unique index. Zero or multiple matches,
+  malformed Cookies, expiry, or storage failure return a fixed no-store error
+  without decrypting or consuming the row. The clean page contains no
+  authorization code, OAuth state, Client ID, confirmation ID, or credential
+  in its URL, JavaScript, or reflected error. It emits only the signed
+  single-use `swpc1` proof and current legal-acceptance controls needed by the
+  form.
+- `POST /auth/confirm` requires the exact Cookie, signed proof, current legal
+  acceptance, and an explicit user action. After constant-time signature
+  verification, one conditional `DELETE ... RETURNING` operation may consume
+  a row only when the proof's exact `confirmationId` and `expiresAtMs`, the
+  HMAC digest of the presented confirmation Cookie, `protocol_version = 1`,
+  unconsumed state, and current unexpired state all match that same
+  `callback_confirmations` row. Only the returned row may be decrypted and
+  exchanged. A zero/multiple-row result or any cross-row mismatch performs no
+  decrypt, consumption, token exchange, or credential creation.
+  Proof/Cookie binding mismatch is recoverable and preserves the valid Cookie
+  and every candidate row so the correct pairing can retry; other terminal
+  results clear the confirmation Cookie. A Phase 4A compatibility response or
+  transient cross-version failure leaves the pending row and Cookie unconsumed
+  so the user can return to query-free `GET /auth/confirm` and retry within
+  five minutes. Reauthorization always requires the original matching
+  callback Cookie and never uses this fallback. Malformed or duplicate
+  callback or confirmation Cookies are rejected.
+- Expired/consumed setup, OAuth, and callback-confirmation sessions are
+  purged by bounded scheduled maintenance without starvation.
+- Setup, callback, confirmation GET/POST, and Phase 4A compatibility-stub
+  responses set `Cache-Control: no-store`, `Referrer-Policy: no-referrer`,
+  restrictive CSP, frame denial, and `X-Content-Type-Options: nosniff` on both
+  success and every fixed error page.
 - Cloudflare invocation logs are disabled because callback URLs contain authorization codes.
 - Pairing Token generation occurs only after successful Spotify token exchange.
-- Initial callback shows the Pairing Token once. Reauthorization keeps the existing Pairing Token.
+- Initial authorization completion shows the Pairing Token once.
+  Reauthorization keeps the existing Pairing Token.
 
 ## Pairing Token
 
@@ -86,6 +202,20 @@ AAD:
 ```text
 spotify-wallpaper:v1:<recordId>:<spotifyClientId>:<fieldName>
 ```
+
+Pending callback-confirmation authorization code and PKCE verifier fields use
+the same AES-256-GCM encryption keyring, separate random 96-bit nonces and key
+IDs, and exact AAD:
+
+```text
+spotify-wallpaper:oauth-confirm:v1:<confirmationId>:<spotifyClientId>:<fieldName>
+```
+
+`fieldName` is exactly `authorizationCode` or `pkceVerifier`. Moving an OAuth
+session to pending confirmation re-encrypts the verifier under the new AAD.
+Field swaps, row swaps, tampering, expiry, or decrypt failure fail closed.
+Successful non-consuming reads under a previous key lazily rotate both fields,
+and key-reference scans include pending-confirmation rows.
 
 The active key and previous keys form a keyring. Successful reads using an old key lazily re-encrypt the field with the active key. An old key is removed only after no D1 row references its key ID. A D1 export without Worker secrets cannot recover Spotify tokens.
 
@@ -142,11 +272,23 @@ The Worker returns normalized playback only. `source` remains `spotify` and `fet
 
 Playback/control CORS permits Wallpaper Engine `Origin: null` and explicit local preview origins only. Allowed methods and headers are fixed, `Authorization` is required, and credentialed cookie CORS is disabled. CORS is not authentication.
 
-Account management is same-origin and rejects `Origin: null`. The native setup form carries a ten-minute signed setup proof in its HTML. The Worker verifies this proof even when Chrome supplies `Origin: null` or a nonstandard origin. A third-party site cannot read the proof from the setup page because of the same-origin policy, and the proof is bound to a Worker HMAC key; it is therefore required for every setup authorization. Wallpaper requests use `redirect: 'error'`, `credentials: 'omit'`, and `referrerPolicy: 'no-referrer'`. The wallpaper permits HTTP loopback and the exact release-configured HTTPS origin only.
+Account management is same-origin and rejects `Origin: null`. Setup
+authorization treats neither the HTML proof nor its Cookie as human-presence
+or browser-possession proof because a server can fetch and replay both in its
+own client. Their single-use, SameSite-bound session prevents cross-site
+browser CSRF and replay; server-originated setup creation is bounded by
+pre-write rate limits and outstanding-session caps. If the authorization URL
+is handed to a different browser, a Cookie-less initial callback cannot
+exchange tokens until that browser performs the visible one-time confirmation.
+The signed proof provides tamper and expiry validation, not bot resistance.
+Wallpaper requests use `redirect: 'error'`, `credentials: 'omit'`, and
+`referrerPolicy: 'no-referrer'`. The wallpaper permits HTTP loopback and the
+exact release-configured HTTPS origin only.
 
-Cloudflare Rate Limiting bindings protect auth start, callback, and
-reauthorization by IP and API routes by `publicId`. Spotify's persisted
-`Retry-After` remains authoritative.
+Cloudflare Rate Limiting bindings protect setup before D1 insertion, auth
+start, callback, confirmation-page GET, confirmation POST, and reauthorization
+by IP and API routes by `publicId`. A rate-limit binding failure fails closed
+before state mutation. Spotify's persisted `Retry-After` remains authoritative.
 
 ## Reauthorization and deletion
 
@@ -166,6 +308,32 @@ identifiers.
 
 - Preview and production use different domains, D1 databases, keyrings, and rate-limit namespaces.
 - Production uses Workers Paid and a fixed custom HTTPS domain.
+- Additive setup/confirmation-session tables and expiry/issuer indexes are
+  migrated with an additive
+  `oauth_sessions.protocol_version INTEGER NOT NULL DEFAULT 1 CHECK (protocol_version IN (1, 2))`
+  column and
+  verified in preview, then production, before deploying a Worker that
+  requires them. Existing Workers insert/read version 1 by default and ignore
+  the new tables. Hardened OAuth rows are inserted explicitly as version 2 and
+  may be consumed only by a version-2 handler; setup rows require protocol
+  version 2 and confirmation rows require protocol version 1.
+  Missing or partial schema fails closed with a fixed unavailable response and
+  never falls back to stateless setup.
+- Phase 4A also routes inert `GET /auth/confirm` and `POST /auth/confirm`
+  compatibility stubs. They do not parse OAuth material or read/write D1; they
+  return a fixed no-store `409 AUTH_FLOW_VERSION_MISMATCH` page with a
+  query-free retry link. This release must be fully deployed and verified
+  before any callback can create pending-confirmation rows. A Phase 4C rollout
+  is supported only over the fully deployed Phase 4A/4B generation, never
+  directly over commit `455dcf1`.
+- Deployment characterization freezes both protocol generations: old
+  setup/start and callback parsers reject hardened values before state
+  mutation, while hardened parsers reject old proof/state/Cookie values. The
+  frozen `455dcf1` baseline returns its fixed 404 for both confirmation methods
+  without D1 access; the Phase 4A stub returns the safe 409 recovery page.
+  Mixed-isolate tests must exercise setup/start/callback plus confirmation GET
+  and POST in both directions, including new callback to old stub to new retry,
+  before the hardened routes are enabled.
 - Aggregate metrics use Analytics Engine and contain only route/status/latency classes and outcome counters.
 - Request URL invocation logs remain disabled.
 - Deployment, key rotation, incident response, migration, cost, and restore runbooks are release requirements.
