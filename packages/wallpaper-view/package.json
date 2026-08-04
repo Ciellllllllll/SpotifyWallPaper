@@ -1,0 +1,21 @@
+{
+  "name": "@spotify-wallpaper/wallpaper-view",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./WallpaperView.svelte": "./src/WallpaperView.svelte"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@spotify-wallpaper/shared-types": "0.0.0"
+  }
+}

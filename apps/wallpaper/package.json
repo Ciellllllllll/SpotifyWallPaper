@@ -12,7 +12,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@spotify-wallpaper/shared-types": "0.0.0"
+    "@spotify-wallpaper/shared-types": "0.0.0",
+    "@spotify-wallpaper/wallpaper-view": "0.0.0"
   },
   "devDependencies": {}
 }

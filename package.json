@@ -20,7 +20,7 @@
     "check:repository-authority": "node scripts/check-repository-authority.mjs",
     "check:repository-preservation": "node scripts/repository-preservation.mjs verify-recovered-index",
     "verify:repository-authority": "npm run test:repository-authority && npm run check:repository-authority && npm run check:repository-preservation",
-    "check": "npm run check -w @spotify-wallpaper/shared-types && npm run check -w @spotify-wallpaper/spotify-auth && npm run check -w @spotify-wallpaper/configurator && npm run check -w @spotify-wallpaper/wallpaper && npm run check -w @spotify-wallpaper/cloudflare-worker",
+    "check": "npm run check -w @spotify-wallpaper/shared-types && npm run check -w @spotify-wallpaper/wallpaper-view && npm run check -w @spotify-wallpaper/spotify-auth && npm run check -w @spotify-wallpaper/configurator && npm run check -w @spotify-wallpaper/wallpaper && npm run check -w @spotify-wallpaper/cloudflare-worker",
     "test": "npm run test:repository-authority && npm run test --workspaces --if-present"
   },
   "devDependencies": {

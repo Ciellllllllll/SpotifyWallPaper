@@ -1,9 +1,10 @@
 import {
+  clonePresetItems,
+  isLayoutPresetName,
   repairWallpaperPreferences,
   type PlaybackProviderKind,
   type WallpaperPreferences
 } from '@spotify-wallpaper/shared-types';
-import { clonePresetItems, isLayoutPresetName } from '../layout/presets';
 import { loadSettings } from '../settings/loadSettings';
 import { isWallpaperEngineSpotifyToken, parseWallpaperEngineSpotifyToken } from '../spotify/wallpaperEngineToken';
 import type { CredentialInput } from '../settings/credentialBoundary';

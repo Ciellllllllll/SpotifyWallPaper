@@ -2,30 +2,31 @@ import { describe, expect, it } from 'vitest';
 import { buildSettings, defaultDraft, exportSettingsJson, importSettingsJson } from './settingsModel';
 
 describe('configurator settings model', () => {
-  it('excludes refresh tokens from exported settings by default', () => {
+  it('builds secret-free v2 preferences regardless of draft credentials', () => {
     const settings = buildSettings({
       ...defaultDraft,
       spotifyClientId: 'client-id',
       spotifyRefreshToken: 'secret-refresh-token'
     });
 
-    expect(settings.spotify.clientId).toBe('client-id');
-    expect(settings.spotify.refreshToken).toBeUndefined();
-    expect(settings.spotify.hasRefreshToken).toBe(false);
+    expect(settings.schemaVersion).toBe(2);
+    expect(settings.spotify.provider).toBe('mock');
+    expect('clientId' in settings.spotify).toBe(false);
     expect(exportSettingsJson({ ...defaultDraft, spotifyRefreshToken: 'secret-refresh-token' })).not.toContain(
       'secret-refresh-token'
     );
   });
 
-  it('includes refresh tokens only when explicitly enabled', () => {
+  it('does not include refresh tokens in the v2 export', () => {
     const settings = buildSettings({
       ...defaultDraft,
-      spotifyRefreshToken: 'secret-refresh-token',
-      includeRefreshToken: true
+      spotifyRefreshToken: 'secret-refresh-token'
     });
 
-    expect(settings.spotify.refreshToken).toBe('secret-refresh-token');
-    expect(settings.spotify.hasRefreshToken).toBe(true);
+    expect('refreshToken' in settings.spotify).toBe(false);
+    expect(exportSettingsJson({ ...defaultDraft, spotifyRefreshToken: 'secret-refresh-token' })).not.toContain(
+      'secret-refresh-token'
+    );
   });
 
   it('imports a generated settings JSON back into a draft', () => {
@@ -52,7 +53,7 @@ describe('configurator settings model', () => {
     });
   });
 
-  it('requires a fresh opt-in before re-exporting imported refresh tokens', () => {
+  it('ignores credentials in imported settings and keeps export secret-free', () => {
     const imported = importSettingsJson(
       JSON.stringify({
         spotify: {
@@ -62,8 +63,7 @@ describe('configurator settings model', () => {
       })
     );
 
-    expect(imported.draft.spotifyRefreshToken).toBe('secret-refresh-token');
-    expect(imported.draft.includeRefreshToken).toBe(false);
+    expect(imported.draft.spotifyRefreshToken).toBe('');
     expect(exportSettingsJson(imported.draft)).not.toContain('secret-refresh-token');
   });
 
@@ -140,5 +140,36 @@ describe('configurator settings model', () => {
     expect(imported.warning).toContain('malformed');
     expect(imported.warning).not.toContain('secret-refresh-token');
     expect(imported.draft).toEqual(defaultDraft);
+  });
+
+  it('round-trips imported non-UI preferences without rebuilding them from defaults', () => {
+    const source = exportSettingsJson({
+      ...defaultDraft,
+      basePreferences: {
+        ...defaultDraft.basePreferences,
+        spotify: { ...defaultDraft.basePreferences.spotify, pollIntervalPlayingMs: 1777, pollIntervalPausedMs: 8888 },
+        layout: {
+          ...defaultDraft.basePreferences.layout,
+          items: {
+            ...defaultDraft.basePreferences.layout.items,
+            trackText: { ...defaultDraft.basePreferences.layout.items.trackText, width: 913, height: 271 }
+          }
+        },
+        theme: { ...defaultDraft.basePreferences.theme, textColor: '#123456', customPrimaryColor: '#654321' },
+        visualizer: { ...defaultDraft.basePreferences.visualizer, mode: 'radial-bars', smoothing: 0.81, gap: 27 },
+        transitions: { ...defaultDraft.basePreferences.transitions, preset: 'zoom-in', durationMs: 1333 },
+        clock: { ...defaultDraft.basePreferences.clock, showDate: true, fontSizePx: 48 }
+      }
+    });
+    const imported = importSettingsJson(source);
+    const exported = buildSettings(imported.draft);
+
+    expect(exported.spotify.pollIntervalPlayingMs).toBe(1777);
+    expect(exported.layout.items.trackText.width).toBe(913);
+    expect(exported.theme.customPrimaryColor).toBe('#654321');
+    expect(exported.visualizer.smoothing).toBe(0.81);
+    expect(exported.transitions.durationMs).toBe(1333);
+    expect(exported.clock.showDate).toBe(true);
+    expect(exported.player.displayMode).toBe('album-only');
   });
 });

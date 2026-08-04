@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@spotify-wallpaper/shared-types": "0.0.0",
+    "@spotify-wallpaper/wallpaper-view": "0.0.0",
     "@tauri-apps/api": "^2.11.0"
   },
   "devDependencies": {
