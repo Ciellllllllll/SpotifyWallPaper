@@ -1,10 +1,12 @@
 import type { NormalizedPlayback, WallpaperPreferences, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
+import { isTrustedPublicBackendOrigin } from './providers/backendProvider';
+import { playbackProviderFromSettings, selectPlaybackProvider, credentialsFromCredential, hasSpotifyCredentials, backendConfigFromCredential } from './providers/factory';
+import { BackendPlaybackProvider } from './providers/backendProvider';
+import { DirectPlaybackProvider } from './providers/directProvider';
+import { MockPlaybackProvider } from './providers/mockProvider';
+import type { BackendPlaybackProviderConfig, PlaybackProvider, ProviderSelection } from './providers/types';
 import type { CredentialInput } from '../settings/credentialBoundary';
-import { fetchCurrentPlayback, sendPlaybackCommand } from './client';
-import { classifyNetworkError, classifySpotifyStatus } from './errors';
-import { normalizeSpotifyPlayback } from './normalize';
-import { refreshAccessToken, shouldRefreshToken } from './token';
-import type { Fetcher, SpotifyCredentials, SpotifyPlaybackCommand, SpotifyResult, SpotifyTokenState } from './types';
+import type { SpotifyPlaybackCommand, SpotifyResult } from './types';
 
 const DEFAULT_PLAYING_INTERVAL_MS = 1000;
 const DEFAULT_PAUSED_INTERVAL_MS = 3000;
@@ -13,7 +15,20 @@ const PUBLIC_BACKEND_PAUSED_INTERVAL_MS = 5000;
 const DEFAULT_ERROR_BACKOFF_MS = 5000;
 const MAX_ERROR_BACKOFF_MS = 60_000;
 const ACTIVE_TRANSIENT_ERROR_BACKOFF_MS = 5000;
-const PRIMARY_ENDPOINT_DEGRADED_COOLDOWN_MS = 5000;
+
+export type SpotifyPlaybackProvider = PlaybackProvider;
+export type { BackendPlaybackProviderConfig, PlaybackProvider, ProviderSelection };
+export {
+  BackendPlaybackProvider,
+  DirectPlaybackProvider,
+  MockPlaybackProvider,
+  backendConfigFromCredential,
+  credentialsFromCredential,
+  hasSpotifyCredentials,
+  playbackProviderFromSettings,
+  selectPlaybackProvider
+};
+export { DirectPlaybackProvider as SpotifyPlaybackSession };
 
 export interface PollDecisionInput {
   playback?: NormalizedPlayback | null;
@@ -22,480 +37,47 @@ export interface PollDecisionInput {
   settings?: WallpaperPreferences;
 }
 
-export interface SpotifyPlaybackProvider {
-  poll(nowMs?: number): Promise<SpotifyResult<NormalizedPlayback>>;
-  control(command: SpotifyPlaybackCommand, nowMs?: number): Promise<SpotifyResult<void>>;
-}
-
-export interface BackendPlaybackProviderConfig {
-  backendUrl: string;
-  pairingToken: string;
-}
-
 export interface PlaybackHistory {
   playback: NormalizedPlayback;
   previousPlayback: NormalizedPlayback | null;
-}
-
-export class SpotifyPlaybackSession implements SpotifyPlaybackProvider {
-  private token: SpotifyTokenState | null = null;
-  private primaryPlaybackEndpointBlockedUntilMs = 0;
-
-  constructor(
-    private readonly credentials: SpotifyCredentials,
-    private readonly fetcher: Fetcher = fetch
-  ) {}
-
-  async poll(nowMs = Date.now()): Promise<SpotifyResult<NormalizedPlayback>> {
-    const token = await this.accessToken(nowMs);
-    if (!token.ok) {
-      return token;
-    }
-
-    const result = await fetchCurrentPlayback(token.value, this.fetcher, new Date(nowMs).toISOString(), {
-      skipPrimaryEndpoint: nowMs < this.primaryPlaybackEndpointBlockedUntilMs
-    });
-    if (result.ok && result.degraded) {
-      this.primaryPlaybackEndpointBlockedUntilMs = nowMs + PRIMARY_ENDPOINT_DEGRADED_COOLDOWN_MS;
-    } else if (result.ok && nowMs >= this.primaryPlaybackEndpointBlockedUntilMs) {
-      this.primaryPlaybackEndpointBlockedUntilMs = 0;
-    }
-
-    return result;
-  }
-
-  async control(command: SpotifyPlaybackCommand, nowMs = Date.now()): Promise<SpotifyResult<void>> {
-    const token = await this.accessToken(nowMs);
-    if (!token.ok) {
-      return token;
-    }
-
-    return sendPlaybackCommand(token.value, command, this.fetcher);
-  }
-
-  private async accessToken(nowMs: number): Promise<SpotifyResult<string>> {
-    if (shouldRefreshToken(this.token, nowMs)) {
-      const refreshed = await refreshAccessToken(this.credentials, this.fetcher, nowMs);
-      if (!refreshed.ok) {
-        return refreshed;
-      }
-
-      this.token = refreshed.value;
-    }
-
-    if (!this.token) {
-      return {
-        ok: false,
-        error: {
-          kind: 'unauthorized',
-          message: 'Spotify access token is unavailable.'
-        }
-      };
-    }
-
-    return { ok: true, value: this.token.accessToken };
-  }
-}
-
-export class BackendPlaybackProvider implements SpotifyPlaybackProvider {
-  constructor(
-    private readonly config: BackendPlaybackProviderConfig,
-    private readonly fetcher: Fetcher = fetch
-  ) {}
-
-  async poll(nowMs = Date.now()): Promise<SpotifyResult<NormalizedPlayback>> {
-    const endpoint = this.endpoint('/api/playback');
-    if (!endpoint.ok) {
-      return endpoint;
-    }
-
-    let response: Response;
-    try {
-      response = await this.fetcher(endpoint.value, {
-        method: 'GET',
-        headers: this.headers(),
-        ...backendFetchPolicy
-      });
-    } catch {
-      return { ok: false, error: classifyNetworkError() };
-    }
-
-    if (!response.ok) {
-      return { ok: false, error: await backendErrorFromResponse(response) };
-    }
-
-    const payload: unknown = await response.json().catch(() => null);
-    const unwrapped = unwrapBackendPayload(payload);
-    if (!unwrapped.ok) {
-      return { ok: false, error: unwrapped.error };
-    }
-
-    if (isNormalizedPlayback(unwrapped.value)) {
-      return { ok: true, value: { ...unwrapped.value, fetchedAt: unwrapped.value.fetchedAt || new Date(nowMs).toISOString() } };
-    }
-
-    const normalized = normalizeSpotifyPlayback(unwrapped.value as never, new Date(nowMs).toISOString());
-    return normalized.ok ? { ok: true, value: normalized.value.playback, degraded: normalized.value.warning } : normalized;
-  }
-
-  async control(command: SpotifyPlaybackCommand, _nowMs = Date.now()): Promise<SpotifyResult<void>> {
-    const endpoint = this.endpoint('/api/control');
-    if (!endpoint.ok) {
-      return endpoint;
-    }
-
-    let response: Response;
-    try {
-      response = await this.fetcher(endpoint.value, {
-        method: 'POST',
-        headers: {
-          ...this.headers(),
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify(command),
-        ...backendFetchPolicy
-      });
-    } catch {
-      return { ok: false, error: classifyNetworkError() };
-    }
-
-    if (response.ok || response.status === 204) {
-      return { ok: true, value: undefined };
-    }
-
-    return { ok: false, error: await backendErrorFromResponse(response) };
-  }
-
-  private endpoint(path: string): SpotifyResult<string> {
-    const baseUrl = normalizeBackendBaseUrl(this.config.backendUrl);
-    if (!baseUrl.ok) {
-      return baseUrl;
-    }
-
-    return { ok: true, value: new URL(path.replace(/^\//, ''), baseUrl.value).toString() };
-  }
-
-  private headers(): Record<string, string> {
-    return {
-      authorization: `Bearer ${this.config.pairingToken}`
-    };
-  }
-}
-
-export const hasSpotifyCredentials = (credential: CredentialInput | null): credential is Extract<CredentialInput, { kind: 'direct' }> =>
-  credential?.kind === 'direct' && credential.clientId.length > 0 && credential.refreshToken.length > 0;
-
-export const credentialsFromCredential = (credential: CredentialInput | null): SpotifyCredentials | null => {
-  if (!hasSpotifyCredentials(credential)) {
-    return null;
-  }
-
-  return {
-    clientId: credential.clientId,
-    refreshToken: credential.refreshToken
-  };
-};
-
-export const backendConfigFromCredential = (
-  settings: WallpaperPreferences,
-  credential: CredentialInput | null
-): BackendPlaybackProviderConfig | null => {
-  if (settings.spotify.provider !== 'backend' || !settings.spotify.backendOrigin || credential?.kind !== 'backend') {
-    return null;
-  }
-
-  const backendUrl = normalizeBackendBaseUrl(settings.spotify.backendOrigin);
-  if (!backendUrl.ok) {
-    return null;
-  }
-
-  return {
-    backendUrl: backendUrl.value,
-    pairingToken: credential.pairingToken
-  };
-};
-
-export function playbackProviderFromSettings(
-  settings: WallpaperPreferences,
-  credential?: CredentialInput | null,
-  fetcher?: Fetcher
-): SpotifyPlaybackProvider | null;
-export function playbackProviderFromSettings(
-  settings: WallpaperPreferences,
-  fetcher?: Fetcher
-): SpotifyPlaybackProvider | null;
-export function playbackProviderFromSettings(
-  settings: WallpaperPreferences,
-  credentialOrFetcher: CredentialInput | Fetcher | null = null,
-  fetcher: Fetcher = fetch
-): SpotifyPlaybackProvider | null {
-  const credential = typeof credentialOrFetcher === 'function' ? null : credentialOrFetcher;
-  const actualFetcher = typeof credentialOrFetcher === 'function' ? credentialOrFetcher : fetcher;
-  if (settings.spotify.provider === 'backend') {
-    const backendConfig = backendConfigFromCredential(settings, credential);
-    return backendConfig
-      ? new BackendPlaybackProvider(backendConfig, actualFetcher)
-      : null;
-  }
-
-  if (settings.spotify.provider !== 'direct') {
-    return null;
-  }
-
-  const credentials = credentialsFromCredential(credential);
-  return credentials ? new SpotifyPlaybackSession(credentials, actualFetcher) : null;
 }
 
 export const playbackHistoryAfterPoll = (
   history: PlaybackHistory,
   result: SpotifyResult<NormalizedPlayback>
 ): PlaybackHistory => {
-  if (!result.ok) {
-    return history;
+  if (!result.ok) return history;
+  if (history.playback.id !== result.value.id || history.playback.itemType !== result.value.itemType) {
+    return { playback: result.value, previousPlayback: history.playback };
   }
-  if (
-    history.playback.id !== result.value.id ||
-    history.playback.itemType !== result.value.itemType
-  ) {
-    return {
-      playback: result.value,
-      previousPlayback: history.playback
-    };
-  }
-  return {
-    playback: result.value,
-    previousPlayback: history.previousPlayback
-  };
+  return { playback: result.value, previousPlayback: history.previousPlayback };
 };
 
 export const nextPollingDelayMs = ({ playback, error, consecutiveErrors = 0, settings }: PollDecisionInput): number => {
   const publicBackend = isTrustedPublicBackend(settings);
-  const playingIntervalMs = pollingInterval(
-    settings?.spotify.pollIntervalPlayingMs,
-    DEFAULT_PLAYING_INTERVAL_MS,
-    PUBLIC_BACKEND_PLAYING_INTERVAL_MS,
-    publicBackend
-  );
-  const pausedIntervalMs = pollingInterval(
-    settings?.spotify.pollIntervalPausedMs,
-    DEFAULT_PAUSED_INTERVAL_MS,
-    PUBLIC_BACKEND_PAUSED_INTERVAL_MS,
-    publicBackend
-  );
+  const playingIntervalMs = pollingInterval(settings?.spotify.pollIntervalPlayingMs, DEFAULT_PLAYING_INTERVAL_MS, PUBLIC_BACKEND_PLAYING_INTERVAL_MS, publicBackend);
+  const pausedIntervalMs = pollingInterval(settings?.spotify.pollIntervalPausedMs, DEFAULT_PAUSED_INTERVAL_MS, PUBLIC_BACKEND_PAUSED_INTERVAL_MS, publicBackend);
 
-  if (error?.kind === 'rate_limited' && error.retryAfterMs !== undefined) {
-    return Math.max(error.retryAfterMs, playingIntervalMs);
-  }
-
+  if (error?.kind === 'rate_limited' && error.retryAfterMs !== undefined) return Math.max(error.retryAfterMs, playingIntervalMs);
   if (error) {
-    if (
-      playback?.isPlaying &&
-      (error.kind === 'network_error' || error.kind === 'unavailable' || error.kind === 'unknown_response_shape')
-    ) {
+    if (playback?.isPlaying && (error.kind === 'network_error' || error.kind === 'unavailable' || error.kind === 'unknown_response_shape')) {
       return ACTIVE_TRANSIENT_ERROR_BACKOFF_MS;
     }
-
-    const multiplier = Math.max(1, consecutiveErrors + 1);
-    return Math.min(DEFAULT_ERROR_BACKOFF_MS * multiplier, MAX_ERROR_BACKOFF_MS);
+    return Math.min(DEFAULT_ERROR_BACKOFF_MS * Math.max(1, consecutiveErrors + 1), MAX_ERROR_BACKOFF_MS);
   }
-
-  if (playback?.isPlaying) {
-    return playingIntervalMs;
-  }
-
-  return pausedIntervalMs;
+  return playback?.isPlaying ? playingIntervalMs : pausedIntervalMs;
 };
 
-const pollingInterval = (
-  configured: number | undefined,
-  localDefault: number,
-  publicDefault: number,
-  publicBackend: boolean
-): number => {
-  const value =
-    publicBackend && (configured === undefined || configured === localDefault)
-      ? publicDefault
-      : configured;
+const pollingInterval = (configured: number | undefined, localDefault: number, publicDefault: number, publicBackend: boolean): number => {
+  const value = publicBackend && (configured === undefined || configured === localDefault) ? publicDefault : configured;
   return clampInterval(value, publicBackend ? publicDefault : localDefault);
 };
 
-const clampInterval = (value: number | undefined, fallback: number): number => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return fallback;
-  }
+const clampInterval = (value: number | undefined, fallback: number): number =>
+  typeof value !== 'number' || !Number.isFinite(value) ? fallback : Math.min(Math.max(value, 500), 60_000);
 
-  return Math.min(Math.max(value, 500), 60_000);
-};
+const isTrustedPublicBackend = (settings: WallpaperPreferences | undefined): boolean =>
+  settings?.spotify.provider === 'backend' && !!settings.spotify.backendOrigin && isTrustedPublicBackendOrigin(settings.spotify.backendOrigin);
 
-const normalizeBackendBaseUrl = (value: string): SpotifyResult<string> => {
-  try {
-    const url = new URL(value);
-    if (
-      !isCanonicalOriginInput(value, url) ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash ||
-      (url.pathname && url.pathname !== '/')
-    ) {
-      return invalidBackendUrl();
-    }
-
-    const isLoopback = url.protocol === 'http:' && isLoopbackHost(url.hostname);
-    const officialOrigin = configuredOfficialBackendOrigin();
-    const isOfficial =
-      url.protocol === 'https:' &&
-      officialOrigin !== null &&
-      url.origin === officialOrigin;
-    if (!isLoopback && !isOfficial) {
-      return invalidBackendUrl();
-    }
-
-    return { ok: true, value: `${url.origin}/` };
-  } catch {
-    return invalidBackendUrl();
-  }
-};
-
-const configuredOfficialBackendOrigin = (): string | null => {
-  const value = import.meta.env.VITE_SPOTIFY_BACKEND_ORIGIN;
-  if (!value) {
-    return null;
-  }
-  try {
-    const url = new URL(value);
-    if (
-      !isCanonicalOriginInput(value, url) ||
-      url.protocol !== 'https:' ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash ||
-      (url.pathname && url.pathname !== '/')
-    ) {
-      return null;
-    }
-    return url.origin;
-  } catch {
-    return null;
-  }
-};
-
-const isCanonicalOriginInput = (value: string, url: URL): boolean =>
-  value === url.origin || value === `${url.origin}/`;
-
-const isTrustedPublicBackend = (settings: WallpaperPreferences | undefined): boolean => {
-  if (
-    settings?.spotify.provider !== 'backend' ||
-    !settings.spotify.backendOrigin
-  ) {
-    return false;
-  }
-  const normalized = normalizeBackendBaseUrl(settings.spotify.backendOrigin);
-  return normalized.ok && normalized.value.startsWith('https://');
-};
-
-const isLoopbackHost = (hostname: string): boolean => hostname === '127.0.0.1' || hostname === '[::1]';
-
-const backendFetchPolicy = {
-  redirect: 'error',
-  credentials: 'omit',
-  referrerPolicy: 'no-referrer'
-} satisfies Pick<RequestInit, 'redirect' | 'credentials' | 'referrerPolicy'>;
-
-const invalidBackendUrl = (): SpotifyResult<string> => ({
-  ok: false,
-  error: {
-    kind: 'unavailable',
-    message: 'Spotify backend URL is invalid.'
-  }
-});
-
-const backendErrorFromResponse = async (response: Response): Promise<SpotifyPlaybackError> => {
-  const payload = await response.json().catch(() => null);
-  const unwrapped = unwrapBackendPayload(payload);
-  return unwrapped.ok ? classifySpotifyStatus(response.status, response.headers.get('retry-after')) : unwrapped.error;
-};
-
-const unwrapBackendPayload = (payload: unknown): SpotifyResult<unknown> => {
-  if (!payload || typeof payload !== 'object') {
-    return { ok: true, value: payload };
-  }
-
-  const record = payload as Record<string, unknown>;
-  if (record.ok === true) {
-    return { ok: true, value: record.value };
-  }
-
-  if (record.ok === false && record.error && typeof record.error === 'object') {
-    const error = record.error as Partial<SpotifyPlaybackError>;
-    const kind =
-      error.kind === 'unauthorized' ||
-      error.kind === 'forbidden' ||
-      error.kind === 'rate_limited' ||
-      error.kind === 'network_error' ||
-      error.kind === 'unavailable' ||
-      error.kind === 'unknown_response_shape' ||
-      error.kind === 'item_null'
-        ? error.kind
-        : 'unknown_response_shape';
-    return {
-      ok: false,
-      error: {
-        kind,
-        message: backendErrorMessage(kind),
-        retryAfterMs: validRetryAfterMs(error.retryAfterMs),
-        status: typeof error.status === 'number' ? error.status : undefined
-      }
-    };
-  }
-
-  return { ok: true, value: payload };
-};
-
-const validRetryAfterMs = (value: unknown): number | undefined =>
-  typeof value === 'number' &&
-  Number.isFinite(value) &&
-  Number.isInteger(value) &&
-  value >= 0 &&
-  value <= 86_400_000
-    ? value
-    : undefined;
-
-const backendErrorMessage = (
-  kind: SpotifyPlaybackError['kind']
-): string => {
-  switch (kind) {
-    case 'unauthorized':
-      return 'Spotify authorization is required.';
-    case 'forbidden':
-      return 'Spotify playback access was denied.';
-    case 'rate_limited':
-      return 'Spotify rate limit reached.';
-    case 'network_error':
-      return 'Spotify backend network request failed.';
-    case 'unavailable':
-      return 'Spotify backend is unavailable.';
-    case 'item_null':
-      return 'Spotify has no current playback item.';
-    case 'unknown_response_shape':
-      return 'Spotify backend returned an unexpected response.';
-  }
-};
-
-const isNormalizedPlayback = (value: unknown): value is NormalizedPlayback => {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const record = value as Partial<NormalizedPlayback>;
-  return (
-    (record.source === 'spotify' || record.source === 'mock') &&
-    (record.itemType === 'track' || record.itemType === 'episode' || record.itemType === 'none') &&
-    typeof record.title === 'string' &&
-    Array.isArray(record.artists) &&
-    typeof record.durationMs === 'number' &&
-    typeof record.progressMs === 'number' &&
-    typeof record.isPlaying === 'boolean'
-  );
-};
+// Keep the import surface intentionally narrow while preserving the legacy polling module path.
+export type { CredentialInput, SpotifyPlaybackCommand };

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import trackFixture from '../../../../tests/fixtures/spotify/current-playback-track.json';
+import providerFixture from '../../../../tests/contracts/provider-v1/success-playing.json';
 import { mockPlayback } from '../mock/mockPlayback';
 import { defaultSettings } from '../settings/defaultSettings';
 import {
@@ -8,6 +9,7 @@ import {
   nextPollingDelayMs,
   playbackHistoryAfterPoll,
   playbackProviderFromSettings,
+  selectPlaybackProvider,
   SpotifyPlaybackSession
 } from './polling';
 
@@ -70,6 +72,18 @@ describe('Spotify polling decisions', () => {
       fetcher
     )).toBeNull();
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('exposes explicit mock, ready, and invalid provider selections', () => {
+    const mock = selectPlaybackProvider(defaultSettings, null);
+    expect(mock.kind).toBe('mock');
+    if (mock.kind === 'mock') expect(mock.provider.kind).toBe('mock');
+
+    const invalid = selectPlaybackProvider({
+      ...defaultSettings,
+      spotify: { ...defaultSettings.spotify, provider: 'direct' }
+    }, null);
+    expect(invalid).toMatchObject({ kind: 'invalid', error: { code: 'missing-credentials' } });
   });
 
   it('preserves current and previous playback references after a polling error', () => {
@@ -156,9 +170,9 @@ describe('Spotify polling decisions', () => {
     }) as typeof fetch;
     const session = new SpotifyPlaybackSession({ clientId: 'client-id', refreshToken: 'refresh-token' }, fetcher);
 
-    await session.poll(0);
-    await session.poll(1000);
-    await session.poll(6000);
+    await session.pollAt(0);
+    await session.pollAt(1000);
+    await session.pollAt(6000);
 
     expect(calls).toEqual([
       'https://accounts.spotify.com/api/token',
@@ -181,15 +195,35 @@ describe('Spotify polling decisions', () => {
         }
       },
       { kind: 'backend', pairingToken: 'secret-pairing-token' },
-      (() => Promise.resolve(new Response(JSON.stringify(trackFixture), { status: 200 }))) as typeof fetch
+      (() => Promise.resolve(new Response(JSON.stringify(providerFixture), { status: 200 }))) as typeof fetch
     );
 
     expect(provider).toBeInstanceOf(BackendPlaybackProvider);
-    const result = await provider?.poll(0);
+    if (!(provider instanceof BackendPlaybackProvider)) return;
+    const result = await provider.pollAt(0);
 
     expect(result?.ok).toBe(true);
     if (!result?.ok) return;
-    expect(result.value.title).toBe('Current Song');
+    expect(result.value.title).toBe('Example Track');
+  });
+
+  it('rejects raw Spotify playback from a backend instead of normalizing an unversioned payload', async () => {
+    const provider = new BackendPlaybackProvider(
+      { backendUrl: 'http://127.0.0.1:49320/', pairingToken: 'secret-pairing-token' },
+      (async () => new Response(JSON.stringify(trackFixture), { status: 200 })) as typeof fetch
+    );
+
+    const result = await provider.pollAt(0);
+    expect(result).toMatchObject({ ok: false, error: { kind: 'unknown_response_shape' } });
+  });
+
+  it('rejects a mock-sourced normalized envelope from the backend contract', async () => {
+    const provider = new BackendPlaybackProvider(
+      { backendUrl: 'http://127.0.0.1:49320/', pairingToken: 'secret-pairing-token' },
+      (async () => new Response(JSON.stringify({ ...providerFixture, value: { ...providerFixture.value, source: 'mock' } }), { status: 200 })) as typeof fetch
+    );
+
+    await expect(provider.pollAt(0)).resolves.toMatchObject({ ok: false, error: { kind: 'unknown_response_shape' } });
   });
 
   it('does not fall back to direct credentials when the selected backend is invalid', () => {
@@ -209,15 +243,15 @@ describe('Spotify polling decisions', () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetcher = (async (url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(url), init });
-      return new Response(JSON.stringify(trackFixture), { status: 200 });
+      return new Response(JSON.stringify(providerFixture), { status: 200 });
     }) as typeof fetch;
     const provider = new BackendPlaybackProvider(
       { backendUrl: 'http://127.0.0.1:49320/', pairingToken: 'secret-pairing-token' },
       fetcher
     );
 
-    await provider.poll(0);
-    await provider.control({ type: 'pause' }, 1000);
+    await provider.pollAt(0);
+    await provider.controlAt({ type: 'pause' }, 1000);
 
     expect(calls.map((call) => [call.url, call.init?.method, (call.init?.headers as Record<string, string>).authorization])).toEqual([
       ['http://127.0.0.1:49320/api/playback', 'GET', 'Bearer secret-pairing-token'],
@@ -233,12 +267,43 @@ describe('Spotify polling decisions', () => {
     }
   });
 
+  it('rejects a successful control envelope carried by a non-success HTTP status', async () => {
+    const provider = new BackendPlaybackProvider(
+      { backendUrl: 'http://127.0.0.1:49320/', pairingToken: 'secret-pairing-token' },
+      (async () => Response.json({ ok: true, value: null }, { status: 500 })) as typeof fetch
+    );
+
+    await expect(provider.controlAt({ type: 'pause' }, 0)).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'unknown_response_shape', status: 500 }
+    });
+  });
+
+  it('aborts backend requests and rejects the result after dispose through the shared interface', async () => {
+    let release!: (response: Response) => void;
+    const response = new Promise<Response>((resolve) => { release = resolve; });
+    let requestSignal: AbortSignal | undefined;
+    const provider = new BackendPlaybackProvider(
+      { backendUrl: 'http://127.0.0.1:49320/', pairingToken: 'secret-pairing-token' },
+      (async (_url, init) => {
+        requestSignal = init?.signal ?? undefined;
+        return response;
+      }) as typeof fetch
+    );
+    const pending = provider.poll(new AbortController().signal);
+    provider.dispose();
+    release(Response.json(providerFixture));
+
+    await expect(pending).resolves.toMatchObject({ ok: false, error: { kind: 'unavailable' } });
+    expect(requestSignal?.aborted).toBe(true);
+  });
+
   it('accepts only the exact build-time HTTPS origin', async () => {
     vi.stubEnv('VITE_SPOTIFY_BACKEND_ORIGIN', 'https://api.wallpaper.example');
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetcher = (async (url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(url), init });
-      return Response.json({ ok: true, value: trackFixture });
+      return Response.json(providerFixture);
     }) as typeof fetch;
     const official = new BackendPlaybackProvider(
       {
@@ -255,8 +320,8 @@ describe('Spotify polling decisions', () => {
       fetcher
     );
 
-    await expect(official.poll(0)).resolves.toMatchObject({ ok: true });
-    await expect(arbitrary.poll(0)).resolves.toMatchObject({ ok: false });
+    await expect(official.pollAt(0)).resolves.toMatchObject({ ok: true });
+    await expect(arbitrary.pollAt(0)).resolves.toMatchObject({ ok: false });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('https://api.wallpaper.example/api/playback');
   });
@@ -283,7 +348,7 @@ describe('Spotify polling decisions', () => {
       fetcher
     );
 
-    const result = await provider.poll(0);
+    const result = await provider.pollAt(0);
 
     expect(result.ok).toBe(false);
     expect(calls).toEqual([]);
@@ -308,7 +373,7 @@ describe('Spotify polling decisions', () => {
       fetcher
     );
 
-    await expect(provider.poll(0)).resolves.toMatchObject({ ok: false });
+    await expect(provider.pollAt(0)).resolves.toMatchObject({ ok: false });
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
@@ -374,7 +439,7 @@ describe('Spotify polling decisions', () => {
         )) as typeof fetch
     );
 
-    const result = await provider.poll(0);
+    const result = await provider.pollAt(0);
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -402,7 +467,7 @@ describe('Spotify polling decisions', () => {
         )) as typeof fetch
     );
 
-    const result = await provider.poll(0);
+    const result = await provider.pollAt(0);
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -425,7 +490,7 @@ describe('Spotify polling decisions', () => {
           )) as typeof fetch
       );
 
-      const result = await provider.poll(0);
+      const result = await provider.pollAt(0);
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -454,7 +519,7 @@ describe('Spotify polling decisions', () => {
         })) as typeof fetch
     );
 
-    const result = await provider.poll(0);
+    const result = await provider.pollAt(0);
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

@@ -12,7 +12,7 @@
   import {
     nextPollingDelayMs,
     playbackHistoryAfterPoll,
-    playbackProviderFromSettings,
+    selectPlaybackProvider,
     type SpotifyPlaybackProvider
   } from './spotify/polling';
   import { layoutStyle } from './layout/style';
@@ -45,6 +45,9 @@
   let lastPollingDelayMs: number | null = null;
   let consecutiveErrors = 0;
   let spotifySession: SpotifyPlaybackProvider | null = null;
+  let spotifySessionAbortController: AbortController | null = null;
+  let providerSelection: 'mock' | 'ready' | 'invalid' = 'mock';
+  let providerConfigurationError: string | null = null;
   const credentialClosure = createProcessMemoryCredentialClosure();
   let networkAllowed = false;
   let configurationSafetyGateOpen = false;
@@ -159,7 +162,9 @@
     !playback.device?.isRestricted &&
     !controlBusy;
   $: controlStatusText = controlError?.message ?? (playback.device?.isRestricted ? 'Current Spotify device is restricted.' : '');
-  $: spotifyStatusText = spotifyError
+  $: spotifyStatusText = providerConfigurationError
+    ? providerConfigurationError
+    : spotifyError
     ? `${spotifyError.kind}${spotifyError.status ? ` ${spotifyError.status}` : ''}: ${spotifyError.message}`
     : 'ok';
 
@@ -310,6 +315,9 @@
     }
     pollingTimeout = null;
     lastPollingDelayMs = null;
+    spotifySessionAbortController?.abort();
+    spotifySessionAbortController = null;
+    spotifySession?.dispose();
     spotifySession = null;
   };
 
@@ -352,7 +360,7 @@
 
     controlBusy = true;
     controlError = null;
-    const result = await spotifySession.control(command);
+    const result = await spotifySession.control(command, spotifySessionAbortController?.signal ?? new AbortController().signal);
     controlBusy = false;
 
     if (result.ok) {
@@ -447,13 +455,17 @@
 
   const spotifyPollingKey = (nextSettings: WallpaperPreferences) => {
     const status = credentialClosure.status();
-    if (!configurationSafetyGateOpen || !networkAllowed || nextSettings.spotify.provider === 'mock') {
-      return '';
+    if (!configurationSafetyGateOpen) {
+      return `blocked:${nextSettings.spotify.provider}`;
+    }
+    if (nextSettings.spotify.provider === 'mock') {
+      return 'mock';
     }
 
     return JSON.stringify({
       provider: nextSettings.spotify.provider,
       backendOrigin: nextSettings.spotify.backendOrigin,
+      networkAllowed,
       playingIntervalMs: nextSettings.spotify.pollIntervalPlayingMs,
       pausedIntervalMs: nextSettings.spotify.pollIntervalPausedMs,
       credentialRevision: status.revision
@@ -473,7 +485,9 @@
   const configureSpotifyPolling = () => {
     stopPolling();
 
-    if (!configurationSafetyGateOpen || !networkAllowed) {
+    if (!configurationSafetyGateOpen) {
+      providerSelection = 'mock';
+      providerConfigurationError = null;
       playbackMode = 'browser mock';
       spotifyError = null;
       controlError = null;
@@ -481,24 +495,40 @@
       return;
     }
 
-    const session = playbackProviderFromSettings(settings, credentialClosure.read());
-    if (!session) {
+    const selection = selectPlaybackProvider(settings, credentialClosure.read());
+    providerSelection = selection.kind;
+    providerConfigurationError = selection.kind === 'invalid' ? selection.error.message : null;
+    if (selection.kind === 'invalid') {
+      playbackMode = 'provider configuration required';
+      spotifyError = null;
+      controlError = null;
+      consecutiveErrors = 0;
+      return;
+    }
+    if (selection.kind === 'mock' || !networkAllowed) {
+      providerSelection = selection.kind === 'mock' ? 'mock' : 'invalid';
+      providerConfigurationError = !networkAllowed && settings.spotify.provider !== 'mock'
+        ? 'Spotify network is disabled by the current safety gate.'
+        : null;
       playbackMode = 'browser mock';
       spotifyError = null;
       controlError = null;
       consecutiveErrors = 0;
       return;
     }
+    const session = selection.provider;
 
     playbackMode = settings.spotify.provider === 'backend' ? 'spotify backend' : 'spotify direct';
     spotifyError = null;
     controlError = null;
     consecutiveErrors = 0;
     spotifySession = session;
+    spotifySessionAbortController = new AbortController();
+    const signal = spotifySessionAbortController.signal;
     const runId = pollingRunId;
 
     const poll = async () => {
-      const result = await session.poll();
+      const result = await session.poll(signal);
       if (runId !== pollingRunId) {
         return;
       }
@@ -603,6 +633,10 @@
   style={themeVariables}
 >
   <div class="album-backdrop" aria-hidden="true" style={albumBackground}></div>
+
+  {#if providerConfigurationError}
+    <div class="provider-status" role="status" aria-live="polite">{providerConfigurationError}</div>
+  {/if}
 
   <VisualizerLayer frame={visualizerFrame} {settings} {theme} albumItem={activeAlbumItem} />
 
@@ -1254,6 +1288,21 @@
     font-size: 0.82rem;
     line-height: 1.7;
     pointer-events: none;
+  }
+
+  .provider-status {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    z-index: 20;
+    max-width: min(90vw, 42rem);
+    padding: 0.65rem 0.9rem;
+    border: 1px solid rgba(255, 184, 92, 0.65);
+    border-radius: 0.5rem;
+    background: rgba(32, 24, 14, 0.88);
+    color: #ffd9a3;
+    font-size: 0.8rem;
+    transform: translateX(-50%);
   }
 
   @keyframes album-spin {

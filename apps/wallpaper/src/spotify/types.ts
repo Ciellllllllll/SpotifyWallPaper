@@ -3,6 +3,7 @@ import type { SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
 export interface SpotifyTokenState {
   accessToken: string;
   expiresAtMs: number;
+  refreshToken?: string;
 }
 
 export interface SpotifyCredentials {
