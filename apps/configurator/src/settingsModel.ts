@@ -15,7 +15,6 @@ export interface ConfiguratorDraft {
   provider: PlaybackProviderKind;
   backendOrigin: string;
   spotifyClientId: string;
-  spotifyRefreshToken: string;
   preset: LayoutPresetName;
   presetChanged: boolean;
   backgroundMode: WallpaperPreferences['background']['mode'];
@@ -38,7 +37,6 @@ export const defaultDraft: ConfiguratorDraft = {
   provider: 'mock',
   backendOrigin: '',
   spotifyClientId: '',
-  spotifyRefreshToken: '',
   preset: defaultLayoutPreset,
   presetChanged: false,
   backgroundMode: 'album-blur',
@@ -107,7 +105,6 @@ export const importSettingsJson = (source: string): { draft: ConfiguratorDraft; 
         provider: migrated.preferences.spotify.provider,
         backendOrigin: migrated.preferences.spotify.backendOrigin ?? '',
         spotifyClientId: '',
-        spotifyRefreshToken: '',
         preset: migrated.preferences.layout.preset,
         presetChanged: false,
         backgroundMode: migrated.preferences.background.mode,

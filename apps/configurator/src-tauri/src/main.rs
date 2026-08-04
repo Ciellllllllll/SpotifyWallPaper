@@ -8,7 +8,7 @@ use std::{
     io::{BufRead, BufReader, Write},
     net::TcpListener,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     sync::{mpsc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -30,22 +30,19 @@ const SENSITIVE_KEYS: [&str; 11] = [
 
 const SPOTIFY_SCOPES: &str =
     "user-read-currently-playing user-read-playback-state user-modify-playback-state";
-
-struct OAuthState {
-    verifier: String,
-    state: String,
-    redirect_uri: String,
-}
-
-struct OAuthRequest {
-    auth: SpotifyAuthStart,
-    state: OAuthState,
-}
+const SPOTIFY_LOOPBACK_REDIRECT_URI: &str = "http://127.0.0.1:8899/callback";
 
 #[derive(Debug)]
 struct LoopbackRedirectTarget {
     bind_address: String,
     path: String,
+}
+
+struct SpotifyAuthRequest {
+    auth_url: String,
+    verifier: String,
+    state: String,
+    redirect_uri: String,
 }
 
 struct RainmeterScheduler {
@@ -67,26 +64,18 @@ struct RainmeterSchedulerPayload {
 
 #[derive(Default)]
 struct AppState {
-    oauth: Mutex<Option<OAuthState>>,
     rainmeter: Mutex<Option<RainmeterScheduler>>,
 }
 
 #[derive(Serialize)]
-struct SpotifyAuthStart {
-    auth_url: String,
-    state: String,
-}
-
-#[derive(Serialize)]
-struct SpotifyTokenExchange {
-    refresh_token: String,
-    expires_in: Option<u64>,
+struct SpotifyAuthorizeStatus {
+    status: &'static str,
+    error_code: Option<&'static str>,
 }
 
 #[derive(Deserialize)]
 struct SpotifyTokenResponse {
     refresh_token: Option<String>,
-    expires_in: Option<u64>,
 }
 
 #[tauri::command]
@@ -102,109 +91,63 @@ fn write_rainmeter_json(output_path: String, payload_json: String) -> Result<(),
 }
 
 #[tauri::command]
-fn open_external_url(url: String) -> Result<(), String> {
-    let url = url.trim();
-    if !url.starts_with("https://accounts.spotify.com/authorize?") {
-        return Err("Only Spotify authorization URLs can be opened.".to_string());
+async fn authorize_spotify_and_copy_swpt1(client_id: String) -> SpotifyAuthorizeStatus {
+    match authorize_spotify_and_copy_swpt1_inner(client_id, SPOTIFY_LOOPBACK_REDIRECT_URI).await {
+        Ok(()) => SpotifyAuthorizeStatus {
+            status: "copied",
+            error_code: None,
+        },
+        Err(error_code) => SpotifyAuthorizeStatus {
+            status: "error",
+            error_code: Some(error_code),
+        },
     }
-
-    open_url_with_system_browser(url)
 }
 
-#[tauri::command]
-fn start_spotify_pkce_auth(
+async fn authorize_spotify_and_copy_swpt1_inner(
     client_id: String,
-    redirect_uri: String,
-    state: tauri::State<AppState>,
-) -> Result<SpotifyAuthStart, String> {
-    let request = build_spotify_oauth_request(&client_id, &redirect_uri)?;
-
-    *state
-        .oauth
-        .lock()
-        .map_err(|_| "OAuth state is unavailable.".to_string())? = Some(request.state);
-
-    Ok(request.auth)
-}
-
-#[tauri::command]
-async fn authorize_spotify_pkce(
-    client_id: String,
-    redirect_uri: String,
-) -> Result<SpotifyTokenExchange, String> {
+    redirect_uri: &str,
+) -> Result<(), &'static str> {
     let client_id = client_id.trim().to_string();
-    let request = build_spotify_oauth_request(&client_id, &redirect_uri)?;
-    let target = parse_loopback_redirect_uri(&request.state.redirect_uri)?;
-    let listener = TcpListener::bind(&target.bind_address).map_err(|_| {
-        "Callback listener could not start. Check whether the redirect port is already in use."
-            .to_string()
-    })?;
+    let request =
+        build_spotify_oauth_request(&client_id, &redirect_uri).map_err(|_| "invalid_input")?;
+    let target =
+        parse_loopback_redirect_uri(&request.redirect_uri).map_err(|_| "invalid_redirect_uri")?;
+    let listener = TcpListener::bind(&target.bind_address).map_err(|_| "listener_unavailable")?;
     listener
         .set_nonblocking(true)
-        .map_err(|_| "Callback listener mode could not be configured.".to_string())?;
+        .map_err(|_| "listener_unavailable")?;
 
-    open_url_with_system_browser(&request.auth.auth_url)?;
+    open_url_with_system_browser(&request.auth_url).map_err(|_| "browser_open_failed")?;
 
     let callback_path = target.path;
     let callback = tauri::async_runtime::spawn_blocking(move || {
         wait_for_oauth_callback(listener, &callback_path)
     })
     .await
-    .map_err(|_| "Callback listener stopped unexpectedly.".to_string())??;
+    .map_err(|_| "callback_unavailable")?
+    .map_err(|_| "callback_unavailable")?;
 
-    let callback = parse_callback_query(&callback)?;
-    if callback.state.as_deref() != Some(request.state.state.as_str()) {
-        return Err("Spotify authorization state did not match.".to_string());
+    let callback = parse_callback_query(&callback).map_err(|_| "callback_invalid")?;
+    if callback.state.as_deref() != Some(request.state.as_str()) {
+        return Err("state_mismatch");
     }
-
-    if let Some(error) = callback.error {
-        return Err(format!("Spotify authorization failed: {error}"));
+    if callback.error.is_some() {
+        return Err("authorization_denied");
     }
+    let code = callback.code.ok_or("callback_invalid")?;
+    let refresh_token =
+        exchange_spotify_code(&client_id, &code, &request.redirect_uri, &request.verifier)
+            .await
+            .map_err(|_| "token_exchange_failed")?;
+    let swpt1 = encode_wallpaper_engine_token(&client_id, &refresh_token)
+        .map_err(|_| "token_encoding_failed")?;
 
-    let code = callback
-        .code
-        .ok_or_else(|| "Spotify callback did not include an authorization code.".to_string())?;
-
-    exchange_spotify_code(
-        client_id,
-        code,
-        request.state.redirect_uri,
-        request.state.verifier,
-    )
-    .await
-}
-
-#[tauri::command]
-async fn exchange_spotify_callback(
-    client_id: String,
-    callback_url: String,
-    state: tauri::State<'_, AppState>,
-) -> Result<SpotifyTokenExchange, String> {
-    let client_id = client_id.trim().to_string();
-    if client_id.is_empty() {
-        return Err("Client ID is required.".to_string());
+    if !native_confirm_copy() {
+        return Err("copy_not_confirmed");
     }
-
-    let callback = parse_callback_query(&callback_url)?;
-    let saved = state
-        .oauth
-        .lock()
-        .map_err(|_| "OAuth state is unavailable.".to_string())?
-        .take()
-        .ok_or_else(|| "Spotify authorization has not been started.".to_string())?;
-
-    if callback.state.as_deref() != Some(saved.state.as_str()) {
-        return Err("Spotify authorization state did not match.".to_string());
-    }
-
-    if let Some(error) = callback.error {
-        return Err(format!("Spotify authorization failed: {error}"));
-    }
-
-    let code = callback
-        .code
-        .ok_or_else(|| "Spotify callback did not include an authorization code.".to_string())?;
-    exchange_spotify_code(client_id, code, saved.redirect_uri, saved.verifier).await
+    copy_to_clipboard(&swpt1).map_err(|_| "clipboard_unavailable")?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -374,7 +317,7 @@ struct CallbackQuery {
     error: Option<String>,
 }
 
-fn parse_callback_query(callback_url: &str) -> Result<CallbackQuery, String> {
+fn parse_callback_query(callback_url: &str) -> Result<CallbackQuery, &'static str> {
     let query = callback_url
         .split_once('?')
         .map(|(_, query)| query)
@@ -399,7 +342,7 @@ fn parse_callback_query(callback_url: &str) -> Result<CallbackQuery, String> {
     }
 
     if output.code.is_none() && output.error.is_none() {
-        return Err("Spotify callback did not include an authorization result.".to_string());
+        return Err("callback_missing_result");
     }
 
     Ok(output)
@@ -488,7 +431,7 @@ fn normalize_key(key: &str) -> String {
 fn build_spotify_oauth_request(
     client_id: &str,
     redirect_uri: &str,
-) -> Result<OAuthRequest, String> {
+) -> Result<SpotifyAuthRequest, String> {
     let client_id = client_id.trim();
     let redirect_uri = redirect_uri.trim();
     if client_id.is_empty() || redirect_uri.is_empty() {
@@ -507,31 +450,26 @@ fn build_spotify_oauth_request(
         encode_component(&state_value)
     );
 
-    Ok(OAuthRequest {
-        auth: SpotifyAuthStart {
-            auth_url,
-            state: state_value.clone(),
-        },
-        state: OAuthState {
-            verifier,
-            state: state_value,
-            redirect_uri: redirect_uri.to_string(),
-        },
+    Ok(SpotifyAuthRequest {
+        auth_url,
+        verifier,
+        state: state_value,
+        redirect_uri: redirect_uri.to_string(),
     })
 }
 
 async fn exchange_spotify_code(
-    client_id: String,
-    code: String,
-    redirect_uri: String,
-    verifier: String,
-) -> Result<SpotifyTokenExchange, String> {
+    client_id: &str,
+    code: &str,
+    redirect_uri: &str,
+    verifier: &str,
+) -> Result<String, String> {
     let params = [
         ("grant_type", "authorization_code"),
-        ("code", code.as_str()),
-        ("redirect_uri", redirect_uri.as_str()),
-        ("client_id", client_id.as_str()),
-        ("code_verifier", verifier.as_str()),
+        ("code", code),
+        ("redirect_uri", redirect_uri),
+        ("client_id", client_id),
+        ("code_verifier", verifier),
     ];
 
     let response = reqwest::Client::new()
@@ -539,24 +477,138 @@ async fn exchange_spotify_code(
         .form(&params)
         .send()
         .await
-        .map_err(|_| "Spotify token request failed.".to_string())?;
+        .map_err(|_| "request_failed".to_string())?;
 
     if !response.status().is_success() {
-        return Err("Spotify token exchange was rejected.".to_string());
+        return Err("exchange_rejected".to_string());
     }
 
     let token = response
         .json::<SpotifyTokenResponse>()
         .await
-        .map_err(|_| "Spotify token response was malformed.".to_string())?;
+        .map_err(|_| "response_malformed".to_string())?;
     let refresh_token = token
         .refresh_token
-        .ok_or_else(|| "Spotify token response did not include a Refresh Token.".to_string())?;
+        .ok_or_else(|| "refresh_token_missing".to_string())?;
 
-    Ok(SpotifyTokenExchange {
-        refresh_token,
-        expires_in: token.expires_in,
-    })
+    Ok(refresh_token)
+}
+
+fn encode_wallpaper_engine_token(client_id: &str, refresh_token: &str) -> Result<String, String> {
+    let payload = serde_json::json!({
+        "v": 1,
+        "clientId": client_id,
+        "refreshToken": refresh_token,
+    });
+    let bytes = serde_json::to_vec(&payload).map_err(|_| "serialize_failed".to_string())?;
+    Ok(format!(
+        "swpt1.{}",
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+    ))
+}
+
+fn native_confirm_copy() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        return Command::new("powershell")
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Add-Type -AssemblyName PresentationFramework; $r=[System.Windows.MessageBox]::Show('Spotify authorization succeeded. Copy the one-time Wallpaper Engine token to the clipboard?','Spotify Wallpaper',[System.Windows.MessageBoxButton]::YesNo,[System.Windows.MessageBoxImage]::Question); if ($r -eq 'Yes') { exit 0 } else { exit 1 }",
+            ])
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        return Command::new("osascript")
+            .args([
+                "-e",
+                "display dialog \"Spotify authorization succeeded. Copy the one-time Wallpaper Engine token to the clipboard?\" with title \"Spotify Wallpaper\" buttons {\"Cancel\", \"Copy\"} default button \"Copy\"",
+            ])
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        return Command::new("zenity")
+            .args([
+                "--question",
+                "--title=Spotify Wallpaper",
+                "--text=Spotify authorization succeeded. Copy the one-time Wallpaper Engine token to the clipboard?",
+            ])
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+    }
+
+    #[allow(unreachable_code)]
+    false
+}
+
+fn copy_to_clipboard(value: &str) -> Result<(), &'static str> {
+    #[cfg(target_os = "windows")]
+    {
+        return pipe_to_command(
+            Command::new("powershell").args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$input | Set-Clipboard",
+            ]),
+            value,
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        return pipe_to_command(Command::new("pbcopy"), value);
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if pipe_to_command(
+            Command::new("xclip").args(["-selection", "clipboard"]),
+            value,
+        )
+        .is_ok()
+        {
+            return Ok(());
+        }
+        return pipe_to_command(Command::new("xsel").args(["--clipboard", "--input"]), value);
+    }
+
+    #[allow(unreachable_code)]
+    Err("clipboard_unavailable")
+}
+
+fn pipe_to_command(command: &mut Command, value: &str) -> Result<(), &'static str> {
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| "clipboard_unavailable")?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(value.as_bytes())
+            .map_err(|_| "clipboard_unavailable")?;
+    } else {
+        return Err("clipboard_unavailable");
+    }
+    child
+        .wait()
+        .map_err(|_| "clipboard_unavailable")?
+        .success()
+        .then_some(())
+        .ok_or("clipboard_unavailable")
 }
 
 fn parse_loopback_redirect_uri(redirect_uri: &str) -> Result<LoopbackRedirectTarget, String> {
@@ -592,49 +644,53 @@ fn parse_loopback_redirect_uri(redirect_uri: &str) -> Result<LoopbackRedirectTar
     })
 }
 
-fn wait_for_oauth_callback(listener: TcpListener, callback_path: &str) -> Result<String, String> {
+fn wait_for_oauth_callback(
+    listener: TcpListener,
+    callback_path: &str,
+) -> Result<String, &'static str> {
     let deadline = Instant::now() + Duration::from_secs(300);
     let mut stream = loop {
         match listener.accept() {
             Ok((stream, _)) => break stream,
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 if Instant::now() >= deadline {
-                    return Err("Spotify callback was not received before the timeout.".to_string());
+                    return Err("callback_timeout");
                 }
                 thread::sleep(Duration::from_millis(50));
             }
-            Err(_) => return Err("Spotify callback listener failed.".to_string()),
+            Err(_) => return Err("callback_listener_failed"),
         }
     };
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
-        .map_err(|_| "Spotify callback read timeout could not be configured.".to_string())?;
+        .map_err(|_| "callback_timeout_config_failed")?;
     let mut request_line = String::new();
     {
         let mut reader = BufReader::new(&mut stream);
         reader
             .read_line(&mut request_line)
-            .map_err(|_| "Spotify callback request could not be read.".to_string())?;
+            .map_err(|_| "callback_read_failed")?;
     }
 
     let path = request_line
         .split_whitespace()
         .nth(1)
-        .ok_or_else(|| "Spotify callback request was malformed.".to_string())?;
+        .ok_or("callback_request_malformed")?;
     if !path.starts_with(callback_path) {
         let _ = write_http_response(
             &mut stream,
             "404 Not Found",
             "Spotify callback path did not match. Return to Spotify Wallpaper Configurator.",
         );
-        return Err("Spotify callback path did not match.".to_string());
+        return Err("callback_path_mismatch");
     }
 
     write_http_response(
         &mut stream,
         "200 OK",
         "Spotify authorization finished. You can close this browser tab and return to Spotify Wallpaper Configurator.",
-    )?;
+    )
+    .map_err(|_| "callback_response_failed")?;
     Ok(path.to_string())
 }
 
@@ -675,10 +731,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             validate_settings_json,
             write_rainmeter_json,
-            open_external_url,
-            start_spotify_pkce_auth,
-            authorize_spotify_pkce,
-            exchange_spotify_callback,
+            authorize_spotify_and_copy_swpt1,
             start_rainmeter_scheduler,
             update_rainmeter_scheduler,
             stop_rainmeter_scheduler
@@ -769,6 +822,22 @@ mod tests {
             .expect_err("external callback URLs are not supported");
 
         assert!(error.contains("127.0.0.1"));
+    }
+
+    #[test]
+    fn encodes_the_legacy_token_without_returning_oauth_material() {
+        let token = encode_wallpaper_engine_token("client-id", "refresh-token")
+            .expect("token encoding should succeed");
+        assert!(token.starts_with("swpt1."));
+        let encoded = token.trim_start_matches("swpt1.");
+        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(encoded)
+            .expect("token payload should be base64url");
+        let payload: serde_json::Value =
+            serde_json::from_slice(&bytes).expect("payload should be JSON");
+        assert_eq!(payload["v"], 1);
+        assert_eq!(payload["clientId"], "client-id");
+        assert_eq!(payload["refreshToken"], "refresh-token");
     }
 
     fn unique_temp_path(file_name: &str) -> std::path::PathBuf {

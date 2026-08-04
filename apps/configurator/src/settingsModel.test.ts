@@ -5,28 +5,22 @@ describe('configurator settings model', () => {
   it('builds secret-free v2 preferences regardless of draft credentials', () => {
     const settings = buildSettings({
       ...defaultDraft,
-      spotifyClientId: 'client-id',
-      spotifyRefreshToken: 'secret-refresh-token'
+      spotifyClientId: 'client-id'
     });
 
     expect(settings.schemaVersion).toBe(2);
     expect(settings.spotify.provider).toBe('mock');
     expect('clientId' in settings.spotify).toBe(false);
-    expect(exportSettingsJson({ ...defaultDraft, spotifyRefreshToken: 'secret-refresh-token' })).not.toContain(
-      'secret-refresh-token'
-    );
+    expect(exportSettingsJson(defaultDraft)).not.toMatch(/refreshToken|accessToken|clientSecret/i);
   });
 
   it('does not include refresh tokens in the v2 export', () => {
     const settings = buildSettings({
-      ...defaultDraft,
-      spotifyRefreshToken: 'secret-refresh-token'
+      ...defaultDraft
     });
 
     expect('refreshToken' in settings.spotify).toBe(false);
-    expect(exportSettingsJson({ ...defaultDraft, spotifyRefreshToken: 'secret-refresh-token' })).not.toContain(
-      'secret-refresh-token'
-    );
+    expect(exportSettingsJson(defaultDraft)).not.toMatch(/refreshToken|accessToken|clientSecret/i);
   });
 
   it('imports a generated settings JSON back into a draft', () => {
@@ -63,7 +57,6 @@ describe('configurator settings model', () => {
       })
     );
 
-    expect(imported.draft.spotifyRefreshToken).toBe('');
     expect(exportSettingsJson(imported.draft)).not.toContain('secret-refresh-token');
   });
 
@@ -109,7 +102,6 @@ describe('configurator settings model', () => {
     const exported = buildSettings(imported.draft);
 
     expect(imported.draft.spotifyClientId).toBe('');
-    expect(imported.draft.spotifyRefreshToken).toBe('');
     expect(exported.visualizer.enabled).toBe(defaultDraft.visualizerEnabled);
     expect(exported.transitions.enabled).toBe(defaultDraft.transitionEnabled);
     expect(exported.clock.enabled).toBe(defaultDraft.clockEnabled);
@@ -123,7 +115,6 @@ describe('configurator settings model', () => {
   it('exports Rainmeter settings without Spotify token material', () => {
     const json = exportSettingsJson({
       ...defaultDraft,
-      spotifyRefreshToken: 'secret-refresh-token',
       rainmeterEnabled: true,
       rainmeterOutputPath: 'D:\\Rainmeter\\NowPlaying.json'
     });
@@ -131,7 +122,7 @@ describe('configurator settings model', () => {
     expect(json).toContain('"rainmeter"');
     expect(json).toContain('"outputMode": "json"');
     expect(json).toContain('D:\\\\Rainmeter\\\\NowPlaying.json');
-    expect(json).not.toContain('secret-refresh-token');
+    expect(json).not.toMatch(/refreshToken|accessToken|clientSecret/i);
   });
 
   it('falls back safely for malformed import JSON', () => {

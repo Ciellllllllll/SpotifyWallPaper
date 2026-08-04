@@ -13,11 +13,8 @@
   import { buildRainmeterOutput, exportRainmeterJson } from './rainmeter/rainmeterExport';
   import { applyPreviewIntent } from './previewIntent';
   import {
-    authorizeSpotifyPkce,
-    exchangeSpotifyCallback,
-    openExternalUrl,
+    authorizeSpotifyAndCopySwpt1,
     startRainmeterScheduler,
-    startSpotifyPkceAuth,
     stopRainmeterScheduler,
     updateRainmeterScheduler,
     writeRainmeterJson
@@ -28,9 +25,6 @@
   let importWarning: string | null = null;
   let copyStatus = '';
   let rainmeterStatus = '';
-  let spotifyRedirectUri = 'http://127.0.0.1:8899/callback';
-  let spotifyCallbackUrl = '';
-  let spotifyAuthUrl = '';
   let oauthStatus = '';
   let rainmeterSchedulerRunning = false;
   let previewDisplayMode: WallpaperPreferences['player']['displayMode'] = 'album-details';
@@ -151,45 +145,13 @@
   };
 
   const startSpotifyAuth = async () => {
-    oauthStatus = 'Opening browser; waiting for Spotify authorization...';
-    spotifyAuthUrl = '';
-    const automatic = await authorizeSpotifyPkce(draft.spotifyClientId, spotifyRedirectUri);
-    if (automatic.ok) {
-      update('spotifyRefreshToken', automatic.refreshToken);
-      oauthStatus = 'Refresh token saved locally; export still excludes token by default';
-      return;
-    }
-
-    const result = await startSpotifyPkceAuth(draft.spotifyClientId, spotifyRedirectUri);
-    if (!result.ok) {
-      oauthStatus = automatic.message;
-      return;
-    }
-
-    spotifyAuthUrl = result.authUrl;
-    const opened = await openExternalUrl(result.authUrl);
-    if (opened.ok) {
-      oauthStatus = 'Spotify authorization opened';
-      return;
-    }
-
-    const popup = window.open(result.authUrl, '_blank', 'noopener,noreferrer');
-    oauthStatus = popup
-      ? `${automatic.message} Manual authorization opened.`
-      : `${automatic.message} Copy the authorization URL below and open it in your browser.`;
-  };
-
-  const exchangeCallback = async () => {
-    oauthStatus = '';
-    const result = await exchangeSpotifyCallback(draft.spotifyClientId, spotifyCallbackUrl);
+    oauthStatus = 'Opening Spotify authorization; waiting for native confirmation...';
+    const result = await authorizeSpotifyAndCopySwpt1(draft.spotifyClientId);
     if (!result.ok) {
       oauthStatus = result.message;
       return;
     }
-
-    update('spotifyRefreshToken', result.refreshToken);
-    oauthStatus = 'Refresh token saved locally; export still excludes token by default';
-    spotifyCallbackUrl = '';
+    oauthStatus = 'Native confirmation accepted; swpt1 copied once to the clipboard.';
   };
 
   const handlePreviewIntent = (intent: WallpaperViewIntent) => {
@@ -258,41 +220,11 @@
           <span>Client ID</span>
           <input value={draft.spotifyClientId} on:input={(event) => update('spotifyClientId', event.currentTarget.value)} />
         </label>
-        <label>
-          <span>Redirect URI</span>
-          <input value={spotifyRedirectUri} on:input={(event) => (spotifyRedirectUri = event.currentTarget.value)} />
-        </label>
         <div class="export-actions">
-          <button type="button" on:click={startSpotifyAuth}>Start Auth</button>
+          <button type="button" on:click={startSpotifyAuth}>Authorize and copy swpt1</button>
           <span>{oauthStatus}</span>
         </div>
-        {#if spotifyAuthUrl}
-          <label>
-            <span>Authorization URL</span>
-            <input readonly type="password" value={spotifyAuthUrl} autocomplete="off" />
-          </label>
-        {/if}
-        <label>
-          <span>Callback URL</span>
-          <input
-            type="password"
-            value={spotifyCallbackUrl}
-            autocomplete="off"
-            on:input={(event) => (spotifyCallbackUrl = event.currentTarget.value)}
-          />
-        </label>
-        <div class="export-actions">
-          <button type="button" on:click={exchangeCallback}>Save Token</button>
-        </div>
-        <label>
-          <span>Refresh token</span>
-          <input
-            type="password"
-            value={draft.spotifyRefreshToken}
-            autocomplete="off"
-            on:input={(event) => update('spotifyRefreshToken', event.currentTarget.value)}
-          />
-        </label>
+        <p class="auth-note">The native flow keeps OAuth material in Rust and copies a one-time swpt1 token only after confirmation.</p>
       </fieldset>
 
       <fieldset>
