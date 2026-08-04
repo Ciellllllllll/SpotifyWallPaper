@@ -4,12 +4,22 @@
 
 This domain handles Spotify OAuth, token refresh, API polling, normalized playback state, playback operations, and Spotify error handling.
 
+During the active structure-first refactor, these concerns cross a provider
+boundary. Mock, direct, and backend are explicit `PlaybackProvider` kinds with
+one polling/control contract. Provider selection distinguishes `mock`,
+`ready`, and `invalid`; configuration errors are not network errors. The
+runtime owns lifecycle and scheduling, while providers own their transport and
+credential state. No provider is required for deterministic browser mock mode.
+
 ## OAuth policy
 
 Use Authorization Code with PKCE. Do not use Client Secret in the Web Wallpaper.
 
-The wallpaper may accept Client ID and Refresh Token from Wallpaper Engine properties or settings JSON.
-The configurator may help the user obtain Refresh Token.
+The wallpaper may accept Client ID and Refresh Token only through a dedicated
+Wallpaper Engine property snapshot or explicit process-memory session input.
+Settings JSON is preference-only: embedded credentials are ignored and are
+never migrated or exported. The configurator may help the user obtain a
+Refresh Token, but raw credentials stay in the native/provider boundary.
 
 Do not log tokens or full callback URLs.
 

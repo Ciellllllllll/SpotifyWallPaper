@@ -1,5 +1,13 @@
 # Repository Structure
 
+## Active structure-first refactor
+
+The 2026-08-04 structure-first authority is the current cross-cutting design.
+The only new workspace permitted by that design is `packages/wallpaper-view`.
+`packages/shared-types` remains dependency-free and owns shared DTOs, while
+runtime owns lifecycle and the view owns presentation. The runtime must never
+import the view; apps must not use relative imports across app boundaries.
+
 ## Recommended monorepo layout
 
 - `apps/wallpaper/`
@@ -18,13 +26,24 @@
   Optional public Spotify proxy. TypeScript Cloudflare Worker owning OAuth PKCE, encrypted D1 credentials, access-token refresh, playback/control proxying, reauthorization, and account deletion.
 
 - `crates/visual-core/`
-  Rust pure logic crate. WASM target. Handles theme, layout, visualizer normalization, animation helpers, and setting validation helpers when appropriate.
+  Rust pure logic crate. The current baseline also contains characterized
+  theme/layout/animation/settings helpers. The structure-first target keeps
+  only measured visual normalization/readability algorithms in the WASM
+  adapter; layout CSS/safe-area semantics remain TypeScript-owned and the
+  baseline helpers are retired only after Phase 8 parity evidence.
 
 - `crates/config-schema/`
-  Rust-side settings schema, defaults, migration helpers, and validation primitives.
+  Rust-side baseline settings schema, defaults, migration helpers, and
+  validation vectors. It is a planned retirement target after both app
+  cutovers and consumer-zero evidence; native narrow DTO validation remains.
 
 - `packages/shared-types/`
   TypeScript shared types for normalized Spotify playback, settings, layout, theme, visualizer, Rainmeter output, and errors.
+
+- `packages/wallpaper-view/`
+  Shared presentational wallpaper/Configurator renderer. It accepts props and
+  intent callbacks only; it has no network, storage, timer, host API,
+  credential, or WASM lifecycle.
 
 - `config/`
   Tracked machine-readable repository contracts, including repository
@@ -72,6 +91,9 @@ Raw Spotify response must be normalized before UI use.
 Settings must be validated before UI use.
 Wallpaper Engine API access must be isolated behind an adapter.
 Browser mock mode must use the same display model as real Spotify mode.
+
+The baseline Rust/settings responsibilities remain characterization inputs until
+their owning Phase changes the domain documents in the same reviewed diff.
 
 New Markdown under `docs/` must be tracked and classified in the authority
 policy. New ignored output must declare an owner, producer, representative

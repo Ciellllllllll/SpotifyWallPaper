@@ -4,6 +4,12 @@
 
 The configurator is optional. The wallpaper must not require it at runtime.
 
+During the structure-first refactor, Configurator preferences use the same
+Settings v2 authority and `packages/wallpaper-view` renderer as Wallpaper.
+Preview is network-free and control intents never reach Spotify. Native auth
+and credential handling remain a separate Rust boundary; ordinary WebView
+state exposes only presence/status or fixed error codes, never raw secrets.
+
 ## Responsibilities
 
 - Spotify OAuth PKCE setup assistance
@@ -33,7 +39,14 @@ The configurator is optional. The wallpaper must not require it at runtime.
 
 ## Token policy
 
-Do not show tokens by default. Do not include tokens in exported settings by default. Legacy direct Refresh Token export, if retained, must be explicit. Public-backend Pairing Token export is never allowed.
+Authentication uses one native command,
+`authorize_spotify_and_copy_swpt1`. The verifier, OAuth state, callback URL,
+authorization code, and Refresh Token remain Rust locals; after native user
+confirmation, the command copies the `swpt1` value to the clipboard exactly
+once. Ordinary WebView IPC returns only status/presence and fixed error codes;
+it never returns raw credentials, callback material, or upstream bodies. There
+is no generic settings/export path for credentials, and public-backend Pairing
+Tokens are never exported.
 
 The public Worker setup page is the supported public-backend authorization path. Tauri remains optional and must not be required to authorize or run the Wallpaper Engine wallpaper.
 

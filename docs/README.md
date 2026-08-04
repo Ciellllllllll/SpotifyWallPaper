@@ -59,11 +59,15 @@ same-named file under `phase-reports/` is historical execution evidence.
 
 ## Designs and implementation plans
 
-- `superpowers/specs/2026-07-27-system-wide-refactoring-design.md`: approved
-  normative design for the active repository-wide refactor.
+- `superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`:
+  active structure-first authority for the repository-wide refactor.
+- `superpowers/specs/2026-07-27-system-wide-refactoring-design.md`: historical
+  evidence for the earlier reviewed design.
 - `superpowers/plans/README.md`: current and executed-plan index.
+- `superpowers/plans/2026-08-04-system-wide-refactor-ponytail.md`: active
+  Ponytail-gated Phase 0B–9 execution plan.
 - `superpowers/plans/2026-07-27-system-wide-refactor-phase-0-repository-specification-truth.md`:
-  current Phase 0 execution plan.
+  historical Phase 0 repository-authority execution evidence.
 - `superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md`: executed
   historical intent for the public-backend baseline.
 

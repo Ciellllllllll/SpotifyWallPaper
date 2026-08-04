@@ -6,8 +6,10 @@ behavior and does not necessarily enumerate the exact commit diff that first
 tracked the report.
 
 Use `AGENTS.md`, `docs/01-project-goals-and-non-goals.md`, the current domain
-specifications (`docs/10` through `docs/25`), and the approved system-wide
-refactor design for current behavior.
+specifications (`docs/10` through `docs/25`), and the active
+`docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`
+for current behavior. Older system-wide designs and reports remain historical
+evidence.
 
 ## Product construction and stabilization history
 

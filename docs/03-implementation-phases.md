@@ -1,5 +1,11 @@
 # Implementation Phases
 
+This document preserves the product-capability construction order. It does not
+override the active 2026-08-04 structure-first refactor sequence, which governs
+cross-cutting changes and review/commit boundaries. Phase 0A/0B in that plan
+maps to history preparation followed by repository specification authority;
+product code remains unchanged until characterization and contract phases.
+
 ## Phase 0: Scaffold and mock preview
 
 Create the monorepo, wallpaper app, configurator app skeleton, Rust workspace, shared docs, and mock data. The wallpaper must render in a normal browser without Spotify.

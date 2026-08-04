@@ -2,6 +2,11 @@
 
 ## Authority order
 
+For the active cross-cutting refactor, the normative approved design is
+`docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`.
+The 2026-07-27 design and its execution plan are historical evidence and may
+explain prior commits but cannot override the current structure-first plan.
+
 Current normative behavior is determined in this order:
 
 1. `AGENTS.md` and the mandatory entry documents.
@@ -188,8 +193,9 @@ Authority migrations must:
 - stage an explicit path allowlist;
 - reject deletion, rename, copy, type, mode, or extra-path drift;
 - compare protected recovered bytes and static local path/type/size metadata;
-- run repository authority, baseline gates, mock preview, and independent
-  quality/Security/SpecGuard reviews;
+- run repository authority, baseline gates, and mock preview, then have the
+  single read-only Sol reviewer cover quality, Security when applicable, and
+  SpecGuard as separate perspectives;
 - commit only the exact reviewed branch/parent/tree tuple.
 
 Do not use broad `git add`, delete ignored artifacts to make a check pass, or

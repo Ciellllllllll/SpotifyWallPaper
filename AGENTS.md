@@ -25,7 +25,7 @@ Architecture or cross-cutting work must also read:
 - `docs/02-repository-structure.md`
 - `docs/03-implementation-phases.md`
 - `docs/30-subagent-matrix.md`
-- `docs/superpowers/specs/2026-07-27-system-wide-refactoring-design.md`
+- `docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`
 
 Public backend work must also read `docs/25-public-backend.md`.
 
@@ -45,6 +45,23 @@ Do not remove mock/browser preview support.
 Do not discard previous track state immediately on track change; transitions need previous and current states.
 Please commit once each phase is complete. Please refer to previous commit messages when writing your commit message.
 
+## Active refactor execution policy
+The active structure-first refactor is governed by
+`docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`
+and `docs/superpowers/plans/2026-08-04-system-wide-refactor-ponytail.md`.
+Luna/MAX is the only implementation, test, finding-fix, and commit owner. A
+single `gpt-5.6-sol` / medium SubAgent is reused as a read-only reviewer; it
+must not edit files or run Git operations. No other model, reasoning level,
+fallback, implementation SubAgent, branch, worktree, push, PR, merge, or
+deploy is allowed.
+
+Ponytail 4.8.4 standard SessionStart, SubagentStart, and UserPromptSubmit
+hooks must remain trusted/enabled and full mode must be active before each
+Phase. After Sol's explicit PASS on the exact diff, run the final
+`@ponytail-audit`; only `Lean already. Ship.` is PONYTAIL PASS. A finding or
+diff change returns to Sol review. Commit only after consecutive Sol and
+Ponytail PASS results, then verify HEAD and a clean worktree.
+
 ## Architectural rule
 The wallpaper display is a Web Wallpaper. Rendering belongs to the web frontend. Rust is used for pure logic through WASM and for the optional Tauri configurator backend.
 
@@ -54,8 +71,11 @@ The Rust/WASM core must not own Spotify HTTP calls, DOM mutation, Canvas/WebGL d
 
 ## Required implementation order
 For the active system-wide refactor, follow
-`docs/superpowers/specs/2026-07-27-system-wide-refactoring-design.md`.
+`docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`.
 It owns the refactor phase sequence and review/commit boundaries.
+
+The 2026-07-27 design and its Phase 0 plan are historical evidence. They are
+read for context but do not override the active structure-first authority.
 
 `docs/03-implementation-phases.md` preserves the product-construction order.
 Use it when adding product capability, and do not implement advanced effects

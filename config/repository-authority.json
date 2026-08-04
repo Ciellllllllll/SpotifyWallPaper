@@ -76,6 +76,13 @@
       "name": "approved-designs",
       "classification": "normative",
       "paths": [
+        "docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md"
+      ]
+    },
+    {
+      "name": "historical-designs",
+      "classification": "historical-evidence",
+      "paths": [
         "docs/superpowers/specs/2026-07-27-system-wide-refactoring-design.md"
       ]
     },
@@ -84,14 +91,15 @@
       "classification": "implementation-plan",
       "paths": [
         "docs/superpowers/plans/README.md",
-        "docs/superpowers/plans/2026-07-27-system-wide-refactor-phase-0-repository-specification-truth.md"
+        "docs/superpowers/plans/2026-08-04-system-wide-refactor-ponytail.md"
       ]
     },
     {
       "name": "historical-plans",
       "classification": "historical-evidence",
       "paths": [
-        "docs/superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md"
+        "docs/superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md",
+        "docs/superpowers/plans/2026-07-27-system-wide-refactor-phase-0-repository-specification-truth.md"
       ]
     },
     {
