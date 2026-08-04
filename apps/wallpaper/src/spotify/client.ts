@@ -1,7 +1,7 @@
-import type { NormalizedPlayback, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
+import type { NormalizedPlayback, PlaybackCommand, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
 import { classifyNetworkError, classifySpotifyStatus } from './errors';
 import { normalizeSpotifyPlayback } from './normalize';
-import type { Fetcher, SpotifyPlaybackCommand, SpotifyResult } from './types';
+import type { Fetcher, SpotifyResult } from './types';
 
 const CURRENT_PLAYBACK_ENDPOINT = 'https://api.spotify.com/v1/me/player';
 const CURRENTLY_PLAYING_ENDPOINT = 'https://api.spotify.com/v1/me/player/currently-playing';
@@ -98,7 +98,7 @@ const fetchCurrentlyPlayingFallback = async (
 
 export const sendPlaybackCommand = async (
   accessToken: string,
-  command: SpotifyPlaybackCommand,
+  command: PlaybackCommand,
   fetcher: Fetcher = fetch,
   signal?: AbortSignal
 ): Promise<SpotifyResult<void>> => {
@@ -123,7 +123,7 @@ export const sendPlaybackCommand = async (
   return { ok: false, error: classifySpotifyStatus(response.status, response.headers.get('retry-after')) };
 };
 
-const playbackCommandRequest = (command: SpotifyPlaybackCommand): { method: string; url: string } => {
+const playbackCommandRequest = (command: PlaybackCommand): { method: string; url: string } => {
   const url = new URL(PLAYER_ENDPOINT);
 
   switch (command.type) {

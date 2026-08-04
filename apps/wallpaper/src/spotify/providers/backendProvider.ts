@@ -1,10 +1,11 @@
 import {
   isNormalizedPlaybackResultEnvelope,
   isProviderResultEnvelope,
-  type NormalizedPlayback
+  type NormalizedPlayback,
+  type PlaybackCommand
 } from '@spotify-wallpaper/shared-types';
 import { classifyNetworkError, classifySpotifyStatus } from '../errors';
-import type { Fetcher, SpotifyPlaybackCommand, SpotifyResult } from '../types';
+import type { Fetcher, SpotifyResult } from '../types';
 import type { BackendPlaybackProviderConfig, PlaybackProvider } from './types';
 import { mergeAbortSignals } from './signals';
 
@@ -58,11 +59,11 @@ export class BackendPlaybackProvider implements PlaybackProvider {
     }
   }
 
-  async control(command: SpotifyPlaybackCommand, signal: AbortSignal): Promise<SpotifyResult<void>> {
+  async control(command: PlaybackCommand, signal: AbortSignal): Promise<SpotifyResult<void>> {
     return this.controlAt(command, Date.now(), signal);
   }
 
-  async controlAt(command: SpotifyPlaybackCommand, _nowMs = Date.now(), signal: AbortSignal = this.abortController.signal): Promise<SpotifyResult<void>> {
+  async controlAt(command: PlaybackCommand, _nowMs = Date.now(), signal: AbortSignal = this.abortController.signal): Promise<SpotifyResult<void>> {
     const generation = this.generation;
     try {
       const effectiveSignal = mergeAbortSignals(this.abortController.signal, signal);

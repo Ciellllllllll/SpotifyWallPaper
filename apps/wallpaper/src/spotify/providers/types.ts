@@ -3,7 +3,7 @@ import type {
   ProviderConfigurationError,
   ProviderSelection
 } from '@spotify-wallpaper/shared-types';
-import type { Fetcher, SpotifyPlaybackCommand, SpotifyResult } from '../types';
+import type { Fetcher } from '../types';
 
 export type { PlaybackProvider, ProviderConfigurationError, ProviderSelection };
 
@@ -13,4 +13,3 @@ export interface BackendPlaybackProviderConfig {
 }
 
 export type ProviderFetcher = Fetcher;
-export type ProviderCommand = SpotifyPlaybackCommand;

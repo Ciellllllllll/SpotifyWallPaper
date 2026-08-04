@@ -4,7 +4,8 @@ import type {
   VisualizerFrame,
   WallpaperPreferences,
   WallpaperTheme,
-  ProviderResult
+  ProviderResult,
+  PlaybackCommand
 } from '@spotify-wallpaper/shared-types';
 import { mockPlayback } from '../mock/mockPlayback';
 import {
@@ -18,7 +19,6 @@ import {
   selectPlaybackProvider,
   type SpotifyPlaybackProvider
 } from '../spotify/polling';
-import type { SpotifyPlaybackCommand } from '../spotify/types';
 import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from '../theme/colors';
 import { extractAlbumTheme } from '../theme/extractAlbumTheme';
 import { createTransitionState, type TrackTransitionState } from '../transitions/model';
@@ -64,7 +64,7 @@ export interface WallpaperRuntime {
   subscribe(listener: (snapshot: ReadonlyWallpaperRuntimeSnapshot) => void): () => void;
   applyConfiguration(settings: WallpaperPreferences, credential: CredentialUpdate, safetyGateOpen: boolean): void;
   acceptAudioFrame(frame: VisualizerFrame): void;
-  execute(command: SpotifyPlaybackCommand): Promise<void>;
+  execute(command: PlaybackCommand): Promise<void>;
   toggleDisplayMode(): void;
   dispose(): void;
 }

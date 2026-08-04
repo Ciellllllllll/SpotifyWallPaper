@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { PlaybackCommand } from '@spotify-wallpaper/shared-types';
 
 import trackFixture from '../../../tests/fixtures/spotify/current-playback-track.json';
 import {
   fetchSpotifyPlayback,
-  sendSpotifyCommand,
-  type SpotifyPlaybackCommand
+  sendSpotifyCommand
 } from '../src/spotify';
 
 const fetchedAt = '2026-07-18T00:00:00.000Z';
@@ -155,7 +155,7 @@ describe('Spotify control requests', () => {
       calls.push([init?.method ?? 'GET', String(input)]);
       return new Response(null, { status: 204 });
     });
-    const commands: SpotifyPlaybackCommand[] = [
+    const commands: PlaybackCommand[] = [
       { type: 'play' },
       { type: 'pause' },
       { type: 'next' },

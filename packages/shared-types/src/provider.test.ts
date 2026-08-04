@@ -13,6 +13,7 @@ import type { ProviderSelection } from './provider';
 
 const fixturesDir = fileURLToPath(new URL('../../../tests/contracts/provider-v1/', import.meta.url));
 const fixtureNames = [
+  'control-requests.json',
   'control-seek.json',
   'error-rate-limited.json',
   'error-unauthorized.json',
@@ -49,6 +50,22 @@ describe('provider-v1 JSON fixtures', () => {
     expect(isPlaybackCommand(control.request)).toBe(true);
     expect(isProviderResultEnvelope(control.result)).toBe(true);
     expect(control.result).toEqual({ ok: true, value: null });
+  });
+
+  it('accepts all eight control requests from the shared fixture and rejects malformed commands', () => {
+    const commands: unknown[] = JSON.parse(readFileSync(join(fixturesDir, 'control-requests.json'), 'utf8'));
+
+    expect(commands).toHaveLength(8);
+    for (const command of commands) expect(isPlaybackCommand(command), JSON.stringify(command)).toBe(true);
+    for (const invalid of [
+      { type: 'play', extra: true },
+      { type: 'seek', positionMs: 1.5 },
+      { type: 'seek', positionMs: -1 },
+      { type: 'volume', volumePercent: 101 },
+      { type: 'unknown' }
+    ]) {
+      expect(isPlaybackCommand(invalid), JSON.stringify(invalid)).toBe(false);
+    }
   });
 
   it('rejects extra envelope fields and malformed result values', () => {

@@ -1,5 +1,6 @@
 import type {
   NormalizedPlayback,
+  PlaybackCommand,
   SpotifyPlaybackError
 } from '@spotify-wallpaper/shared-types';
 
@@ -39,16 +40,6 @@ const refreshLifetimeMs = 180 * 24 * 60 * 60 * 1000;
 const maxResponseBytes = 262_144;
 const maxRetryAfterMs = 24 * 60 * 60 * 1000;
 const spotifyRequestTimeoutMs = 10_000;
-
-export type SpotifyPlaybackCommand =
-  | { type: 'play' }
-  | { type: 'pause' }
-  | { type: 'next' }
-  | { type: 'previous' }
-  | { type: 'seek'; positionMs: number }
-  | { type: 'volume'; volumePercent: number }
-  | { type: 'shuffle'; state: boolean }
-  | { type: 'repeat'; state: 'off' | 'track' | 'context' };
 
 export interface SpotifyRequestOptions {
   fetcher?: typeof fetch;
@@ -98,7 +89,7 @@ export async function fetchSpotifyPlayback(
 
 export async function sendSpotifyCommand(
   accessToken: string,
-  command: SpotifyPlaybackCommand,
+  command: PlaybackCommand,
   fetcher: typeof fetch = fetch,
   timeoutMs = spotifyRequestTimeoutMs
 ): Promise<ApiResult<null>> {
@@ -229,7 +220,7 @@ export async function sendCredentialSpotifyCommand(
   db: D1Database,
   credential: Credential,
   env: Env,
-  command: SpotifyPlaybackCommand,
+  command: PlaybackCommand,
   options: SpotifyRequestOptions = {}
 ): Promise<ApiResult<null>> {
   const nowMs = options.nowMs ?? Date.now();
@@ -297,7 +288,7 @@ async function retryCommandAfterUnauthorized(
   db: D1Database,
   credential: Credential,
   env: Env,
-  command: SpotifyPlaybackCommand,
+  command: PlaybackCommand,
   options: SpotifyRequestOptions,
   nowMs: number
 ): Promise<ApiResult<null>> {
@@ -708,7 +699,7 @@ function parseRetryAfter(value: string | null): number {
   return Math.min(Number(value) * 1000, maxRetryAfterMs);
 }
 
-function commandRequest(command: SpotifyPlaybackCommand): {
+function commandRequest(command: PlaybackCommand): {
   method: 'POST' | 'PUT';
   url: string;
 } {

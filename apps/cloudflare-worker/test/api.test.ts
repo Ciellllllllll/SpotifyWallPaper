@@ -2,6 +2,7 @@ import { env } from 'cloudflare:test';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import trackFixture from '../../../tests/fixtures/spotify/current-playback-track.json';
+import controlRequests from '../../../tests/contracts/provider-v1/control-requests.json';
 import { encryptSecret } from '../src/crypto';
 import {
   createCredential,
@@ -144,6 +145,25 @@ describe('authenticated playback API', () => {
 });
 
 describe('control API validation', () => {
+  it('accepts all eight commands from the shared contract fixture', async () => {
+    const pairing = await createApiCredential();
+
+    for (const command of controlRequests) {
+      const spotify = vi.fn(async () => new Response(null, { status: 204 }));
+      if (command.type === 'seek') {
+        spotify.mockResolvedValueOnce(Response.json(trackFixture));
+      }
+      vi.stubGlobal('fetch', spotify);
+
+      const response = await apiRequest('/api/control', pairing.token, {
+        method: 'POST',
+        json: command
+      });
+
+      expect(response.status, JSON.stringify(command)).toBe(200);
+    }
+  });
+
   it('accepts a strict command and returns the existing envelope', async () => {
     const pairing = await createApiCredential();
     const spotify = vi.fn(async () => new Response(null, { status: 204 }));
@@ -225,6 +245,30 @@ describe('control API validation', () => {
 
     expect(response.status).toBe(413);
     expect(cancelled).toHaveBeenCalledOnce();
+  });
+
+  it('keeps Content-Type, strict UTF-8, and JSON decoding checks', async () => {
+    const pairing = await createApiCredential();
+    const headers = {
+      Origin: 'null',
+      Authorization: `Bearer ${pairing.token}`
+    };
+    const wrongContentType = await worker.fetch(new Request(`${baseUrl}/api/control`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ type: 'play' })
+    }), env);
+    const invalidUtf8 = await worker.fetch(new Request(`${baseUrl}/api/control`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: new Uint8Array([0xff])
+    }), env);
+    const invalidJson = await apiRequest('/api/control', pairing.token, {
+      method: 'POST',
+      rawBody: '{'
+    });
+
+    expect([wrongContentType.status, invalidUtf8.status, invalidJson.status]).toEqual([400, 400, 400]);
   });
 
   it('rejects seek positions beyond the current item duration', async () => {

@@ -1,6 +1,7 @@
 import { mockPlayback } from '../../mock/mockPlayback';
+import type { PlaybackCommand } from '@spotify-wallpaper/shared-types';
 import type { PlaybackProvider } from './types';
-import type { SpotifyPlaybackCommand, SpotifyResult } from '../types';
+import type { SpotifyResult } from '../types';
 
 export class MockPlaybackProvider implements PlaybackProvider {
   readonly kind = 'mock' as const;
@@ -12,7 +13,7 @@ export class MockPlaybackProvider implements PlaybackProvider {
     });
   }
 
-  control(_command: SpotifyPlaybackCommand, _signal: AbortSignal): Promise<SpotifyResult<void>> {
+  control(_command: PlaybackCommand, _signal: AbortSignal): Promise<SpotifyResult<void>> {
     return Promise.resolve({ ok: true, value: undefined });
   }
 

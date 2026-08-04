@@ -6,7 +6,7 @@ import { DirectPlaybackProvider } from './providers/directProvider';
 import { MockPlaybackProvider } from './providers/mockProvider';
 import type { BackendPlaybackProviderConfig, PlaybackProvider, ProviderSelection } from './providers/types';
 import type { CredentialInput } from '../settings/credentialBoundary';
-import type { SpotifyPlaybackCommand, SpotifyResult } from './types';
+import type { SpotifyResult } from './types';
 
 const DEFAULT_PLAYING_INTERVAL_MS = 1000;
 const DEFAULT_PAUSED_INTERVAL_MS = 3000;
@@ -80,4 +80,4 @@ const isTrustedPublicBackend = (settings: WallpaperPreferences | undefined): boo
   settings?.spotify.provider === 'backend' && !!settings.spotify.backendOrigin && isTrustedPublicBackendOrigin(settings.spotify.backendOrigin);
 
 // Keep the import surface intentionally narrow while preserving the legacy polling module path.
-export type { CredentialInput, SpotifyPlaybackCommand };
+export type { CredentialInput };

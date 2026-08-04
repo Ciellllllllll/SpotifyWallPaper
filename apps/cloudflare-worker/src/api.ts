@@ -1,4 +1,5 @@
 import { parseSecretKeyring } from './crypto';
+import { isPlaybackCommand, type PlaybackCommand } from '@spotify-wallpaper/shared-types';
 import {
   deleteCredentialData,
   findActiveCredentialByPairingToken,
@@ -22,8 +23,7 @@ import {
 import { parsePairingToken } from './pairing';
 import {
   fetchCredentialPlayback,
-  sendCredentialSpotifyCommand,
-  type SpotifyPlaybackCommand
+  sendCredentialSpotifyCommand
 } from './spotify';
 
 const deletionRetentionMs = 35 * 24 * 60 * 60 * 1000;
@@ -216,7 +216,7 @@ async function authenticate(
 async function parseControlRequest(
   request: Request
 ): Promise<
-  | { kind: 'valid'; command: SpotifyPlaybackCommand }
+  | { kind: 'valid'; command: PlaybackCommand }
   | { kind: 'invalid' }
   | { kind: 'too_large' }
 > {
@@ -239,69 +239,9 @@ async function parseControlRequest(
   } catch {
     return { kind: 'invalid' };
   }
-  if (value === null || Array.isArray(value) || typeof value !== 'object') {
-    return { kind: 'invalid' };
-  }
-  const command = value as Record<string, unknown>;
-  if (typeof command.type !== 'string') {
-    return { kind: 'invalid' };
-  }
-  if (
-    command.type === 'play' ||
-    command.type === 'pause' ||
-    command.type === 'next' ||
-    command.type === 'previous'
-  ) {
-    return exactKeys(command, ['type'])
-      ? { kind: 'valid', command: { type: command.type } }
-      : { kind: 'invalid' };
-  }
-  if (
-    command.type === 'seek' &&
-    exactKeys(command, ['positionMs', 'type']) &&
-    finiteInteger(command.positionMs) &&
-    command.positionMs >= 0
-  ) {
-    return {
-      kind: 'valid',
-      command: { type: 'seek', positionMs: command.positionMs }
-    };
-  }
-  if (
-    command.type === 'volume' &&
-    exactKeys(command, ['type', 'volumePercent']) &&
-    finiteInteger(command.volumePercent) &&
-    command.volumePercent >= 0 &&
-    command.volumePercent <= 100
-  ) {
-    return {
-      kind: 'valid',
-      command: { type: 'volume', volumePercent: command.volumePercent }
-    };
-  }
-  if (
-    command.type === 'shuffle' &&
-    exactKeys(command, ['state', 'type']) &&
-    typeof command.state === 'boolean'
-  ) {
-    return {
-      kind: 'valid',
-      command: { type: 'shuffle', state: command.state }
-    };
-  }
-  if (
-    command.type === 'repeat' &&
-    exactKeys(command, ['state', 'type']) &&
-    (command.state === 'off' ||
-      command.state === 'track' ||
-      command.state === 'context')
-  ) {
-    return {
-      kind: 'valid',
-      command: { type: 'repeat', state: command.state }
-    };
-  }
-  return { kind: 'invalid' };
+  return isPlaybackCommand(value)
+    ? { kind: 'valid', command: value }
+    : { kind: 'invalid' };
 }
 
 async function rateLimit(binding: RateLimit, key: string): Promise<boolean> {
@@ -319,18 +259,6 @@ async function preAuthenticationRateLimit(
       ? address.toLowerCase()
       : 'unknown';
   return rateLimit(binding, `preauth:${key}`);
-}
-
-function exactKeys(value: Record<string, unknown>, expected: string[]): boolean {
-  const keys = Object.keys(value).sort();
-  return (
-    keys.length === expected.length &&
-    keys.every((key, index) => key === [...expected].sort()[index])
-  );
-}
-
-function finiteInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value);
 }
 
 function corsIfAllowed(response: Response, request: Request): Response {

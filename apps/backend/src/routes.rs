@@ -481,4 +481,18 @@ mod tests {
             assert!(serde_json::from_value::<PlaybackCommand>(invalid).is_err());
         }
     }
+
+    #[test]
+    fn deserializes_all_provider_v1_control_request_fixtures() {
+        let fixtures: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+            "../../../tests/contracts/provider-v1/control-requests.json"
+        ))
+        .expect("control request fixtures");
+
+        assert_eq!(fixtures.len(), 8);
+        for fixture in fixtures {
+            serde_json::from_value::<PlaybackCommand>(fixture)
+                .expect("strict playback command fixture");
+        }
+    }
 }
