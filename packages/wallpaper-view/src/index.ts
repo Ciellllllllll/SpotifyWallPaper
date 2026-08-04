@@ -2,4 +2,4 @@ export type {
   WallpaperViewIntent,
   WallpaperViewModel,
   WallpaperViewTransition
-} from './types';
+} from '@spotify-wallpaper/shared-types';

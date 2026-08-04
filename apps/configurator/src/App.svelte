@@ -8,8 +8,7 @@
     type ConfiguratorDraft
   } from './settingsModel';
   import WallpaperView from '@spotify-wallpaper/wallpaper-view/WallpaperView.svelte';
-  import type { WallpaperViewIntent, WallpaperViewModel } from '@spotify-wallpaper/wallpaper-view';
-  import type { WallpaperPreferences } from '@spotify-wallpaper/shared-types';
+  import type { WallpaperPreferences, WallpaperViewIntent, WallpaperViewModel } from '@spotify-wallpaper/shared-types';
   import { buildRainmeterOutput, exportRainmeterJson } from './rainmeter/rainmeterExport';
   import { applyPreviewIntent } from './previewIntent';
   import {
@@ -93,7 +92,7 @@
     credentialConfigured: false,
     settingsWarning: null,
     settingsSource: 'configurator draft'
-  };
+  } satisfies WallpaperViewModel;
   $: rainmeterJson = exportRainmeterJson(
     buildRainmeterOutput(
       previewPlayback,

@@ -26,7 +26,7 @@ import { idleVisualizerFrame, shapeVisualizerFrame, shouldIgnoreSilentWallpaperF
 import { startAudioBridge } from '../wallpaperEngine/audio';
 import type { CredentialUpdate } from '../wallpaperEngine/types';
 
-export interface WallpaperRuntimeSnapshot {
+interface WallpaperRuntimeSnapshot {
   settings: WallpaperPreferences;
   playback: NormalizedPlayback;
   previousPlayback: NormalizedPlayback | null;
@@ -57,11 +57,11 @@ type DeepReadonly<T> = T extends (...args: never[]) => unknown
         ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
         : T;
 
-export type WallpaperRuntimeViewModel = DeepReadonly<WallpaperRuntimeSnapshot>;
+export type ReadonlyWallpaperRuntimeSnapshot = DeepReadonly<WallpaperRuntimeSnapshot>;
 
 export interface WallpaperRuntime {
   start(): void;
-  subscribe(listener: (snapshot: WallpaperRuntimeViewModel) => void): () => void;
+  subscribe(listener: (snapshot: ReadonlyWallpaperRuntimeSnapshot) => void): () => void;
   applyConfiguration(settings: WallpaperPreferences, credential: CredentialUpdate, safetyGateOpen: boolean): void;
   acceptAudioFrame(frame: VisualizerFrame): void;
   execute(command: SpotifyPlaybackCommand): Promise<void>;
@@ -83,7 +83,7 @@ export const createWallpaperRuntime = (
   const connectAudio = dependencies.startAudioBridge ?? startAudioBridge;
   const extractTheme = dependencies.extractTheme ?? extractAlbumTheme;
   const credentialClosure = createProcessMemoryCredentialClosure();
-  const listeners = new Set<(snapshot: WallpaperRuntimeViewModel) => void>();
+  const listeners = new Set<(snapshot: ReadonlyWallpaperRuntimeSnapshot) => void>();
   let provider: SpotifyPlaybackProvider | null = null;
   let providerAbortController: AbortController | null = null;
   let pollingTimeout: number | null = null;
@@ -125,7 +125,7 @@ export const createWallpaperRuntime = (
   const emit = () => {
     snapshot = { ...snapshot, credentialStatus: credentialClosure.status() };
     deepFreeze(snapshot);
-    for (const listener of listeners) listener(snapshot as WallpaperRuntimeViewModel);
+    for (const listener of listeners) listener(snapshot as ReadonlyWallpaperRuntimeSnapshot);
   };
 
   const clearTimers = () => {
@@ -320,7 +320,7 @@ export const createWallpaperRuntime = (
     subscribe(listener) {
       if (disposed) return () => undefined;
       listeners.add(listener);
-      listener(snapshot as WallpaperRuntimeViewModel);
+      listener(snapshot as ReadonlyWallpaperRuntimeSnapshot);
       return () => listeners.delete(listener);
     },
     applyConfiguration(settings, credential, gateOpen) {

@@ -1,6 +1,5 @@
 <script lang="ts">
-  import type { LayoutItem } from '@spotify-wallpaper/shared-types';
-  import type { WallpaperViewIntent, WallpaperViewModel } from './types';
+  import type { LayoutItem, WallpaperViewIntent, WallpaperViewModel } from '@spotify-wallpaper/shared-types';
   import { visualizerRingRadius, visualizerStyleVariables } from './visualizerStyle';
 
   export let model: WallpaperViewModel;
