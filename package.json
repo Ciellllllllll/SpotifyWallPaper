@@ -10,6 +10,7 @@
   "scripts": {
     "build": "npm run build -w @spotify-wallpaper/shared-types && npm run build -w @spotify-wallpaper/spotify-auth && npm run build -w @spotify-wallpaper/configurator && npm run build -w @spotify-wallpaper/wallpaper && npm run build -w @spotify-wallpaper/cloudflare-worker",
     "build:wasm": "wasm-pack build crates/visual-core --target web --out-dir ../../apps/wallpaper/public/wasm",
+    "test:wasm-parity": "node scripts/require-wasm-artifacts.mjs && npm run test -w @spotify-wallpaper/wallpaper -- src/wasm/wasmParity.test.ts",
     "cloudflare:deploy:preview": "npm run deploy:preview -w @spotify-wallpaper/cloudflare-worker",
     "cloudflare:deploy:production": "npm run deploy:production -w @spotify-wallpaper/cloudflare-worker",
     "cloudflare:migrate:preview": "npm run migrate:primary:preview -w @spotify-wallpaper/cloudflare-worker && npm run migrate:deletion:preview -w @spotify-wallpaper/cloudflare-worker",

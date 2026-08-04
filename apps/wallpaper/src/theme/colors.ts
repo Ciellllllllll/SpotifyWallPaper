@@ -1,5 +1,6 @@
 import type { WallpaperTheme } from '@spotify-wallpaper/shared-types';
 import { readabilityWithCore } from '../wasm/visualCore';
+import { readabilityFallback } from '../wasm/fallback';
 
 export interface Rgb {
   r: number;
@@ -54,14 +55,8 @@ export const readableTextColor = (background: Rgb): { color: string; contrast: n
     };
   }
 
-  const white = { r: 255, g: 255, b: 255 };
-  const black = { r: 0, g: 0, b: 0 };
-  const whiteContrast = contrastRatio(background, white);
-  const blackContrast = contrastRatio(background, black);
-
-  return whiteContrast >= blackContrast
-    ? { color: '#ffffff', contrast: whiteContrast }
-    : { color: '#000000', contrast: blackContrast };
+  const fallback = readabilityFallback(background.r, background.g, background.b);
+  return { color: rgbToHex(fallback.text), contrast: fallback.contrastRatio };
 };
 
 export const fallbackThemeFromSeed = (seed: string): WallpaperTheme => {

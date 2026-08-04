@@ -1,5 +1,6 @@
 import type { VisualizerFrame, WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
 import { normalizeSamplesWithCore } from '../wasm/visualCore';
+import { normalizeSamplesFallback } from '../wasm/fallback';
 
 export interface EffectiveVisualizerConfig {
   barCount: number;
@@ -111,23 +112,6 @@ const normalizeSample = (sample: number, settings: WallpaperPreferences['visuali
   }
 
   return clamp01((clamped / settings.clampMax) * settings.sensitivity * settings.intensity);
-};
-
-const normalizeSamplesFallback = (
-  current: number[],
-  previous: number[],
-  settings: WallpaperPreferences['visualizer']
-): { samples: number[]; peak: number } => {
-  const nextSamples = current.map((sample, index) => {
-    const previousSample = previous[index] ?? 0;
-    const smoothed = previousSample * settings.smoothing + sample * (1 - settings.smoothing);
-    return Math.max(smoothed, previousSample * (1 - settings.decay));
-  });
-
-  return {
-    samples: nextSamples,
-    peak: nextSamples.reduce((max, sample) => Math.max(max, sample), 0)
-  };
 };
 
 const bandWeight = (index: number, length: number, settings: WallpaperPreferences['visualizer']): number => {

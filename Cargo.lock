@@ -1267,8 +1267,7 @@ version = "0.0.0"
 name = "spotify-wallpaper-visual-core"
 version = "0.0.0"
 dependencies = [
- "serde",
- "serde_json",
+ "js-sys",
  "wasm-bindgen",
 ]
 
