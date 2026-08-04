@@ -11,19 +11,16 @@ the accepted maximum visual diff ratio is 0.002.
 
 ## Unit tests
 
-Rust/WASM core (baseline characterization; Phase 8 narrows the target):
+Rust/WASM core (current Phase 8 boundary):
 
-- settings validation
-- settings migration
-- layout anchors
-- visualizer normalization
+- visualizer normalization and typed-array safety
 - readability calculation
-- animation helpers
+- NaN, empty input, and actual-WASM/fallback parity
 
-The settings/layout/animation cases freeze existing behavior before the Rust
-layout ABI and disconnected whole-settings crate are retired. After Phase 8,
-parity coverage remains for visual normalization/readability and settings
-validation is owned by the shared TypeScript contract plus narrow native DTOs.
+Historical settings/layout/animation characterization remains evidence in the
+Phase 1 fixtures. The retired Rust layout ABI and disconnected whole-settings
+crate are no longer runtime authorities; settings validation, migration, and
+repair are owned by the shared TypeScript contract plus narrow native DTOs.
 
 TypeScript:
 

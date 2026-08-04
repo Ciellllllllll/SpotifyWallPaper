@@ -2,33 +2,34 @@
 
 ## Status
 
-`v0.0.1` is the first complete milestone for the browser-previewable Wallpaper Engine Web Wallpaper foundation. It includes Spotify polling foundations, settings safety, visual customization basics, optional configurator support, and optional Rainmeter JSON export.
+`v0.0.1` is the first complete milestone for the browser-previewable Wallpaper Engine Web Wallpaper foundation. The current structure-first refactor keeps the browser mock path independent while making settings, provider, runtime, renderer, Tauri, and WASM boundaries explicit.
 
 ## Highlights
 
 - Browser mock wallpaper works without Spotify, Wallpaper Engine, Tauri, or Rainmeter.
 - Spotify playback normalization, token refresh, polling, and error classification are implemented.
 - Wallpaper Engine property and audio adapters are isolated behind browser-safe fallbacks.
-- Rust crates provide pure logic for config schema validation, layout, theme readability, visualizer normalization, and animation helpers.
-- Settings schema includes layout, theme, background, player, seekbar, visualizer, clock, transitions, performance, Rainmeter, and debug categories.
+- Rust/WASM provides typed-array visual normalization and readability only; settings migration, repair, layout, and serialization are TypeScript-owned.
+- Settings v2 is the single preference authority and includes layout, theme, background, player, seekbar, visualizer, clock, transitions, performance, Rainmeter, and debug categories.
 - Album-based background/theme fallback and readability handling are implemented.
 - Visualizer modes include album ring, radial bars, waveform line, idle behavior, and performance-mode tuning.
 - Track transitions retain previous/current display state and support reduce-motion.
 - Player display, safe controls, seekbar, and optimized clock behavior are implemented.
-- Optional Tauri configurator can preview, import, and export settings JSON.
+- Optional Tauri configurator uses the shared renderer, previews mock data, and imports/exports secret-free settings JSON.
 - Optional Rainmeter JSON output can be written from the Tauri configurator with credential-field rejection.
 
 ## Security Notes
 
 - Spotify Client Secret is not used by the Web Wallpaper.
-- Refresh Token export is disabled by default in the configurator.
+- Client IDs are excluded from settings export. The user-provided public Client ID may remain in Configurator WebView state and is passed to the single native authorization command; Refresh Tokens, Pairing Tokens, and sensitive OAuth material never enter WebView state.
+- Tauri authorization keeps OAuth material in Rust locals and copies an approved `swpt1.` bundle once after native confirmation.
 - The static auth page can issue a single `swpt1.` Wallpaper Engine Token that bundles the public Client ID and Refresh Token for one-paste setup.
 - Token values, OAuth authorization codes, and full callback URLs must not be logged or committed.
 - Rainmeter output is display-only and rejects token-like, client-secret, authorization-code, and callback URL field names.
 
 ## Known Gaps
 
-- The configurator does not yet implement full OAuth PKCE acquisition UI.
+- The configurator does not expose callback-URL paste or a token draft; authorization is delegated to the native command.
 - The configurator is not a full drag-and-drop layout editor.
 - Rainmeter has JSON output only; no bundled Rainmeter skin template or INI output.
 - Album-art local cache writing is not implemented.
@@ -40,11 +41,13 @@
 Run before publishing:
 
 ```sh
-npm run test --workspaces --if-present
+npm run build:wasm
+npm run build:shared-types
+npm test
 npm run check
 npm run build
-cargo check --workspace
-cargo test --workspace
+cargo fmt --all -- --check
+cargo test --manifest-path crates/visual-core/Cargo.toml --all-features
 cargo check --manifest-path apps/configurator/src-tauri/Cargo.toml
 cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml
 npm audit --audit-level=moderate
