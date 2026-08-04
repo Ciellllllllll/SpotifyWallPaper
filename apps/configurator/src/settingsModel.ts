@@ -1,4 +1,5 @@
 import {
+  applyWallpaperPreferencesPatch,
   clonePresetItems,
   defaultLayoutPreset,
   defaultWallpaperPreferences,
@@ -6,7 +7,8 @@ import {
   migrateWallpaperSettingsToV2,
   type LayoutPresetName,
   type PlaybackProviderKind,
-  type WallpaperPreferences
+  type WallpaperPreferences,
+  type WallpaperPreferencesPatch
 } from '@spotify-wallpaper/shared-types';
 
 export interface ConfiguratorDraft {
@@ -56,40 +58,36 @@ export const buildSettings = (draft: ConfiguratorDraft): WallpaperPreferences =>
   const defaults = draft.basePreferences ?? defaultWallpaperPreferences();
   const layoutChanged = draft.presetChanged || draft.preset !== defaults.layout.preset;
   const performanceChanged = draft.performanceMode !== defaults.performance.mode;
-  return {
-    ...structuredClone(defaults),
+  const patch: WallpaperPreferencesPatch = {
     spotify: {
-      ...defaults.spotify,
       provider: draft.provider,
       backendOrigin: draft.backendOrigin.trim() || undefined
     },
     layout: {
-      ...defaults.layout,
       preset: draft.preset,
-      items: layoutChanged ? clonePresetItems(draft.preset) : structuredClone(defaults.layout.items)
+      ...(layoutChanged ? { items: clonePresetItems(draft.preset) } : {})
     },
-    theme: { ...defaults.theme, mode: draft.themeMode },
+    theme: { mode: draft.themeMode },
     background: {
-      ...defaults.background,
       blurPx: performanceChanged && draft.performanceMode === 'low-power' ? 12 : defaults.background.blurPx,
       mode: draft.backgroundMode
     },
-    player: { ...defaults.player, controlsEnabled: draft.playerControlsEnabled },
-    seekbar: { ...defaults.seekbar, style: layoutChanged ? (draft.preset === 'Album Ring' ? 'album-ring' : 'line') : defaults.seekbar.style },
+    player: { controlsEnabled: draft.playerControlsEnabled },
+    seekbar: { style: layoutChanged ? (draft.preset === 'Album Ring' ? 'album-ring' : 'line') : defaults.seekbar.style },
     visualizer: {
-      ...defaults.visualizer,
       enabled: draft.visualizerEnabled,
       intensity: performanceChanged && draft.performanceMode === 'high-effect' ? 1.05 : defaults.visualizer.intensity,
       barCount: performanceChanged && draft.performanceMode === 'low-power' ? 32 : defaults.visualizer.barCount,
       rotationSpeed: performanceChanged && draft.performanceMode === 'low-power' ? 0.06 : defaults.visualizer.rotationSpeed,
       glowStrength: performanceChanged && draft.performanceMode === 'low-power' ? 0.36 : defaults.visualizer.glowStrength
     },
-    clock: { ...defaults.clock, enabled: draft.clockEnabled, showSeconds: draft.clockShowSeconds },
-    transitions: { ...defaults.transitions, enabled: draft.transitionEnabled },
-    performance: { ...defaults.performance, mode: draft.performanceMode },
-    rainmeter: { ...defaults.rainmeter, enabled: draft.rainmeterEnabled, outputPath: draft.rainmeterOutputPath.trim() },
-    debug: { ...defaults.debug, enabled: draft.debugEnabled }
+    clock: { enabled: draft.clockEnabled, showSeconds: draft.clockShowSeconds },
+    transitions: { enabled: draft.transitionEnabled },
+    performance: { mode: draft.performanceMode },
+    rainmeter: { enabled: draft.rainmeterEnabled, outputPath: draft.rainmeterOutputPath.trim() },
+    debug: { enabled: draft.debugEnabled }
   };
+  return applyWallpaperPreferencesPatch(defaults, patch);
 };
 
 export const exportSettingsJson = (draft: ConfiguratorDraft): string => JSON.stringify(buildSettings(draft), null, 2);

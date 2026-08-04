@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { applyWallpaperPreferencesPatch } from '@spotify-wallpaper/shared-types';
 import { defaultSettings } from '../settings/defaultSettings';
-import { applySettingsPatch, parseWallpaperProperties, registerWallpaperPropertyListener } from './properties';
+import { parseWallpaperProperties, registerWallpaperPropertyListener } from './properties';
 
 const encodeWallpaperEngineToken = (clientId: string, refreshToken: string): string => {
   const json = JSON.stringify({ v: 1, clientId, refreshToken });
@@ -38,10 +39,11 @@ describe('Wallpaper Engine property adapter', () => {
       }
     });
 
-    expect(result.patch.spotify).toMatchObject({ provider: 'direct' });
+    expect(result.patch).toEqual({});
+    expect(result.settingsReplacement?.spotify.provider).toBe('direct');
+    expect(result.settingsReplacement?.debug.enabled).toBe(true);
     expect(JSON.stringify(result.patch)).not.toMatch(/json-client|json-refresh-token|clientId|refreshToken/i);
     expect(result.credential).toEqual({ kind: 'retain' });
-    expect(result.patch.debug?.enabled).toBe(true);
   });
 
   it('accepts direct credentials only from explicit Wallpaper Engine properties', () => {
@@ -73,7 +75,7 @@ describe('Wallpaper Engine property adapter', () => {
   });
 
   it('keeps credentials outside the v2 preference patch', () => {
-    const merged = applySettingsPatch(defaultSettings, { debug: { enabled: true }, spotify: { provider: 'mock' } });
+    const merged = applyWallpaperPreferencesPatch(defaultSettings, { debug: { enabled: true }, spotify: { provider: 'mock' } });
 
     expect(merged.debug.enabled).toBe(true);
     expect(merged.spotify.provider).toBe('mock');
@@ -129,6 +131,32 @@ describe('Wallpaper Engine property adapter', () => {
     expect(parseWallpaperProperties(properties).credential).toEqual({ kind: 'clear' });
   });
 
+  it('selects provider from property patch, then settings replacement, then host hint', () => {
+    const credentials = {
+      spotify_client_id: { value: 'direct-client' },
+      spotify_refresh_token: { value: 'direct-refresh' },
+      spotify_pairing_token: { value: 'backend-pairing' }
+    };
+    const replacementSelected = parseWallpaperProperties({
+      ...credentials,
+      settings_json: { value: JSON.stringify({ schemaVersion: 2, spotify: { provider: 'direct' } }) }
+    }, 'backend');
+    const patchSelected = parseWallpaperProperties({
+      ...credentials,
+      settings_json: { value: JSON.stringify({ schemaVersion: 2, spotify: { provider: 'direct' } }) },
+      spotify_playback_provider: { value: 'backend' }
+    }, 'direct');
+
+    expect(replacementSelected.credential).toEqual({
+      kind: 'replace',
+      value: { kind: 'direct', clientId: 'direct-client', refreshToken: 'direct-refresh' }
+    });
+    expect(patchSelected.credential).toEqual({
+      kind: 'replace',
+      value: { kind: 'backend', pairingToken: 'backend-pairing' }
+    });
+  });
+
   it('uses settings_json as a complete preference replacement, including optional fields', () => {
     const base = {
       ...defaultSettings,
@@ -137,10 +165,32 @@ describe('Wallpaper Engine property adapter', () => {
     const result = parseWallpaperProperties({
       settings_json: { value: JSON.stringify({ schemaVersion: 2, spotify: { provider: 'mock' }, player: { displayMode: 'album-details' } }) }
     });
-    const merged = applySettingsPatch(result.settingsReplacement ?? base, result.patch);
+    const merged = applyWallpaperPreferencesPatch(result.settingsReplacement ?? base, result.patch);
 
     expect(merged.spotify.provider).toBe('mock');
     expect(merged.spotify.backendOrigin).toBeUndefined();
     expect(merged.player.displayMode).toBe('album-details');
+  });
+
+  it('applies individual properties over a complete settings JSON replacement', () => {
+    const results: Array<ReturnType<typeof parseWallpaperProperties> & { settings?: typeof defaultSettings }> = [];
+    const target = {} as Window;
+    registerWallpaperPropertyListener(
+      (result) => results.push(result),
+      target,
+      () => 'backend',
+      () => defaultSettings
+    );
+
+    target.wallpaperPropertyListener?.applyUserProperties?.({
+      settings_json: { value: JSON.stringify({ schemaVersion: 2, spotify: { provider: 'mock' }, debug: { enabled: false } }) },
+      spotify_playback_provider: { value: 'direct' },
+      debug_enabled: { value: true }
+    });
+
+    expect(results[0].settings?.spotify.provider).toBe('direct');
+    expect(results[0].settings?.debug.enabled).toBe(true);
+    expect(results[0].patch.spotify?.provider).toBe('direct');
+    expect(results[0].settingsReplacement?.spotify.provider).toBe('mock');
   });
 });

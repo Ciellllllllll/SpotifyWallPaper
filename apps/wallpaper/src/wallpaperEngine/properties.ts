@@ -1,20 +1,21 @@
 import {
+  applyWallpaperPreferencesPatch,
   clonePresetItems,
   isLayoutPresetName,
-  repairWallpaperPreferences,
   type PlaybackProviderKind,
-  type WallpaperPreferences
+  type WallpaperPreferences,
+  type WallpaperPreferencesPatch
 } from '@spotify-wallpaper/shared-types';
 import { loadSettings } from '../settings/loadSettings';
 import { isWallpaperEngineSpotifyToken, parseWallpaperEngineSpotifyToken } from '../spotify/wallpaperEngineToken';
 import type { CredentialInput } from '../settings/credentialBoundary';
-import type { CredentialUpdate, ProviderHint, SettingsPatch, WallpaperEngineProperties, WallpaperPropertyResult } from './types';
+import type { CredentialUpdate, ProviderHint, WallpaperEngineProperties, WallpaperPropertyResult } from './types';
 
 export const parseWallpaperProperties = (
   properties: WallpaperEngineProperties,
   providerHint?: PlaybackProviderKind
 ): WallpaperPropertyResult => {
-  const patch: SettingsPatch = {};
+  const patch: WallpaperPreferencesPatch = {};
   let warning: string | null = null;
   let credential: CredentialUpdate = { kind: 'retain' };
   let safetyGateOpen = true;
@@ -52,7 +53,6 @@ export const parseWallpaperProperties = (
 
   if (settingsJson) {
     const loaded = loadSettings(settingsJson);
-    patchFromSettings(patch, loaded.settings);
     warning = loaded.warning;
     safetyGateOpen = loaded.safetyGateOpen;
     settingsReplacement = loaded.settings;
@@ -91,7 +91,7 @@ export const parseWallpaperProperties = (
       ? { kind: 'replace', value: { kind: 'backend', pairingToken } } as CredentialUpdate
       : { kind: 'clear' } as CredentialUpdate
     : null;
-  const selectedProvider = patch.spotify?.provider ?? providerHint;
+  const selectedProvider = patch.spotify?.provider ?? settingsReplacement?.spotify.provider ?? providerHint;
   if (selectedProvider === 'mock') {
     if (directCredential || backendCredential) {
       credential = { kind: 'clear' };
@@ -206,69 +206,6 @@ export const parseWallpaperProperties = (
   return { patch, warning, credential, safetyGateOpen, settingsReplacement };
 };
 
-export const applySettingsPatch = (settings: WallpaperPreferences, patch: SettingsPatch): WallpaperPreferences => {
-  return repairWallpaperPreferences({
-    ...settings,
-    schemaVersion: 2,
-    spotify: {
-      ...settings.spotify,
-      ...patch.spotify
-    },
-    layout: {
-      ...settings.layout,
-      ...patch.layout
-    },
-    theme: {
-      ...settings.theme,
-      ...patch.theme
-    },
-    background: {
-      ...settings.background,
-      ...patch.background
-    },
-    albumArt: {
-      ...settings.albumArt,
-      ...patch.albumArt
-    },
-    text: {
-      ...settings.text,
-      ...patch.text
-    },
-    player: {
-      ...settings.player,
-      ...patch.player
-    },
-    seekbar: {
-      ...settings.seekbar,
-      ...patch.seekbar
-    },
-    visualizer: {
-      ...settings.visualizer,
-      ...patch.visualizer
-    },
-    clock: {
-      ...settings.clock,
-      ...patch.clock
-    },
-    transitions: {
-      ...settings.transitions,
-      ...patch.transitions
-    },
-    performance: {
-      ...settings.performance,
-      ...patch.performance
-    },
-    rainmeter: {
-      ...settings.rainmeter,
-      ...patch.rainmeter
-    },
-    debug: {
-      ...settings.debug,
-      ...patch.debug
-    }
-  }).preferences;
-};
-
 export const registerWallpaperPropertyListener = (
   onProperties: (result: WallpaperPropertyResult & { settings?: WallpaperPreferences }) => void,
   target: Window = window,
@@ -282,34 +219,10 @@ export const registerWallpaperPropertyListener = (
       const result = parseWallpaperProperties(snapshot, providerHint?.());
       onProperties(currentSettings ? {
         ...result,
-        settings: applySettingsPatch(result.settingsReplacement ?? currentSettings(), result.patch)
+        settings: applyWallpaperPreferencesPatch(result.settingsReplacement ?? currentSettings(), result.patch)
       } : result);
     }
   };
-};
-
-const patchFromSettings = (patch: SettingsPatch, settings: WallpaperPreferences): void => {
-  const spotifyPatch: NonNullable<SettingsPatch['spotify']> = {};
-  spotifyPatch.provider = settings.spotify.provider;
-  if (settings.spotify.backendOrigin) {
-    spotifyPatch.backendOrigin = settings.spotify.backendOrigin;
-  }
-  if (Object.keys(spotifyPatch).length > 0) {
-    patch.spotify = { ...patch.spotify, ...spotifyPatch };
-  }
-  patch.layout = { ...patch.layout, ...settings.layout };
-  patch.theme = { ...patch.theme, ...settings.theme };
-  patch.background = { ...patch.background, ...settings.background };
-  patch.albumArt = { ...patch.albumArt, ...settings.albumArt };
-  patch.text = { ...patch.text, ...settings.text };
-  patch.player = { ...patch.player, ...settings.player };
-  patch.seekbar = { ...patch.seekbar, ...settings.seekbar };
-  patch.visualizer = { ...patch.visualizer, ...settings.visualizer };
-  patch.clock = { ...patch.clock, ...settings.clock };
-  patch.transitions = { ...patch.transitions, ...settings.transitions };
-  patch.performance = { ...patch.performance, ...settings.performance };
-  patch.rainmeter = { ...patch.rainmeter, ...settings.rainmeter };
-  patch.debug = { ...patch.debug, ...settings.debug };
 };
 
 const stringProperty = (properties: WallpaperEngineProperties, key: string): string | undefined => {

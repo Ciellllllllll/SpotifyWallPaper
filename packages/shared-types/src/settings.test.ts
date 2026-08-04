@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LayoutPresetName } from './view';
 import {
+  applyWallpaperPreferencesPatch,
   clonePresetItems,
   defaultLayoutPreset,
   defaultWallpaperPreferences,
@@ -8,12 +9,57 @@ import {
   layoutPresetNames,
   migrateWallpaperSettingsToV2,
   repairWallpaperPreferences,
-  serializeWallpaperPreferences
+  serializeWallpaperPreferences,
+  type WallpaperPreferencesPatch
 } from './settings';
 
 const forbiddenKeys = /(clientId|clientSecret|refreshToken|pairingToken|hasRefreshToken|accessToken|authorizationCode|oauthState|pkceVerifier)/i;
 
 describe('WallpaperPreferences v2', () => {
+  it('applies category patches without losing unchanged preferences', () => {
+    const base = defaultWallpaperPreferences();
+    base.theme.textColor = '#123456';
+    base.visualizer.smoothing = 0.81;
+
+    const patched = applyWallpaperPreferencesPatch(base, {
+      background: { opacity: 0.4 },
+      player: { controlsEnabled: false }
+    });
+
+    expect(patched.background.opacity).toBe(0.4);
+    expect(patched.player.controlsEnabled).toBe(false);
+    expect(patched.theme.textColor).toBe('#123456');
+    expect(patched.visualizer.smoothing).toBe(0.81);
+  });
+
+  it('replaces layout items, repairs ranges, and strips unknown or credential fields', () => {
+    const base = defaultWallpaperPreferences();
+    base.layout.items.trackText.width = 913;
+    base.spotify.backendOrigin = 'https://backend.example';
+    const replacementItems = clonePresetItems('Minimal');
+    replacementItems.albumArt.x = 17;
+    const patch = {
+      schemaVersion: 99,
+      spotify: {
+        backendOrigin: undefined,
+        refreshToken: 'secret-refresh-token'
+      },
+      layout: { items: replacementItems },
+      visualizer: { barCount: 999 },
+      unknownCategory: { enabled: true }
+    } as unknown as WallpaperPreferencesPatch;
+
+    const patched = applyWallpaperPreferencesPatch(base, patch);
+
+    expect(patched.schemaVersion).toBe(2);
+    expect(patched.spotify.backendOrigin).toBeUndefined();
+    expect(patched.layout.items.albumArt.x).toBe(17);
+    expect(patched.layout.items.trackText.width).toBe(replacementItems.trackText.width);
+    expect(patched.visualizer.barCount).toBe(160);
+    expect(JSON.stringify(patched)).not.toMatch(forbiddenKeys);
+    expect(patched).not.toHaveProperty('unknownCategory');
+  });
+
   it('has mock and album-only defaults without credential fields', () => {
     const preferences = defaultWallpaperPreferences();
 

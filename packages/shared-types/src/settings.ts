@@ -116,6 +116,23 @@ export interface WallpaperPreferences extends WallpaperPreferenceSections {
   };
 }
 
+export interface WallpaperPreferencesPatch {
+  spotify?: Partial<WallpaperPreferences['spotify']>;
+  layout?: Partial<WallpaperPreferences['layout']>;
+  theme?: Partial<WallpaperPreferences['theme']>;
+  background?: Partial<WallpaperPreferences['background']>;
+  albumArt?: Partial<WallpaperPreferences['albumArt']>;
+  text?: Partial<WallpaperPreferences['text']>;
+  player?: Partial<WallpaperPreferences['player']>;
+  seekbar?: Partial<WallpaperPreferences['seekbar']>;
+  visualizer?: Partial<WallpaperPreferences['visualizer']>;
+  clock?: Partial<WallpaperPreferences['clock']>;
+  transitions?: Partial<WallpaperPreferences['transitions']>;
+  performance?: Partial<WallpaperPreferences['performance']>;
+  rainmeter?: Partial<WallpaperPreferences['rainmeter']>;
+  debug?: Partial<WallpaperPreferences['debug']>;
+}
+
 export interface RepairedWallpaperPreferences {
   preferences: WallpaperPreferences;
   repaired: boolean;
@@ -480,6 +497,27 @@ export const repairWallpaperPreferences = (input: unknown): RepairedWallpaperPre
     warning: repaired ? 'Invalid settings were repaired; safe v2 defaults are active.' : null
   };
 };
+
+export const applyWallpaperPreferencesPatch = (
+  base: WallpaperPreferences,
+  patch: WallpaperPreferencesPatch
+): WallpaperPreferences => repairWallpaperPreferences({
+  schemaVersion: 2,
+  spotify: { ...base.spotify, ...patch.spotify },
+  layout: { ...base.layout, ...patch.layout },
+  theme: { ...base.theme, ...patch.theme },
+  background: { ...base.background, ...patch.background },
+  albumArt: { ...base.albumArt, ...patch.albumArt },
+  text: { ...base.text, ...patch.text },
+  player: { ...base.player, ...patch.player },
+  seekbar: { ...base.seekbar, ...patch.seekbar },
+  visualizer: { ...base.visualizer, ...patch.visualizer },
+  clock: { ...base.clock, ...patch.clock },
+  transitions: { ...base.transitions, ...patch.transitions },
+  performance: { ...base.performance, ...patch.performance },
+  rainmeter: { ...base.rainmeter, ...patch.rainmeter },
+  debug: { ...base.debug, ...patch.debug }
+}).preferences;
 
 export const migrateWallpaperSettingsToV2 = (input: unknown): WallpaperSettingsMigrationResult => {
   const parsed = parseSettingsInput(input);

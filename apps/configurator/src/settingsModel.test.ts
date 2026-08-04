@@ -47,6 +47,25 @@ describe('configurator settings model', () => {
     });
   });
 
+  it('applies preset and performance adjustments without rebuilding unrelated values', () => {
+    const settings = buildSettings({
+      ...defaultDraft,
+      basePreferences: {
+        ...defaultDraft.basePreferences,
+        theme: { ...defaultDraft.basePreferences.theme, textColor: '#123456' }
+      },
+      preset: 'Album Ring',
+      presetChanged: true,
+      performanceMode: 'low-power'
+    });
+
+    expect(settings.layout.preset).toBe('Album Ring');
+    expect(settings.seekbar.style).toBe('album-ring');
+    expect(settings.background.blurPx).toBe(12);
+    expect(settings.visualizer).toMatchObject({ barCount: 32, rotationSpeed: 0.06, glowStrength: 0.36 });
+    expect(settings.theme.textColor).toBe('#123456');
+  });
+
   it('ignores credentials in imported settings and keeps export secret-free', () => {
     const imported = importSettingsJson(
       JSON.stringify({
