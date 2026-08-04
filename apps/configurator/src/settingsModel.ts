@@ -1,4 +1,5 @@
-import type { LayoutItem, LayoutPresetName, WallpaperSettings } from '@spotify-wallpaper/shared-types';
+import type { LayoutItem, LayoutPresetName } from '@spotify-wallpaper/shared-types';
+import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
 
 export interface ConfiguratorDraft {
   appName: string;

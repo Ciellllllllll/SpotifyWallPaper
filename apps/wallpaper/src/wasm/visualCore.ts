@@ -1,4 +1,5 @@
-import type { LayoutItem, VisualizerFrame, WallpaperSettings } from '@spotify-wallpaper/shared-types';
+import type { LayoutItem, VisualizerFrame } from '@spotify-wallpaper/shared-types';
+import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
 
 export interface ReadabilityResult {
   text: { r: number; g: number; b: number };

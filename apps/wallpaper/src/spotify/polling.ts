@@ -1,4 +1,5 @@
-import type { NormalizedPlayback, SpotifyPlaybackError, WallpaperSettings } from '@spotify-wallpaper/shared-types';
+import type { NormalizedPlayback, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
+import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
 import { fetchCurrentPlayback, sendPlaybackCommand } from './client';
 import { classifyNetworkError, classifySpotifyStatus } from './errors';
 import { normalizeSpotifyPlayback } from './normalize';

@@ -1,4 +1,5 @@
-import type { NormalizedPlayback, WallpaperSettings } from '@spotify-wallpaper/shared-types';
+import type { NormalizedPlayback } from '@spotify-wallpaper/shared-types';
+import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
 
 export interface TrackTransitionState {
   previous: NormalizedPlayback;

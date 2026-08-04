@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { WallpaperSettings, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+  import type { WallpaperTheme } from '@spotify-wallpaper/shared-types';
+  import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
   import { layoutStyle } from '../layout/style';
   import { buildBackgroundStyle } from '../theme/background';
   import { transitionCssClass, type TrackTransitionState } from './model';

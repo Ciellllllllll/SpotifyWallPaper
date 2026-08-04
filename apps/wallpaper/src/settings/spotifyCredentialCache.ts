@@ -1,4 +1,4 @@
-import type { WallpaperSettings } from '@spotify-wallpaper/shared-types';
+import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
 
 export const SPOTIFY_CREDENTIAL_STORAGE_KEY = 'spotify-wallpaper-spotify-credentials';
 

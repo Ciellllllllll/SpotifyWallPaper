@@ -3,8 +3,11 @@ import type {
   LayoutItem,
   LayoutItemKey,
   LayoutUnit,
-  WallpaperSettings
 } from '@spotify-wallpaper/shared-types';
+import type {
+  LegacyWallpaperSettings as WallpaperSettings,
+  LegacyWallpaperSettingsInput
+} from '@spotify-wallpaper/shared-types/legacy';
 import { clonePresetItems, defaultLayoutPreset, isLayoutPresetName } from '../layout/presets';
 import { defaultSettings } from './defaultSettings';
 
@@ -43,7 +46,7 @@ export interface RepairResult {
   warning: string | null;
 }
 
-export const repairSettings = (input: WallpaperSettings): RepairResult => {
+export const repairSettings = (input: LegacyWallpaperSettingsInput): RepairResult => {
   let repaired = false;
   const sanitizedInput = { ...input };
   if (Object.prototype.hasOwnProperty.call(sanitizedInput, 'lyrics')) {
@@ -66,7 +69,7 @@ export const repairSettings = (input: WallpaperSettings): RepairResult => {
   const repairedSettings: WallpaperSettings = {
     ...defaultSettings,
     ...sanitizedInput,
-    schemaVersion: numberInRange(input.schemaVersion, 1, 1, defaultSettings.schemaVersion),
+    schemaVersion: 1,
     spotify: {
       ...defaultSettings.spotify,
       ...input.spotify,

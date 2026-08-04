@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import './app.css';
-  import type { LayoutItem, NormalizedPlayback, SpotifyPlaybackError, WallpaperSettings, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+  import type { LayoutItem, NormalizedPlayback, SpotifyPlaybackError, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+  import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
   import { mockPlayback } from './mock/mockPlayback';
   import { clearStoredSpotifyCredentials, persistSpotifyCredentials } from './settings/spotifyCredentialCache';
   import { defaultSettings } from './settings/defaultSettings';

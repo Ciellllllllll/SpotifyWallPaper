@@ -1,4 +1,4 @@
-import type { WallpaperSettings } from '@spotify-wallpaper/shared-types';
+import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
 import { clonePresetItems, isLayoutPresetName } from '../layout/presets';
 import { loadSettings } from '../settings/loadSettings';
 import { repairSettings } from '../settings/repairSettings';

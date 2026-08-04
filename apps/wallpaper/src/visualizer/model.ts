@@ -1,4 +1,5 @@
-import type { VisualizerFrame, WallpaperSettings, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+import type { VisualizerFrame, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
 import { normalizeSamplesWithCore } from '../wasm/visualCore';
 
 export interface EffectiveVisualizerConfig {

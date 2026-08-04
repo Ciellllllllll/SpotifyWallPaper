@@ -1,4 +1,4 @@
-import type { WallpaperSettings } from '@spotify-wallpaper/shared-types';
+import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
 
 export interface WallpaperEngineProperty {
   value?: unknown;
@@ -7,7 +7,7 @@ export interface WallpaperEngineProperty {
 export type WallpaperEngineProperties = Record<string, WallpaperEngineProperty>;
 
 export interface SettingsPatch {
-  schemaVersion?: WallpaperSettings['schemaVersion'];
+  schemaVersion?: number;
   spotify?: Partial<WallpaperSettings['spotify']>;
   layout?: Partial<WallpaperSettings['layout']>;
   theme?: Partial<WallpaperSettings['theme']>;

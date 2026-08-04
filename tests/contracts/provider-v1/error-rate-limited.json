@@ -1,0 +1,9 @@
+{
+  "ok": false,
+  "error": {
+    "kind": "rate_limited",
+    "message": "Spotify rate limit reached.",
+    "retryAfterMs": 5000,
+    "status": 429
+  }
+}

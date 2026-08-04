@@ -8,10 +8,15 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./legacy": {
+      "types": "./src/legacy.ts",
+      "default": "./dist/legacy.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit"
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src"
   }
 }

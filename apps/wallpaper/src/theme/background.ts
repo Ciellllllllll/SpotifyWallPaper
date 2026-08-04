@@ -1,4 +1,5 @@
-import type { WallpaperSettings, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+import type { WallpaperTheme } from '@spotify-wallpaper/shared-types';
+import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
 
 export const buildBackgroundStyle = (
   settings: WallpaperSettings,
