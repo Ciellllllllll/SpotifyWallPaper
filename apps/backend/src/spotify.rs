@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use axum::http::StatusCode;
 use reqwest::{header::RETRY_AFTER, Method};
-use serde::{Deserialize, Serialize};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 pub const SPOTIFY_SCOPES: &str =
@@ -230,27 +230,83 @@ pub struct PlaybackDeviceState {
     pub volume_percent: Option<u64>,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[derive(Debug)]
 pub enum PlaybackCommand {
     Play,
     Pause,
     Next,
     Previous,
-    Seek {
-        #[serde(rename = "positionMs")]
-        position_ms: u64,
-    },
-    Volume {
-        #[serde(rename = "volumePercent")]
-        volume_percent: u64,
-    },
-    Shuffle {
-        state: bool,
-    },
-    Repeat {
-        state: String,
-    },
+    Seek { position_ms: u64 },
+    Volume { volume_percent: u64 },
+    Shuffle { state: bool },
+    Repeat { state: String },
+}
+
+impl<'de> Deserialize<'de> for PlaybackCommand {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let object = value
+            .as_object()
+            .ok_or_else(|| D::Error::custom("playback command must be an object"))?;
+        let command_type = object
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| D::Error::custom("playback command type is required"))?;
+
+        match command_type {
+            "play" if exact_command_keys(object, &["type"]) => Ok(Self::Play),
+            "pause" if exact_command_keys(object, &["type"]) => Ok(Self::Pause),
+            "next" if exact_command_keys(object, &["type"]) => Ok(Self::Next),
+            "previous" if exact_command_keys(object, &["type"]) => Ok(Self::Previous),
+            "seek" if exact_command_keys(object, &["type", "positionMs"]) => {
+                let position_ms = safe_command_integer(object.get("positionMs"))
+                    .ok_or_else(|| D::Error::custom("seek positionMs is invalid"))?;
+                Ok(Self::Seek { position_ms })
+            }
+            "volume" if exact_command_keys(object, &["type", "volumePercent"]) => {
+                let volume_percent = safe_command_integer(object.get("volumePercent"))
+                    .filter(|value| *value <= 100)
+                    .ok_or_else(|| D::Error::custom("volumePercent is invalid"))?;
+                Ok(Self::Volume { volume_percent })
+            }
+            "shuffle" if exact_command_keys(object, &["type", "state"]) => {
+                let state = object
+                    .get("state")
+                    .and_then(serde_json::Value::as_bool)
+                    .ok_or_else(|| D::Error::custom("shuffle state is invalid"))?;
+                Ok(Self::Shuffle { state })
+            }
+            "repeat" if exact_command_keys(object, &["type", "state"]) => {
+                let state = object
+                    .get("state")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|state| matches!(*state, "off" | "track" | "context"))
+                    .ok_or_else(|| D::Error::custom("repeat state is invalid"))?;
+                Ok(Self::Repeat {
+                    state: state.to_string(),
+                })
+            }
+            _ => Err(D::Error::custom("playback command has unexpected fields")),
+        }
+    }
+}
+
+const MAX_SAFE_COMMAND_INTEGER: u64 = 9_007_199_254_740_991;
+
+fn safe_command_integer(value: Option<&serde_json::Value>) -> Option<u64> {
+    value
+        .and_then(serde_json::Value::as_u64)
+        .filter(|value| *value <= MAX_SAFE_COMMAND_INTEGER)
+}
+
+fn exact_command_keys(
+    object: &serde_json::Map<String, serde_json::Value>,
+    expected: &[&str],
+) -> bool {
+    object.len() == expected.len() && expected.iter().all(|key| object.contains_key(*key))
 }
 
 async fn token_response(response: reqwest::Response) -> Result<TokenExchange, SpotifyApiError> {
@@ -643,5 +699,23 @@ mod tests {
         assert_eq!(playback.title, "Current Song");
         assert_eq!(playback.album_image_url, "https://i.scdn.co/image/large");
         assert_eq!(playback.volume_percent, Some(55));
+    }
+
+    #[test]
+    fn normalizes_item_none_to_the_provider_v1_fixture() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/contracts/provider-v1/success-item-none.json"
+        ))
+        .expect("item-none provider-v1 fixture");
+        let playback = normalize_playback(
+            &serde_json::json!({ "item": null }),
+            "2026-08-04T00:00:00.000Z".to_string(),
+        )
+        .expect("item-none playback");
+
+        assert_eq!(
+            serde_json::to_value(playback).expect("item-none response"),
+            fixture["value"]
+        );
     }
 }

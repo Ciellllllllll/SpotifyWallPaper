@@ -13,7 +13,14 @@
     "durationMs": 180000,
     "progressMs": 12000,
     "isPlaying": true,
-    "device": null,
+    "device": {
+      "id": null,
+      "name": null,
+      "type": null,
+      "isActive": false,
+      "isRestricted": false,
+      "volumePercent": 75
+    },
     "deviceName": null,
     "shuffleState": false,
     "repeatState": "off",
