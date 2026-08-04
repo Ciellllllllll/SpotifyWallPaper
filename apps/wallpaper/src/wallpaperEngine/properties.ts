@@ -269,15 +269,20 @@ export const applySettingsPatch = (settings: WallpaperPreferences, patch: Settin
 };
 
 export const registerWallpaperPropertyListener = (
-  onProperties: (result: WallpaperPropertyResult) => void,
+  onProperties: (result: WallpaperPropertyResult & { settings?: WallpaperPreferences }) => void,
   target: Window = window,
-  providerHint?: ProviderHint
+  providerHint?: ProviderHint,
+  currentSettings?: () => WallpaperPreferences
 ): void => {
   let snapshot: WallpaperEngineProperties = {};
   target.wallpaperPropertyListener = {
     applyUserProperties: (properties) => {
       snapshot = { ...snapshot, ...properties };
-      onProperties(parseWallpaperProperties(snapshot, providerHint?.()));
+      const result = parseWallpaperProperties(snapshot, providerHint?.());
+      onProperties(currentSettings ? {
+        ...result,
+        settings: applySettingsPatch(result.settingsReplacement ?? currentSettings(), result.patch)
+      } : result);
     }
   };
 };
