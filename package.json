@@ -24,6 +24,7 @@
     "test": "npm run test:repository-authority && npm run test --workspaces --if-present"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@types/node": "^25.9.3",
     "svelte": "^5.0.0",

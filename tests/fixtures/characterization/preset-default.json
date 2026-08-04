@@ -1,0 +1,9 @@
+{
+  "name": "default",
+  "displayMode": "album-only",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "reducedMotion": true
+}

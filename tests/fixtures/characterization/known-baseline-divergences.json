@@ -1,0 +1,8 @@
+{
+  "albumDetails": {
+    "progressVisible": false,
+    "controlsVisible": false,
+    "targetPhase": 6,
+    "reason": "Current baseline keeps detail progress and controls behind hover UI; Phase 6 shared renderer targets full album-details presentation."
+  }
+}
