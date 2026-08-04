@@ -1,4 +1,4 @@
-import type { SpotifyPlaybackProviderKind } from './provider';
+import type { PlaybackProviderKind } from './provider';
 import type { WallpaperPreferenceSections } from './settings';
 
 /**
@@ -8,7 +8,7 @@ import type { WallpaperPreferenceSections } from './settings';
 export interface LegacyWallpaperSettings extends WallpaperPreferenceSections {
   schemaVersion: 1;
   spotify: {
-    playbackProvider?: SpotifyPlaybackProviderKind;
+    playbackProvider?: PlaybackProviderKind;
     clientId: string;
     refreshToken?: string;
     hasRefreshToken: boolean;

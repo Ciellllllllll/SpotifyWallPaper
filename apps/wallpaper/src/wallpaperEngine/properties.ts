@@ -1,13 +1,23 @@
-import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
+import {
+  repairWallpaperPreferences,
+  type PlaybackProviderKind,
+  type WallpaperPreferences
+} from '@spotify-wallpaper/shared-types';
 import { clonePresetItems, isLayoutPresetName } from '../layout/presets';
 import { loadSettings } from '../settings/loadSettings';
-import { repairSettings } from '../settings/repairSettings';
 import { isWallpaperEngineSpotifyToken, parseWallpaperEngineSpotifyToken } from '../spotify/wallpaperEngineToken';
-import type { SettingsPatch, WallpaperEngineProperties, WallpaperPropertyResult } from './types';
+import type { CredentialInput } from '../settings/credentialBoundary';
+import type { CredentialUpdate, ProviderHint, SettingsPatch, WallpaperEngineProperties, WallpaperPropertyResult } from './types';
 
-export const parseWallpaperProperties = (properties: WallpaperEngineProperties): WallpaperPropertyResult => {
+export const parseWallpaperProperties = (
+  properties: WallpaperEngineProperties,
+  providerHint?: PlaybackProviderKind
+): WallpaperPropertyResult => {
   const patch: SettingsPatch = {};
   let warning: string | null = null;
+  let credential: CredentialUpdate = { kind: 'retain' };
+  let safetyGateOpen = true;
+  let settingsReplacement: WallpaperPreferences | undefined;
 
   const clientId = stringProperty(properties, 'spotify_client_id');
   const refreshToken = stringProperty(properties, 'spotify_refresh_token');
@@ -42,48 +52,60 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
   if (settingsJson) {
     const loaded = loadSettings(settingsJson);
     patchFromSettings(patch, loaded.settings);
-    const spotifyClearPatch = spotifyCredentialClearPatchFromSettingsJson(settingsJson);
-    if (spotifyClearPatch) {
-      patch.spotify = { ...patch.spotify, ...spotifyClearPatch };
-    }
     warning = loaded.warning;
+    safetyGateOpen = loaded.safetyGateOpen;
+    settingsReplacement = loaded.settings;
   }
 
   if (
+    playbackProvider === 'mock' ||
     playbackProvider === 'direct' ||
     playbackProvider === 'backend' ||
-    backendUrl !== undefined ||
-    pairingToken !== undefined
+    backendUrl !== undefined
   ) {
     patch.spotify = {
       ...patch.spotify,
-      ...(playbackProvider === 'direct' || playbackProvider === 'backend' ? { playbackProvider } : {}),
-      ...(backendUrl !== undefined ? { backendUrl } : {}),
-      ...(pairingToken !== undefined ? { pairingToken } : {})
+      ...(playbackProvider === 'mock' || playbackProvider === 'direct' || playbackProvider === 'backend'
+        ? { provider: playbackProvider }
+        : {}),
+      ...(backendUrl !== undefined ? { backendOrigin: backendUrl } : {})
     };
+    if (playbackProvider === 'mock' || playbackProvider === 'direct' || playbackProvider === 'backend') {
+      credential = { kind: 'clear' };
+    }
   }
 
   const bundledToken = refreshToken !== undefined ? parseWallpaperEngineSpotifyToken(refreshToken) : null;
-  if (bundledToken) {
-    patch.spotify = {
-      ...patch.spotify,
-      clientId: bundledToken.clientId,
-      refreshToken: bundledToken.refreshToken,
-      hasRefreshToken: true
-    };
-  } else if (refreshToken !== undefined && isWallpaperEngineSpotifyToken(refreshToken)) {
-    patch.spotify = {
-      ...patch.spotify,
-      ...(clientId !== undefined ? { clientId } : {}),
-      refreshToken: '',
-      hasRefreshToken: false
-    };
-  } else if (clientId !== undefined || refreshToken !== undefined) {
-    patch.spotify = {
-      ...patch.spotify,
-      ...(clientId !== undefined ? { clientId } : {}),
-      ...(refreshToken !== undefined ? { refreshToken, hasRefreshToken: refreshToken.length > 0 } : {})
-    };
+  const directCredential = bundledToken
+    ? { kind: 'replace', value: { kind: 'direct', ...bundledToken } } as CredentialUpdate
+    : refreshToken !== undefined && isWallpaperEngineSpotifyToken(refreshToken)
+      ? { kind: 'clear' } as CredentialUpdate
+      : clientId !== undefined || refreshToken !== undefined
+        ? clientId && refreshToken
+          ? { kind: 'replace', value: { kind: 'direct', clientId, refreshToken } } as CredentialUpdate
+          : { kind: 'clear' } as CredentialUpdate
+        : null;
+  const backendCredential = pairingToken !== undefined
+    ? pairingToken.length > 0
+      ? { kind: 'replace', value: { kind: 'backend', pairingToken } } as CredentialUpdate
+      : { kind: 'clear' } as CredentialUpdate
+    : null;
+  const selectedProvider = patch.spotify?.provider ?? providerHint;
+  if (selectedProvider === 'mock') {
+    if (directCredential || backendCredential) {
+      credential = { kind: 'clear' };
+    }
+  } else if (selectedProvider === 'direct') {
+    credential = directCredential ?? (backendCredential ? { kind: 'clear' } : credential);
+  } else if (selectedProvider === 'backend') {
+    credential = backendCredential ?? (directCredential ? { kind: 'clear' } : credential);
+  } else if (backendCredential && directCredential) {
+    // Without an explicit/current provider, never guess which credential wins.
+    credential = { kind: 'clear' };
+  } else if (backendCredential) {
+    credential = backendCredential;
+  } else if (directCredential) {
+    credential = directCredential;
   }
 
   if (selectedPreset !== undefined) {
@@ -180,18 +202,16 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
     patch.debug = { ...patch.debug, enabled: debugEnabled };
   }
 
-  return { patch, warning };
+  return { patch, warning, credential, safetyGateOpen, settingsReplacement };
 };
 
-export const applySettingsPatch = (settings: WallpaperSettings, patch: SettingsPatch): WallpaperSettings => {
-  const spotifyPatch = normalizeSpotifyCredentialPatch(settings.spotify, patch.spotify);
-
-  return repairSettings({
+export const applySettingsPatch = (settings: WallpaperPreferences, patch: SettingsPatch): WallpaperPreferences => {
+  return repairWallpaperPreferences({
     ...settings,
-    schemaVersion: patch.schemaVersion ?? settings.schemaVersion,
+    schemaVersion: 2,
     spotify: {
       ...settings.spotify,
-      ...spotifyPatch
+      ...patch.spotify
     },
     layout: {
       ...settings.layout,
@@ -245,33 +265,28 @@ export const applySettingsPatch = (settings: WallpaperSettings, patch: SettingsP
       ...settings.debug,
       ...patch.debug
     }
-  }).settings;
+  }).preferences;
 };
 
 export const registerWallpaperPropertyListener = (
   onProperties: (result: WallpaperPropertyResult) => void,
-  target: Window = window
+  target: Window = window,
+  providerHint?: ProviderHint
 ): void => {
+  let snapshot: WallpaperEngineProperties = {};
   target.wallpaperPropertyListener = {
     applyUserProperties: (properties) => {
-      onProperties(parseWallpaperProperties(properties));
+      snapshot = { ...snapshot, ...properties };
+      onProperties(parseWallpaperProperties(snapshot, providerHint?.()));
     }
   };
 };
 
-const patchFromSettings = (patch: SettingsPatch, settings: WallpaperSettings): void => {
-  const spotifyPatch: Partial<WallpaperSettings['spotify']> = {};
-  if (settings.spotify.clientId) {
-    spotifyPatch.clientId = settings.spotify.clientId;
-  }
-  spotifyPatch.playbackProvider = settings.spotify.playbackProvider ?? 'direct';
-  spotifyPatch.backendUrl = settings.spotify.backendUrl ?? '';
-  if (settings.spotify.pairingToken) {
-    spotifyPatch.pairingToken = settings.spotify.pairingToken;
-  }
-  if (settings.spotify.refreshToken) {
-    spotifyPatch.refreshToken = settings.spotify.refreshToken;
-    spotifyPatch.hasRefreshToken = true;
+const patchFromSettings = (patch: SettingsPatch, settings: WallpaperPreferences): void => {
+  const spotifyPatch: NonNullable<SettingsPatch['spotify']> = {};
+  spotifyPatch.provider = settings.spotify.provider;
+  if (settings.spotify.backendOrigin) {
+    spotifyPatch.backendOrigin = settings.spotify.backendOrigin;
   }
   if (Object.keys(spotifyPatch).length > 0) {
     patch.spotify = { ...patch.spotify, ...spotifyPatch };
@@ -279,12 +294,15 @@ const patchFromSettings = (patch: SettingsPatch, settings: WallpaperSettings): v
   patch.layout = { ...patch.layout, ...settings.layout };
   patch.theme = { ...patch.theme, ...settings.theme };
   patch.background = { ...patch.background, ...settings.background };
+  patch.albumArt = { ...patch.albumArt, ...settings.albumArt };
+  patch.text = { ...patch.text, ...settings.text };
   patch.player = { ...patch.player, ...settings.player };
   patch.seekbar = { ...patch.seekbar, ...settings.seekbar };
   patch.visualizer = { ...patch.visualizer, ...settings.visualizer };
   patch.clock = { ...patch.clock, ...settings.clock };
   patch.transitions = { ...patch.transitions, ...settings.transitions };
   patch.performance = { ...patch.performance, ...settings.performance };
+  patch.rainmeter = { ...patch.rainmeter, ...settings.rainmeter };
   patch.debug = { ...patch.debug, ...settings.debug };
 };
 
@@ -296,63 +314,4 @@ const stringProperty = (properties: WallpaperEngineProperties, key: string): str
 const booleanProperty = (properties: WallpaperEngineProperties, key: string): boolean | undefined => {
   const value = properties[key]?.value;
   return typeof value === 'boolean' ? value : undefined;
-};
-
-const normalizeSpotifyCredentialPatch = (
-  current: WallpaperSettings['spotify'],
-  patch: Partial<WallpaperSettings['spotify']> | undefined
-): Partial<WallpaperSettings['spotify']> | undefined => {
-  if (!patch) {
-    return patch;
-  }
-
-  const next = { ...patch };
-  const hasClientIdPatch = hasOwn(patch, 'clientId');
-  const hasRefreshTokenPatch = hasOwn(patch, 'refreshToken');
-  const clientIdChanged = hasClientIdPatch && patch.clientId !== current.clientId;
-  const clientIdCleared = hasClientIdPatch && patch.clientId === '';
-
-  if ((clientIdChanged || clientIdCleared) && !hasRefreshTokenPatch) {
-    next.refreshToken = '';
-    next.hasRefreshToken = false;
-  }
-
-  if (patch.playbackProvider === 'direct') {
-    next.backendUrl = '';
-    next.pairingToken = '';
-  }
-
-  return next;
-};
-
-const hasOwn = <T extends object>(target: T, key: PropertyKey): boolean => Object.prototype.hasOwnProperty.call(target, key);
-
-const spotifyCredentialClearPatchFromSettingsJson = (
-  settingsJson: string
-): Partial<WallpaperSettings['spotify']> | null => {
-  const parsed = parseJsonObject(settingsJson);
-  const spotify = parsed?.spotify;
-  if (!spotify || typeof spotify !== 'object') {
-    return null;
-  }
-
-  const record = spotify as Record<string, unknown>;
-  if (record.hasRefreshToken !== false && record.refreshToken !== '' && record.clientId !== '') {
-    return null;
-  }
-
-  return {
-    ...(record.clientId === '' ? { clientId: '' } : {}),
-    refreshToken: '',
-    hasRefreshToken: false
-  };
-};
-
-const parseJsonObject = (source: string): Record<string, unknown> | null => {
-  try {
-    const parsed: unknown = JSON.parse(source);
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
 };

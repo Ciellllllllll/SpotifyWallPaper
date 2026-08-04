@@ -1,5 +1,4 @@
-import type { LayoutItem, VisualizerFrame } from '@spotify-wallpaper/shared-types';
-import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
+import type { LayoutItem, VisualizerFrame, WallpaperPreferences } from '@spotify-wallpaper/shared-types';
 
 export interface ReadabilityResult {
   text: { r: number; g: number; b: number };
@@ -58,7 +57,7 @@ export const visualCoreStatus = (): 'wasm' | 'typescript-fallback' => (coreModul
 export const normalizeSamplesWithCore = (
   frame: VisualizerFrame,
   previous: VisualizerFrame | null,
-  settings: WallpaperSettings['visualizer']
+  settings: WallpaperPreferences['visualizer']
 ): { samples: number[]; peak: number } | null =>
   callJson(() =>
     coreModule?.normalize_visualizer_json(

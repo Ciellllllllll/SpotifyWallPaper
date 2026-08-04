@@ -1,11 +1,10 @@
 <script lang="ts">
-  import type { LayoutItem, VisualizerFrame, WallpaperTheme } from '@spotify-wallpaper/shared-types';
-  import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
+  import type { LayoutItem, VisualizerFrame, WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
   import { layoutStyle } from '../layout/style';
   import { buildVisualizerBars, buildWaveformPath, effectiveVisualizerConfig, idleVisualizerFrame, visualizerColor } from './model';
 
   export let frame: VisualizerFrame | null;
-  export let settings: WallpaperSettings;
+  export let settings: WallpaperPreferences;
   export let theme: WallpaperTheme;
   export let albumItem: LayoutItem;
 

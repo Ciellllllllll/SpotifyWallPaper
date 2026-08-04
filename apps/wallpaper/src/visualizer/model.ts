@@ -1,5 +1,4 @@
-import type { VisualizerFrame, WallpaperTheme } from '@spotify-wallpaper/shared-types';
-import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
+import type { VisualizerFrame, WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
 import { normalizeSamplesWithCore } from '../wasm/visualCore';
 
 export interface EffectiveVisualizerConfig {
@@ -14,7 +13,7 @@ export interface VisualizerBar {
   value: number;
 }
 
-export const effectiveVisualizerConfig = (settings: WallpaperSettings): EffectiveVisualizerConfig => {
+export const effectiveVisualizerConfig = (settings: WallpaperPreferences): EffectiveVisualizerConfig => {
   const requestedBars = settings.visualizer.barCount;
   const maxBars =
     settings.performance.mode === 'low-power' ? 24 : settings.performance.mode === 'high-effect' ? 120 : 72;
@@ -32,7 +31,7 @@ export const effectiveVisualizerConfig = (settings: WallpaperSettings): Effectiv
 export const shapeVisualizerFrame = (
   frame: VisualizerFrame,
   previous: VisualizerFrame | null,
-  settings: WallpaperSettings['visualizer']
+  settings: WallpaperPreferences['visualizer']
 ): VisualizerFrame => {
   const safeSamples = frame.samples.length > 0 ? frame.samples : [0];
   const weightedSamples = safeSamples.map((sample, index) => {
@@ -46,7 +45,7 @@ export const shapeVisualizerFrame = (
   return frameFromSamples(normalized.samples.map(clamp01), frame.source, frame.timestampMs);
 };
 
-export const idleVisualizerFrame = (timestampMs: number, settings: WallpaperSettings['visualizer']): VisualizerFrame => {
+export const idleVisualizerFrame = (timestampMs: number, settings: WallpaperPreferences['visualizer']): VisualizerFrame => {
   const phase = timestampMs / 1200;
   const samples = Array.from({ length: Math.max(8, Math.min(32, settings.barCount)) }, (_, index) => {
     const wave = Math.sin(phase + index * 0.62) * 0.5 + 0.5;
@@ -58,12 +57,12 @@ export const idleVisualizerFrame = (timestampMs: number, settings: WallpaperSett
 
 export const shouldIgnoreSilentWallpaperFrame = (
   frame: VisualizerFrame,
-  settings: WallpaperSettings['visualizer']
+  settings: WallpaperPreferences['visualizer']
 ): boolean => frame.source === 'wallpaper-engine' && frame.peak <= settings.noiseGate;
 
 export const buildVisualizerBars = (
   frame: VisualizerFrame,
-  settings: WallpaperSettings,
+  settings: WallpaperPreferences,
   config: EffectiveVisualizerConfig = effectiveVisualizerConfig(settings)
 ): VisualizerBar[] => {
   const samples = downsample(frame.samples, config.barCount, config.sampleStep);
@@ -91,7 +90,7 @@ export const buildWaveformPath = (frame: VisualizerFrame, pointCount = 48): stri
 };
 
 export const visualizerColor = (
-  mode: WallpaperSettings['visualizer']['colorMode'],
+  mode: WallpaperPreferences['visualizer']['colorMode'],
   theme: WallpaperTheme
 ): string => {
   if (mode === 'white') {
@@ -101,7 +100,7 @@ export const visualizerColor = (
   return mode === 'accent' ? theme.accentColor : theme.primaryColor;
 };
 
-const normalizeSample = (sample: number, settings: WallpaperSettings['visualizer']): number => {
+const normalizeSample = (sample: number, settings: WallpaperPreferences['visualizer']): number => {
   if (!Number.isFinite(sample)) {
     return 0;
   }
@@ -117,7 +116,7 @@ const normalizeSample = (sample: number, settings: WallpaperSettings['visualizer
 const normalizeSamplesFallback = (
   current: number[],
   previous: number[],
-  settings: WallpaperSettings['visualizer']
+  settings: WallpaperPreferences['visualizer']
 ): { samples: number[]; peak: number } => {
   const nextSamples = current.map((sample, index) => {
     const previousSample = previous[index] ?? 0;
@@ -131,7 +130,7 @@ const normalizeSamplesFallback = (
   };
 };
 
-const bandWeight = (index: number, length: number, settings: WallpaperSettings['visualizer']): number => {
+const bandWeight = (index: number, length: number, settings: WallpaperPreferences['visualizer']): number => {
   const ratio = index / Math.max(1, length - 1);
   if (ratio < 1 / 3) {
     return settings.bassWeight;

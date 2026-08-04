@@ -1,5 +1,5 @@
-import type { NormalizedPlayback, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
-import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
+import type { NormalizedPlayback, WallpaperPreferences, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
+import type { CredentialInput } from '../settings/credentialBoundary';
 import { fetchCurrentPlayback, sendPlaybackCommand } from './client';
 import { classifyNetworkError, classifySpotifyStatus } from './errors';
 import { normalizeSpotifyPlayback } from './normalize';
@@ -19,7 +19,7 @@ export interface PollDecisionInput {
   playback?: NormalizedPlayback | null;
   error?: SpotifyPlaybackError | null;
   consecutiveErrors?: number;
-  settings?: WallpaperSettings;
+  settings?: WallpaperPreferences;
 }
 
 export interface SpotifyPlaybackProvider {
@@ -182,51 +182,69 @@ export class BackendPlaybackProvider implements SpotifyPlaybackProvider {
   }
 }
 
-export const hasSpotifyCredentials = (settings: WallpaperSettings): settings is WallpaperSettings & {
-  spotify: WallpaperSettings['spotify'] & { refreshToken: string };
-} => Boolean(settings.spotify.clientId && settings.spotify.refreshToken);
+export const hasSpotifyCredentials = (credential: CredentialInput | null): credential is Extract<CredentialInput, { kind: 'direct' }> =>
+  credential?.kind === 'direct' && credential.clientId.length > 0 && credential.refreshToken.length > 0;
 
-export const credentialsFromSettings = (settings: WallpaperSettings): SpotifyCredentials | null => {
-  if (!hasSpotifyCredentials(settings)) {
+export const credentialsFromCredential = (credential: CredentialInput | null): SpotifyCredentials | null => {
+  if (!hasSpotifyCredentials(credential)) {
     return null;
   }
 
   return {
-    clientId: settings.spotify.clientId,
-    refreshToken: settings.spotify.refreshToken
+    clientId: credential.clientId,
+    refreshToken: credential.refreshToken
   };
 };
 
-export const backendConfigFromSettings = (settings: WallpaperSettings): BackendPlaybackProviderConfig | null => {
-  if (settings.spotify.playbackProvider !== 'backend' || !settings.spotify.backendUrl || !settings.spotify.pairingToken) {
+export const backendConfigFromCredential = (
+  settings: WallpaperPreferences,
+  credential: CredentialInput | null
+): BackendPlaybackProviderConfig | null => {
+  if (settings.spotify.provider !== 'backend' || !settings.spotify.backendOrigin || credential?.kind !== 'backend') {
     return null;
   }
 
-  const backendUrl = normalizeBackendBaseUrl(settings.spotify.backendUrl);
+  const backendUrl = normalizeBackendBaseUrl(settings.spotify.backendOrigin);
   if (!backendUrl.ok) {
     return null;
   }
 
   return {
     backendUrl: backendUrl.value,
-    pairingToken: settings.spotify.pairingToken
+    pairingToken: credential.pairingToken
   };
 };
 
-export const playbackProviderFromSettings = (
-  settings: WallpaperSettings,
+export function playbackProviderFromSettings(
+  settings: WallpaperPreferences,
+  credential?: CredentialInput | null,
+  fetcher?: Fetcher
+): SpotifyPlaybackProvider | null;
+export function playbackProviderFromSettings(
+  settings: WallpaperPreferences,
+  fetcher?: Fetcher
+): SpotifyPlaybackProvider | null;
+export function playbackProviderFromSettings(
+  settings: WallpaperPreferences,
+  credentialOrFetcher: CredentialInput | Fetcher | null = null,
   fetcher: Fetcher = fetch
-): SpotifyPlaybackProvider | null => {
-  if (settings.spotify.playbackProvider === 'backend') {
-    const backendConfig = backendConfigFromSettings(settings);
+): SpotifyPlaybackProvider | null {
+  const credential = typeof credentialOrFetcher === 'function' ? null : credentialOrFetcher;
+  const actualFetcher = typeof credentialOrFetcher === 'function' ? credentialOrFetcher : fetcher;
+  if (settings.spotify.provider === 'backend') {
+    const backendConfig = backendConfigFromCredential(settings, credential);
     return backendConfig
-      ? new BackendPlaybackProvider(backendConfig, fetcher)
+      ? new BackendPlaybackProvider(backendConfig, actualFetcher)
       : null;
   }
 
-  const credentials = credentialsFromSettings(settings);
-  return credentials ? new SpotifyPlaybackSession(credentials, fetcher) : null;
-};
+  if (settings.spotify.provider !== 'direct') {
+    return null;
+  }
+
+  const credentials = credentialsFromCredential(credential);
+  return credentials ? new SpotifyPlaybackSession(credentials, actualFetcher) : null;
+}
 
 export const playbackHistoryAfterPoll = (
   history: PlaybackHistory,
@@ -366,14 +384,14 @@ const configuredOfficialBackendOrigin = (): string | null => {
 const isCanonicalOriginInput = (value: string, url: URL): boolean =>
   value === url.origin || value === `${url.origin}/`;
 
-const isTrustedPublicBackend = (settings: WallpaperSettings | undefined): boolean => {
+const isTrustedPublicBackend = (settings: WallpaperPreferences | undefined): boolean => {
   if (
-    settings?.spotify.playbackProvider !== 'backend' ||
-    !settings.spotify.backendUrl
+    settings?.spotify.provider !== 'backend' ||
+    !settings.spotify.backendOrigin
   ) {
     return false;
   }
-  const normalized = normalizeBackendBaseUrl(settings.spotify.backendUrl);
+  const normalized = normalizeBackendBaseUrl(settings.spotify.backendOrigin);
   return normalized.ok && normalized.value.startsWith('https://');
 };
 

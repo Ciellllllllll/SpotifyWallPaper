@@ -4,7 +4,7 @@ import { mockPlayback } from '../mock/mockPlayback';
 import { defaultSettings } from '../settings/defaultSettings';
 import {
   BackendPlaybackProvider,
-  credentialsFromSettings,
+  credentialsFromCredential,
   nextPollingDelayMs,
   playbackHistoryAfterPoll,
   playbackProviderFromSettings,
@@ -41,19 +41,12 @@ describe('Spotify polling decisions', () => {
     ).toBe(5000);
   });
 
-  it('requires both client id and refresh token', () => {
-    expect(credentialsFromSettings(defaultSettings)).toBeNull();
-    expect(
-      credentialsFromSettings({
-        ...defaultSettings,
-        spotify: {
-          ...defaultSettings.spotify,
-          clientId: 'client-id',
-          refreshToken: 'refresh-token',
-          hasRefreshToken: true
-        }
-      })
-    ).toEqual({ clientId: 'client-id', refreshToken: 'refresh-token' });
+  it('requires a direct credential supplied outside settings', () => {
+    expect(credentialsFromCredential(null)).toBeNull();
+    expect(credentialsFromCredential({ kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' })).toEqual({
+      clientId: 'client-id',
+      refreshToken: 'refresh-token'
+    });
   });
 
   it('keeps browser mock mode without credentials and direct mode with credentials', () => {
@@ -63,13 +56,20 @@ describe('Spotify polling decisions', () => {
         ...defaultSettings,
         spotify: {
           ...defaultSettings.spotify,
-          playbackProvider: 'direct',
-          clientId: 'client-id',
-          refreshToken: 'refresh-token',
-          hasRefreshToken: true
+          provider: 'direct'
         }
-      })
+      }, { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' })
     ).toBeInstanceOf(SpotifyPlaybackSession);
+  });
+
+  it('never creates a direct provider when mock is selected, even with a credential present', () => {
+    const fetcher = vi.fn() as unknown as typeof fetch;
+    expect(playbackProviderFromSettings(
+      defaultSettings,
+      { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' },
+      fetcher
+    )).toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it('preserves current and previous playback references after a polling error', () => {
@@ -176,11 +176,11 @@ describe('Spotify polling decisions', () => {
         ...defaultSettings,
         spotify: {
           ...defaultSettings.spotify,
-          playbackProvider: 'backend',
-          backendUrl: 'http://127.0.0.1:49320/',
-          pairingToken: 'secret-pairing-token'
+          provider: 'backend',
+          backendOrigin: 'http://127.0.0.1:49320/'
         }
       },
+      { kind: 'backend', pairingToken: 'secret-pairing-token' },
       (() => Promise.resolve(new Response(JSON.stringify(trackFixture), { status: 200 }))) as typeof fetch
     );
 
@@ -197,12 +197,8 @@ describe('Spotify polling decisions', () => {
       ...defaultSettings,
       spotify: {
         ...defaultSettings.spotify,
-        clientId: 'client-id',
-        refreshToken: 'refresh-token',
-        hasRefreshToken: true,
-        playbackProvider: 'backend',
-        backendUrl: '',
-        pairingToken: 'secret-pairing-token'
+        provider: 'backend',
+        backendOrigin: ''
       }
     });
 
@@ -322,16 +318,15 @@ describe('Spotify polling decisions', () => {
       ...defaultSettings,
       spotify: {
         ...defaultSettings.spotify,
-        playbackProvider: 'backend' as const,
-        backendUrl: 'https://api.wallpaper.example',
-        pairingToken: 'secret-pairing-token'
+        provider: 'backend' as const,
+        backendOrigin: 'https://api.wallpaper.example'
       }
     };
     const loopbackSettings = {
       ...publicSettings,
       spotify: {
         ...publicSettings.spotify,
-        backendUrl: 'http://127.0.0.1:49320'
+        backendOrigin: 'http://127.0.0.1:49320'
       }
     };
 

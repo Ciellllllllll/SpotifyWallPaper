@@ -1,4 +1,5 @@
-import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
+import type { PlaybackProviderKind, WallpaperPreferences } from '@spotify-wallpaper/shared-types';
+import type { CredentialInput } from '../settings/credentialBoundary';
 
 export interface WallpaperEngineProperty {
   value?: unknown;
@@ -8,26 +9,36 @@ export type WallpaperEngineProperties = Record<string, WallpaperEngineProperty>;
 
 export interface SettingsPatch {
   schemaVersion?: number;
-  spotify?: Partial<WallpaperSettings['spotify']>;
-  layout?: Partial<WallpaperSettings['layout']>;
-  theme?: Partial<WallpaperSettings['theme']>;
-  background?: Partial<WallpaperSettings['background']>;
-  albumArt?: Partial<WallpaperSettings['albumArt']>;
-  text?: Partial<WallpaperSettings['text']>;
-  player?: Partial<WallpaperSettings['player']>;
-  seekbar?: Partial<WallpaperSettings['seekbar']>;
-  visualizer?: Partial<WallpaperSettings['visualizer']>;
-  clock?: Partial<WallpaperSettings['clock']>;
-  transitions?: Partial<WallpaperSettings['transitions']>;
-  performance?: Partial<WallpaperSettings['performance']>;
-  rainmeter?: Partial<WallpaperSettings['rainmeter']>;
-  debug?: Partial<WallpaperSettings['debug']>;
+  spotify?: Partial<WallpaperPreferences['spotify']>;
+  layout?: Partial<WallpaperPreferences['layout']>;
+  theme?: Partial<WallpaperPreferences['theme']>;
+  background?: Partial<WallpaperPreferences['background']>;
+  albumArt?: Partial<WallpaperPreferences['albumArt']>;
+  text?: Partial<WallpaperPreferences['text']>;
+  player?: Partial<WallpaperPreferences['player']>;
+  seekbar?: Partial<WallpaperPreferences['seekbar']>;
+  visualizer?: Partial<WallpaperPreferences['visualizer']>;
+  clock?: Partial<WallpaperPreferences['clock']>;
+  transitions?: Partial<WallpaperPreferences['transitions']>;
+  performance?: Partial<WallpaperPreferences['performance']>;
+  rainmeter?: Partial<WallpaperPreferences['rainmeter']>;
+  debug?: Partial<WallpaperPreferences['debug']>;
 }
 
 export interface WallpaperPropertyResult {
   patch: SettingsPatch;
   warning: string | null;
+  credential: CredentialUpdate;
+  safetyGateOpen: boolean;
+  settingsReplacement?: WallpaperPreferences;
 }
+
+export type ProviderHint = () => PlaybackProviderKind;
+
+export type CredentialUpdate =
+  | { kind: 'retain' }
+  | { kind: 'clear' }
+  | { kind: 'replace'; value: CredentialInput };
 
 export type WallpaperAudioListener = (samples: number[] | Float32Array) => void;
 

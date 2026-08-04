@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import './app.css';
-  import type { LayoutItem, NormalizedPlayback, SpotifyPlaybackError, WallpaperTheme } from '@spotify-wallpaper/shared-types';
-  import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
+  import type { LayoutItem, NormalizedPlayback, SpotifyPlaybackError, WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
   import { mockPlayback } from './mock/mockPlayback';
-  import { clearStoredSpotifyCredentials, persistSpotifyCredentials } from './settings/spotifyCredentialCache';
+  import {
+    createProcessMemoryCredentialClosure,
+    shouldClearCredentialForProviderChange
+  } from './settings/credentialBoundary';
   import { defaultSettings } from './settings/defaultSettings';
   import { loadSettings } from './settings/loadSettings';
   import {
@@ -29,7 +31,7 @@
 
   let playback: NormalizedPlayback = mockPlayback;
   let previousPlayback: NormalizedPlayback | null = null;
-  let settings: WallpaperSettings = defaultSettings;
+  let settings: WallpaperPreferences = defaultSettings;
   let spotifyError: SpotifyPlaybackError | null = null;
   let settingsWarning: string | null = null;
   let playbackMode = 'browser mock';
@@ -43,6 +45,9 @@
   let lastPollingDelayMs: number | null = null;
   let consecutiveErrors = 0;
   let spotifySession: SpotifyPlaybackProvider | null = null;
+  const credentialClosure = createProcessMemoryCredentialClosure();
+  let networkAllowed = false;
+  let configurationSafetyGateOpen = false;
   let controlError: SpotifyPlaybackError | null = null;
   let controlBusy = false;
   let displayMode: 'album-only' | 'album-details' = 'album-only';
@@ -383,7 +388,15 @@
     }
 
     detailHoverUiVisible = false;
-    displayMode = showAlbumDetails ? 'album-only' : 'album-details';
+    const nextDisplayMode = showAlbumDetails ? 'album-only' : 'album-details';
+    displayMode = nextDisplayMode;
+    settings = {
+      ...settings,
+      player: {
+        ...settings.player,
+        displayMode: nextDisplayMode
+      }
+    };
   };
 
   const showDetailHoverUi = () => {
@@ -416,9 +429,9 @@
     }, 140);
   };
 
-  const applyRuntimeSettings = (nextSettings: WallpaperSettings, source: string, warning: string | null) => {
+  const applyRuntimeSettings = (nextSettings: WallpaperPreferences, source: string, warning: string | null) => {
     settings = nextSettings;
-    persistSpotifyCredentials(settings);
+    displayMode = nextSettings.player.displayMode;
     settingsWarning = warning;
     settingsSource = source;
     if (!settings.transitions.enabled) {
@@ -432,23 +445,18 @@
     configureSpotifyPollingIfNeeded();
   };
 
-  const spotifyPollingKey = (nextSettings: WallpaperSettings) => {
-    const hasBackendProvider =
-      nextSettings.spotify.playbackProvider === 'backend' &&
-      Boolean(nextSettings.spotify.backendUrl && nextSettings.spotify.pairingToken);
-    const hasDirectCredentials = Boolean(nextSettings.spotify.clientId && nextSettings.spotify.refreshToken);
-    if (!hasBackendProvider && !hasDirectCredentials) {
+  const spotifyPollingKey = (nextSettings: WallpaperPreferences) => {
+    const status = credentialClosure.status();
+    if (!configurationSafetyGateOpen || !networkAllowed || nextSettings.spotify.provider === 'mock') {
       return '';
     }
 
     return JSON.stringify({
-      playbackProvider: nextSettings.spotify.playbackProvider,
-      clientId: nextSettings.spotify.clientId,
-      refreshToken: nextSettings.spotify.refreshToken,
-      backendUrl: nextSettings.spotify.backendUrl,
-      pairingToken: nextSettings.spotify.pairingToken,
+      provider: nextSettings.spotify.provider,
+      backendOrigin: nextSettings.spotify.backendOrigin,
       playingIntervalMs: nextSettings.spotify.pollIntervalPlayingMs,
-      pausedIntervalMs: nextSettings.spotify.pollIntervalPausedMs
+      pausedIntervalMs: nextSettings.spotify.pollIntervalPausedMs,
+      credentialRevision: status.revision
     });
   };
 
@@ -465,7 +473,15 @@
   const configureSpotifyPolling = () => {
     stopPolling();
 
-    const session = playbackProviderFromSettings(settings);
+    if (!configurationSafetyGateOpen || !networkAllowed) {
+      playbackMode = 'browser mock';
+      spotifyError = null;
+      controlError = null;
+      consecutiveErrors = 0;
+      return;
+    }
+
+    const session = playbackProviderFromSettings(settings, credentialClosure.read());
     if (!session) {
       playbackMode = 'browser mock';
       spotifyError = null;
@@ -474,7 +490,7 @@
       return;
     }
 
-    playbackMode = settings.spotify.playbackProvider === 'backend' ? 'spotify backend' : 'spotify direct';
+    playbackMode = settings.spotify.provider === 'backend' ? 'spotify backend' : 'spotify direct';
     spotifyError = null;
     controlError = null;
     consecutiveErrors = 0;
@@ -521,14 +537,36 @@
   onMount(() => {
     initVisualCore();
     const loaded = loadSettings();
+    networkAllowed = loaded.networkAllowed;
+    configurationSafetyGateOpen = loaded.safetyGateOpen;
     applyRuntimeSettings(loaded.settings, loaded.warning ? 'fallback defaults' : 'defaults/browser', loaded.warning);
     startProgressTicker();
     registerWallpaperPropertyListener((result) => {
-      if (result.patch.spotify?.refreshToken === '') {
-        clearStoredSpotifyCredentials();
+      const safetyAllowed = configurationSafetyGateOpen && result.safetyGateOpen;
+      if (!safetyAllowed) {
+        credentialClosure.clear();
+      } else if (result.credential.kind === 'replace') {
+        credentialClosure.replace(result.credential.value);
+      } else if (result.credential.kind === 'clear') {
+        credentialClosure.clear();
       }
-      applyRuntimeSettings(applySettingsPatch(settings, result.patch), 'wallpaper-engine properties', result.warning);
-    });
+      configurationSafetyGateOpen = safetyAllowed;
+      const baseSettings = result.settingsReplacement ?? settings;
+      const previousProvider = settings.spotify.provider;
+      const nextSettings = applySettingsPatch(baseSettings, result.patch);
+      const credentialStatusBeforeSelection = credentialClosure.status();
+      if (shouldClearCredentialForProviderChange(previousProvider, nextSettings.spotify.provider, credentialStatusBeforeSelection.kind)) {
+        credentialClosure.clear();
+      }
+      const credentialStatus = credentialClosure.status();
+      networkAllowed =
+        configurationSafetyGateOpen &&
+        nextSettings.spotify.provider !== 'mock' &&
+        credentialStatus.present &&
+        ((nextSettings.spotify.provider === 'direct' && credentialStatus.kind === 'direct') ||
+          (nextSettings.spotify.provider === 'backend' && credentialStatus.kind === 'backend'));
+      applyRuntimeSettings(nextSettings, 'wallpaper-engine properties', result.warning);
+    }, window, () => settings.spotify.provider);
     stopAudioBridge = startAudioBridge(acceptVisualizerFrame);
 
     return stopPolling;
@@ -552,6 +590,7 @@
       stopAudioBridge();
     }
     stopPolling();
+    credentialClosure.clear();
   });
 </script>
 
@@ -773,7 +812,7 @@
   {#if settings.debug.enabled}
     <aside class="layout-item debug-panel" style={layoutStyle(layoutItems.debug)} aria-label="Debug overlay">
       <div>Mode: {playbackMode}</div>
-      <div>Spotify token: {settings.spotify.hasRefreshToken ? 'configured' : 'not configured'}</div>
+      <div>Spotify credential: {credentialClosure.status().present ? 'configured' : 'not configured'}</div>
       <div>Spotify status: {spotifyStatusText}</div>
       <div>Polling: {lastPollingDelayMs ? `${lastPollingDelayMs}ms` : 'idle'}</div>
       <div>Preset: {settings.layout.preset}</div>

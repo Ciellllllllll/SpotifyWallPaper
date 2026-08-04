@@ -1,12 +1,11 @@
 <script lang="ts">
-  import type { WallpaperTheme } from '@spotify-wallpaper/shared-types';
-  import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
+  import type { WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
   import { layoutStyle } from '../layout/style';
   import { buildBackgroundStyle } from '../theme/background';
   import { transitionCssClass, type TrackTransitionState } from './model';
 
   export let state: TrackTransitionState | null;
-  export let settings: WallpaperSettings;
+  export let settings: WallpaperPreferences;
   export let theme: WallpaperTheme;
 
   $: overlayClass = state ? transitionCssClass(state) : '';

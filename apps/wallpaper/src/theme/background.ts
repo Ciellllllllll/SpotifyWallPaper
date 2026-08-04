@@ -1,8 +1,7 @@
-import type { WallpaperTheme } from '@spotify-wallpaper/shared-types';
-import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
+import type { WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
 
 export const buildBackgroundStyle = (
-  settings: WallpaperSettings,
+  settings: WallpaperPreferences,
   theme: WallpaperTheme,
   albumImageUrl: string
 ): string => {

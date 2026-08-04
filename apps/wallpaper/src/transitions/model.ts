@@ -1,14 +1,13 @@
-import type { NormalizedPlayback } from '@spotify-wallpaper/shared-types';
-import type { LegacyWallpaperSettings as WallpaperSettings } from '@spotify-wallpaper/shared-types/legacy';
+import type { NormalizedPlayback, WallpaperPreferences } from '@spotify-wallpaper/shared-types';
 
 export interface TrackTransitionState {
   previous: NormalizedPlayback;
   current: NormalizedPlayback;
   startedAtMs: number;
   durationMs: number;
-  preset: WallpaperSettings['transitions']['preset'];
-  resolvedPreset: WallpaperSettings['transitions']['preset'];
-  easing: WallpaperSettings['transitions']['easing'];
+  preset: WallpaperPreferences['transitions']['preset'];
+  resolvedPreset: WallpaperPreferences['transitions']['preset'];
+  easing: WallpaperPreferences['transitions']['easing'];
 }
 
 export const isPlaybackChange = (previous: NormalizedPlayback, next: NormalizedPlayback): boolean => {
@@ -20,7 +19,7 @@ export const isPlaybackChange = (previous: NormalizedPlayback, next: NormalizedP
 export const createTransitionState = (
   previous: NormalizedPlayback,
   current: NormalizedPlayback,
-  settings: WallpaperSettings,
+  settings: WallpaperPreferences,
   startedAtMs = Date.now()
 ): TrackTransitionState | null => {
   if (!settings.transitions.enabled || !isPlaybackChange(previous, current)) {
@@ -38,7 +37,7 @@ export const createTransitionState = (
   };
 };
 
-export const resolveTransitionPreset = (settings: WallpaperSettings): WallpaperSettings['transitions']['preset'] => {
+export const resolveTransitionPreset = (settings: WallpaperPreferences): WallpaperPreferences['transitions']['preset'] => {
   if (!settings.transitions.reduceMotion) {
     return settings.transitions.preset;
   }
