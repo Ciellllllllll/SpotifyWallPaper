@@ -26,16 +26,9 @@ import the view; apps must not use relative imports across app boundaries.
   Optional public Spotify proxy. TypeScript Cloudflare Worker owning OAuth PKCE, encrypted D1 credentials, access-token refresh, playback/control proxying, reauthorization, and account deletion.
 
 - `crates/visual-core/`
-  Rust pure logic crate. The current baseline also contains characterized
-  theme/layout/animation/settings helpers. The structure-first target keeps
-  only measured visual normalization/readability algorithms in the WASM
-  adapter; layout CSS/safe-area semantics remain TypeScript-owned and the
-  baseline helpers are retired only after Phase 8 parity evidence.
-
-- `crates/config-schema/`
-  Rust-side baseline settings schema, defaults, migration helpers, and
-  validation vectors. It is a planned retirement target after both app
-  cutovers and consumer-zero evidence; native narrow DTO validation remains.
+  Rust pure logic crate. The Phase 8 boundary exposes only measured visual
+  normalization/readability algorithms through typed arrays. Settings,
+  layout, and safe-area semantics remain TypeScript-owned.
 
 - `packages/shared-types/`
   TypeScript shared types for normalized Spotify playback, settings, layout, theme, visualizer, Rainmeter output, and errors.

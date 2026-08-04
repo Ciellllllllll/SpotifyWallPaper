@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cleanupLegacySpotifyCredentialStorage,
   SPOTIFY_CREDENTIAL_STORAGE_KEY
-} from './spotifyCredentialCache';
+} from './loadPreferences';
 
 const storageTarget = (removeItem: (key: string) => void, getItem: (key: string) => string | null = () => {
   throw new Error('getItem must not be called');

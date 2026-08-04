@@ -104,15 +104,15 @@ is a local developer-only legacy tool, not the Workshop default or a managed
 public authorization path. The repository workflow checks/builds it manually
 but no longer has GitHub Pages deployment permission.
 
-For local browser testing without the auth page, paste settings into browser local storage and reload:
+For local browser preview, keep the settings credential-free and select the v2 mock provider:
 
 ```js
 localStorage.setItem(
   'spotify-wallpaper-settings',
   JSON.stringify({
+    schemaVersion: 2,
     spotify: {
-      clientId: 'your-public-client-id',
-      refreshToken: 'your-refresh-token'
+      provider: 'mock'
     }
   })
 );
@@ -126,7 +126,8 @@ localStorage.removeItem('spotify-wallpaper-settings');
 location.reload();
 ```
 
-Never put Spotify tokens in URLs, screenshots, logs, Rainmeter output, or committed files.
+Never put Spotify tokens in browser settings, URLs, screenshots, logs, Rainmeter output, or committed files. Direct
+credentials are supplied only through the dedicated Wallpaper Engine properties.
 
 ## Wallpaper Engine Import
 
@@ -156,15 +157,15 @@ Supported user property keys:
 
 For the public beta, select `Backend Proxy`, retain the release-configured `spotify_backend_url`, and paste the `swpb1.`
 Pairing Token into `spotify_pairing_token`. The release build rejects arbitrary HTTPS backend origins before sending the
-credential. `spotify_client_id` and `spotify_refresh_token` are legacy direct fields; the latter accepts either a
-`swpt1.` bundle or a raw Refresh Token for manual testing. Paste `settings_json` as single-line JSON. Use dummy values
-when checking visible token fields in screenshots, recordings, or public QA notes.
+credential. Direct mode accepts a `swpt1.` bundle through the dedicated `spotify_refresh_token` property; raw Refresh
+Tokens and any credential fields in `settings_json` are ignored. Paste `settings_json` as single-line, secret-free v2 JSON.
 
 If Wallpaper Engine APIs are absent, the same build still works in a browser using mock settings and mock playback.
 
 ## Rust/WASM Visual Core
 
-The wallpaper can use the Rust visual core at runtime for visualizer normalization, readability calculation, and percent layout rectangle calculation. Generate the WASM bundle before packaging when Rust runtime integration is required:
+The wallpaper can use the Rust visual core at runtime for typed-array visualizer normalization and readability calculation.
+Layout and settings remain TypeScript-owned. Generate the WASM bundle before packaging when Rust runtime integration is required:
 
 ```sh
 wasm-pack build crates/visual-core --target web --out-dir ../../apps/wallpaper/public/wasm
@@ -187,24 +188,17 @@ Run the Tauri shell:
 npm run tauri:dev -w @spotify-wallpaper/configurator
 ```
 
-The configurator can edit milestone settings, preview a mock layout, import/export settings JSON, help with Spotify OAuth PKCE, and write optional Rainmeter JSON from the Tauri shell. Refresh Token export is off by default and must be explicitly enabled before a token appears in generated settings JSON.
-
-For PKCE setup:
-
-1. Enter the public Spotify Client ID.
-2. Enter a redirect URI that is also registered on the Spotify Developer app.
-3. Click Start Auth.
-4. Complete Spotify authorization in the browser.
-5. Paste the callback URL into the password-style callback field.
-6. Click Save Token.
-
-The configurator stores the Refresh Token in the local draft only. It does not print the token, and exported settings exclude it unless Include token in export is explicitly enabled.
+The configurator edits the complete v2 preferences object, previews the shared mock renderer, imports/exports secret-free
+settings JSON, and writes optional Rainmeter JSON. Spotify authorization uses the single native
+`authorize_spotify_and_copy_swpt1` command. Verifier, state, callback URL, authorization code, and Refresh Token stay in
+Rust locals; after native confirmation, the approved `swpt1.` bundle is copied to the clipboard once. The WebView receives
+only status or fixed error codes and never stores or exports credentials. There is no callback-URL paste or token draft.
 
 The configurator is optional. The wallpaper runtime must keep working without it.
 
 ## Settings Reference
 
-Every settings object uses `schemaVersion: 1` and these top-level categories:
+Every preferences object uses `schemaVersion: 2` and these top-level categories:
 
 - `spotify`
 - `layout`

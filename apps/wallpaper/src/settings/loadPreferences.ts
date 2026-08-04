@@ -3,10 +3,13 @@ import {
   migrateWallpaperSettingsToV2,
   type WallpaperPreferences
 } from '@spotify-wallpaper/shared-types';
-import {
-  cleanupLegacySpotifyCredentialStorage,
-  type LegacyCredentialCleanupResult
-} from './spotifyCredentialCache';
+
+export const SPOTIFY_CREDENTIAL_STORAGE_KEY = 'spotify-wallpaper-spotify-credentials';
+
+export interface LegacyCredentialCleanupResult {
+  attempted: boolean;
+  succeeded: boolean;
+}
 
 export interface LoadedWallpaperPreferences {
   preferences: WallpaperPreferences;
@@ -57,6 +60,21 @@ export const loadWallpaperPreferences = (
     storageRewriteAllowed,
     cleanup
   };
+};
+
+export const cleanupLegacySpotifyCredentialStorage = (
+  target: StorageTarget | undefined = currentWindow()
+): LegacyCredentialCleanupResult => {
+  if (!target) {
+    return { attempted: false, succeeded: false };
+  }
+
+  try {
+    target.localStorage.removeItem(SPOTIFY_CREDENTIAL_STORAGE_KEY);
+    return { attempted: true, succeeded: true };
+  } catch {
+    return { attempted: true, succeeded: false };
+  }
 };
 
 const currentWindow = (): StorageTarget | undefined => (typeof window === 'undefined' ? undefined : window);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadSettings } from './loadSettings';
-import { SPOTIFY_CREDENTIAL_STORAGE_KEY } from './spotifyCredentialCache';
+import { SPOTIFY_CREDENTIAL_STORAGE_KEY } from './loadPreferences';
 
 const storageTarget = (values: Record<string, string> = {}) => {
   const store = new Map<string, string>(Object.entries(values));

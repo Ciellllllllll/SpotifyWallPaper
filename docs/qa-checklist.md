@@ -33,15 +33,15 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm `project.json` uses only Wallpaper Engine supported user property types: `color`, `slider`, `bool`, `combo`, `textinput`, `file`, or `directory`.
 - Confirm user properties apply:
   - `spotify_client_id`
-  - `spotify_refresh_token`
+  - `spotify_refresh_token` (legacy `swpt1.` bundle only)
   - `settings_json`
   - `selected_preset`
   - `visualizer_enabled`
   - `performance_mode`
   - `debug_enabled`
 - Confirm `settings_json` is editable as single-line JSON with valid JSON, an empty value, and malformed JSON; malformed JSON must not crash the wallpaper.
-- Confirm `spotify_client_id` and `spotify_refresh_token` accept empty and dummy values. Use dummy values for public QA because the token field can be visible.
-- In legacy direct mode, confirm `spotify_refresh_token` accepts a dummy `swpt1.` bundle and applies its bundled Client ID and Refresh Token without requiring `spotify_client_id`.
+- Confirm `spotify_client_id` and `spotify_refresh_token` accept empty and dummy values without logging or persisting the value outside the Wallpaper Engine user property.
+- In legacy direct mode, confirm `spotify_refresh_token` accepts a dummy `swpt1.` bundle and applies its bundled Client ID and Refresh Token without requiring `spotify_client_id`; raw Refresh Tokens are never entered into `settings_json`.
 - Confirm `spotify_playback_provider=backend` uses only the release-configured public origin in a Workshop build.
 - Confirm an explicit invalid or untrusted `spotify_backend_url` does not fall back to direct mode and never receives a Pairing Token.
 - Confirm `spotify_pairing_token` accepts a dummy `swpb1.` value without exposing it in debug, warnings, or errors.
@@ -102,10 +102,10 @@ Resource-intensive commands should run through `h5i capture run`.
 ## Optional Configurator
 
 - Open `http://127.0.0.1:1420/`.
-- Confirm generated settings JSON excludes Refresh Token by default.
-- Confirm PKCE auth start opens a Spotify authorization URL without a Client Secret.
-- Confirm pasted callback URL exchanges for a Refresh Token and saves it into the local configurator draft.
-- Confirm exported settings still exclude the Refresh Token by default after OAuth.
+- Confirm generated settings JSON is `schemaVersion: 2` and excludes all credential fields and values.
+- Confirm the single native auth command starts PKCE without a Client Secret and returns only status/fixed error codes to the WebView.
+- Confirm verifier, state, callback URL, authorization code, and Refresh Token never enter the WebView draft, logs, settings JSON, or export.
+- Confirm native confirmation copies an approved `swpt1.` bundle to the clipboard once and does not expose it in app state.
 - Confirm imported malformed JSON leaves defaults active.
 - Confirm the Tauri shell can validate settings JSON.
 - Confirm the wallpaper still runs without the configurator.

@@ -8,10 +8,6 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/index.js"
-    },
-    "./legacy": {
-      "types": "./src/legacy.ts",
-      "default": "./dist/legacy.js"
     }
   },
   "scripts": {

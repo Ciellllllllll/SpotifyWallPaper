@@ -17,7 +17,7 @@ Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-
 - Optional public backend: TypeScript Cloudflare Worker with D1, Authorization Code with PKCE, encrypted Spotify credentials, and Pairing Tokens.
 - Legacy direct auth page: static Vite + TypeScript app for developer testing with GitHub Pages.
 - Shared model types: TypeScript workspace package.
-- Visual core: Rust compiled to WebAssembly for pure layout, readability, and visualizer helpers.
+- Visual core: Rust compiled to WebAssembly for typed-array visual normalization and readability helpers.
 - Optional configurator: Svelte frontend with Tauri/Rust backend.
 - Optional Rainmeter output: configurator-side JSON writer and scheduler.
 
@@ -177,15 +177,15 @@ Artwork, link, and attribution requirements are documented in Spotify's
 [Developer Policy](https://developer.spotify.com/policy) and
 [Design Guidelines](https://developer.spotify.com/documentation/design).
 
-For local Spotify MVP testing, explicitly provide settings JSON in the browser console and reload:
+For local browser testing, keep the browser path credential-free and use the v2 mock provider:
 
 ```js
 localStorage.setItem(
   'spotify-wallpaper-settings',
   JSON.stringify({
+    schemaVersion: 2,
     spotify: {
-      clientId: 'your-public-client-id',
-      refreshToken: 'your-refresh-token'
+      provider: 'mock'
     }
   })
 );
@@ -199,7 +199,8 @@ localStorage.removeItem('spotify-wallpaper-settings');
 location.reload();
 ```
 
-Never place Spotify tokens in a URL, screenshot, log, or committed file. The Web Wallpaper must not use a Spotify Client Secret.
+Never place Spotify tokens in browser settings, a URL, screenshot, log, or committed file. Direct credentials are supplied
+only through the dedicated Wallpaper Engine properties; the Web Wallpaper must not use a Spotify Client Secret.
 
 Layout can be selected by preset or customized with coordinate-based layout items:
 
@@ -281,8 +282,8 @@ Rust/TypeScript runtime boundary:
 | --- | --- | --- | --- |
 | Visualizer smoothing, decay, and normalized peak | Rust/WASM visual core | TypeScript normalizer | Rendering-specific bar/path generation stays in TypeScript. |
 | Theme readability and contrast | Rust/WASM visual core | TypeScript contrast helper | Browser album pixel extraction stays in TypeScript because it uses Image and Canvas APIs. |
-| Percent layout rectangle | Rust/WASM visual core | TypeScript CSS transform style | Non-percent units and CSS string construction stay in TypeScript. |
-| Full nested settings validation | TypeScript | None | Keep TypeScript as source of truth until the Rust schema crate models the full nested app settings object. |
+| Layout and safe-area semantics | TypeScript settings/view contracts | TypeScript repair/defaults | The retired Rust layout ABI and config-schema crate are not runtime authorities. |
+| Full nested settings validation | TypeScript shared-types | Safe v2 repair/defaults | Settings migration, repair, presets, and secret-free serialization remain TypeScript-owned. |
 
 Visualizer settings support the Phase 6 MVP modes: `album-ring`, `radial-bars`, and `waveform-line`. Intensity and
 sensitivity directly affect the normalized audio output. Low-power performance mode reduces visualizer bar count, sample
@@ -393,7 +394,9 @@ npm run build
 Run the main automated QA gates:
 
 ```sh
-npm run test --workspaces --if-present
+npm run build:wasm
+npm run build:shared-types
+npm test
 npm run check
 npm run build
 cargo check --workspace
@@ -405,9 +408,9 @@ cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml
 npm audit --audit-level=moderate
 ```
 
-CI runs the same npm and cargo gates, including the wasm32 visual-core target check. It does not run `wasm-pack build`
-because the generated WASM files are release artifacts that are intentionally not committed; run the release packaging
-commands locally before importing into Wallpaper Engine.
+CI runs independent web, visual-core Rust, Tauri, and loopback jobs. The web job generates WASM and shared-types before
+consumer tests/builds, runs the browser characterization suite, and audits the complete dependency tree. The Cloudflare
+Worker test toolchain is pinned independently in its workspace, including the fixed `undici` override in the lockfile.
 
 For Wallpaper Engine import, build the project and select `apps/wallpaper/dist` as the Web Wallpaper folder. The build
 copies `apps/wallpaper/public/project.json` into the distribution folder.
@@ -465,9 +468,11 @@ Run the Tauri shell:
 npm run tauri:dev -w @spotify-wallpaper/configurator
 ```
 
-The configurator can edit the first milestone settings, preview the mock layout, import existing settings JSON, export
-Wallpaper Engine settings JSON, and assist Spotify OAuth PKCE in the Tauri shell. Refresh Token export is disabled by
-default and must be explicitly enabled in the configurator before the token appears in generated JSON.
+The configurator edits the complete v2 preferences object, previews the shared mock renderer, and imports/exports
+secret-free Wallpaper Engine settings JSON. Spotify authorization is a single native Tauri command: verifier, state,
+callback URL, authorization code, and Refresh Token stay in Rust locals; after native confirmation, the approved `swpt1.`
+bundle is copied to the clipboard once. The WebView receives only status or fixed error codes and never stores or exports
+credentials.
 
 ### Optional Rainmeter JSON
 
@@ -502,7 +507,7 @@ The sample Rainmeter skin is `examples/rainmeter/SpotifyWallPaper/SpotifyWallPap
 The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 
 - `spotify_client_id`
-- `spotify_refresh_token` (`swpt1.` legacy direct token or raw Refresh Token)
+- `spotify_refresh_token` (`swpt1.` legacy direct bundle only; never put a raw token in settings JSON)
 - `spotify_playback_provider`
 - `spotify_backend_url`
 - `spotify_pairing_token` (`swpb1.` public-backend Pairing Token)

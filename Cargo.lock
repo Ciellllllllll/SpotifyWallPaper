@@ -1260,10 +1260,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spotify-wallpaper-config-schema"
-version = "0.0.0"
-
-[[package]]
 name = "spotify-wallpaper-visual-core"
 version = "0.0.0"
 dependencies = [
