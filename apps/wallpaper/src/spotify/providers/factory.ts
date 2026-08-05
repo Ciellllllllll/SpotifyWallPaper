@@ -1,10 +1,9 @@
-import type { WallpaperPreferences } from '@spotify-wallpaper/shared-types';
+import type { ProviderSelection, WallpaperPreferences } from '@spotify-wallpaper/shared-types';
 import type { CredentialInput } from '../../settings/credentialBoundary';
 import { MockPlaybackProvider } from './mockProvider';
 import { DirectPlaybackProvider } from './directProvider';
-import { BackendPlaybackProvider, normalizeBackendBaseUrl } from './backendProvider';
+import { BackendPlaybackProvider, normalizeBackendBaseUrl, type BackendPlaybackProviderConfig } from './backendProvider';
 import type { Fetcher, SpotifyCredentials, SpotifyResult } from '../types';
-import type { BackendPlaybackProviderConfig, PlaybackProvider, ProviderSelection } from './types';
 
 export const selectPlaybackProvider = (
   settings: WallpaperPreferences,
@@ -37,30 +36,11 @@ export const selectPlaybackProvider = (
   }
 };
 
-export const playbackProviderFromSettings = (
-  settings: WallpaperPreferences,
-  credentialOrFetcher: CredentialInput | Fetcher | null = null,
-  fetcher: Fetcher = fetch
-): PlaybackProvider | null => {
-  const credential = typeof credentialOrFetcher === 'function' ? null : credentialOrFetcher;
-  const actualFetcher = typeof credentialOrFetcher === 'function' ? credentialOrFetcher : fetcher;
-  const selection = selectPlaybackProvider(settings, credential, actualFetcher);
-  // The legacy nullable adapter keeps mock rendering local; callers that need
-  // an explicit three-state result use selectPlaybackProvider directly.
-  return selection.kind === 'invalid' || selection.kind === 'mock' ? null : selection.provider;
-};
-
 export const hasSpotifyCredentials = (credential: CredentialInput | null): credential is Extract<CredentialInput, { kind: 'direct' }> =>
   credential?.kind === 'direct' && credential.clientId.length > 0 && credential.refreshToken.length > 0;
 
 export const credentialsFromCredential = (credential: CredentialInput | null): SpotifyCredentials | null =>
   hasSpotifyCredentials(credential) ? { clientId: credential.clientId, refreshToken: credential.refreshToken } : null;
-
-export const backendConfigFromCredential = (settings: WallpaperPreferences, credential: CredentialInput | null): BackendPlaybackProviderConfig | null => {
-  if (settings.spotify.provider !== 'backend' || !settings.spotify.backendOrigin || credential?.kind !== 'backend') return null;
-  const normalized = normalizeBackendBaseUrl(settings.spotify.backendOrigin);
-  return normalized.ok ? { backendUrl: normalized.value, pairingToken: credential.pairingToken } : null;
-};
 
 const invalid = (code: 'missing-credentials' | 'invalid-origin' | 'unsupported-provider', message: string): ProviderSelection => ({
   kind: 'invalid',

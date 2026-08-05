@@ -2,9 +2,6 @@ import type { NormalizedPlayback, SpotifyErrorKind, SpotifyPlaybackError } from 
 
 export type PlaybackProviderKind = 'mock' | 'direct' | 'backend';
 
-/** Legacy v1 name retained only for migration/compatibility adapters. */
-export type SpotifyPlaybackProviderKind = Exclude<PlaybackProviderKind, 'mock'>;
-
 export type ProviderError = SpotifyPlaybackError;
 export type ProviderErrorKind = SpotifyErrorKind;
 

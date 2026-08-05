@@ -2,12 +2,17 @@ import {
   isNormalizedPlaybackResultEnvelope,
   isProviderResultEnvelope,
   type NormalizedPlayback,
-  type PlaybackCommand
+  type PlaybackCommand,
+  type PlaybackProvider
 } from '@spotify-wallpaper/shared-types';
 import { classifyNetworkError, classifySpotifyStatus } from '../errors';
 import type { Fetcher, SpotifyResult } from '../types';
-import type { BackendPlaybackProviderConfig, PlaybackProvider } from './types';
 import { mergeAbortSignals } from './signals';
+
+export interface BackendPlaybackProviderConfig {
+  backendUrl: string;
+  pairingToken: string;
+}
 
 export class BackendPlaybackProvider implements PlaybackProvider {
   readonly kind = 'backend' as const;

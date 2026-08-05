@@ -5,7 +5,8 @@ import type {
   WallpaperPreferences,
   WallpaperTheme,
   ProviderResult,
-  PlaybackCommand
+  PlaybackCommand,
+  PlaybackProvider
 } from '@spotify-wallpaper/shared-types';
 import { mockPlayback } from '../mock/mockPlayback';
 import {
@@ -15,10 +16,9 @@ import {
 import { defaultSettings } from '../settings/defaultSettings';
 import {
   nextPollingDelayMs,
-  playbackHistoryAfterPoll,
-  selectPlaybackProvider,
-  type SpotifyPlaybackProvider
+  playbackHistoryAfterPoll
 } from '../spotify/polling';
+import { selectPlaybackProvider } from '../spotify/providers/factory';
 import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from '../theme/colors';
 import { extractAlbumTheme } from '../theme/extractAlbumTheme';
 import { createTransitionState, type TrackTransitionState } from '../transitions/model';
@@ -84,7 +84,7 @@ export const createWallpaperRuntime = (
   const extractTheme = dependencies.extractTheme ?? extractAlbumTheme;
   const credentialClosure = createProcessMemoryCredentialClosure();
   const listeners = new Set<(snapshot: ReadonlyWallpaperRuntimeSnapshot) => void>();
-  let provider: SpotifyPlaybackProvider | null = null;
+  let provider: PlaybackProvider | null = null;
   let providerAbortController: AbortController | null = null;
   let pollingTimeout: number | null = null;
   let clockTimeout: number | null = null;
@@ -225,7 +225,7 @@ export const createWallpaperRuntime = (
     emit();
   };
 
-  const poll = async (runId: number, currentProvider: SpotifyPlaybackProvider, signal: AbortSignal) => {
+  const poll = async (runId: number, currentProvider: PlaybackProvider, signal: AbortSignal) => {
     let result: ProviderResult<NormalizedPlayback>;
     try {
       result = await currentProvider.poll(signal);

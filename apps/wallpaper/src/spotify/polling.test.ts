@@ -4,14 +4,15 @@ import providerFixture from '../../../../tests/contracts/provider-v1/success-pla
 import { mockPlayback } from '../mock/mockPlayback';
 import { defaultSettings } from '../settings/defaultSettings';
 import {
-  BackendPlaybackProvider,
-  credentialsFromCredential,
   nextPollingDelayMs,
-  playbackHistoryAfterPoll,
-  playbackProviderFromSettings,
-  selectPlaybackProvider,
-  SpotifyPlaybackSession
+  playbackHistoryAfterPoll
 } from './polling';
+import { BackendPlaybackProvider } from './providers/backendProvider';
+import { DirectPlaybackProvider } from './providers/directProvider';
+import {
+  credentialsFromCredential,
+  selectPlaybackProvider
+} from './providers/factory';
 
 describe('Spotify polling decisions', () => {
   afterEach(() => {
@@ -49,29 +50,6 @@ describe('Spotify polling decisions', () => {
       clientId: 'client-id',
       refreshToken: 'refresh-token'
     });
-  });
-
-  it('keeps browser mock mode without credentials and direct mode with credentials', () => {
-    expect(playbackProviderFromSettings(defaultSettings)).toBeNull();
-    expect(
-      playbackProviderFromSettings({
-        ...defaultSettings,
-        spotify: {
-          ...defaultSettings.spotify,
-          provider: 'direct'
-        }
-      }, { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' })
-    ).toBeInstanceOf(SpotifyPlaybackSession);
-  });
-
-  it('never creates a direct provider when mock is selected, even with a credential present', () => {
-    const fetcher = vi.fn() as unknown as typeof fetch;
-    expect(playbackProviderFromSettings(
-      defaultSettings,
-      { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' },
-      fetcher
-    )).toBeNull();
-    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it('exposes explicit mock, ready, and invalid provider selections', () => {
@@ -168,7 +146,7 @@ describe('Spotify polling decisions', () => {
 
       return new Response(JSON.stringify(trackFixture), { status: 200 });
     }) as typeof fetch;
-    const session = new SpotifyPlaybackSession({ clientId: 'client-id', refreshToken: 'refresh-token' }, fetcher);
+    const session = new DirectPlaybackProvider({ clientId: 'client-id', refreshToken: 'refresh-token' }, fetcher);
 
     await session.pollAt(0);
     await session.pollAt(1000);
@@ -185,7 +163,7 @@ describe('Spotify polling decisions', () => {
   });
 
   it('uses a backend playback provider when backend settings are configured', async () => {
-    const provider = playbackProviderFromSettings(
+    const selection = selectPlaybackProvider(
       {
         ...defaultSettings,
         spotify: {
@@ -198,6 +176,9 @@ describe('Spotify polling decisions', () => {
       (() => Promise.resolve(new Response(JSON.stringify(providerFixture), { status: 200 }))) as typeof fetch
     );
 
+    expect(selection.kind).toBe('ready');
+    if (selection.kind !== 'ready') return;
+    const provider = selection.provider;
     expect(provider).toBeInstanceOf(BackendPlaybackProvider);
     if (!(provider instanceof BackendPlaybackProvider)) return;
     const result = await provider.pollAt(0);
@@ -227,16 +208,16 @@ describe('Spotify polling decisions', () => {
   });
 
   it('does not fall back to direct credentials when the selected backend is invalid', () => {
-    const provider = playbackProviderFromSettings({
+    const selection = selectPlaybackProvider({
       ...defaultSettings,
       spotify: {
         ...defaultSettings.spotify,
         provider: 'backend',
         backendOrigin: ''
       }
-    });
+    }, null);
 
-    expect(provider).toBeNull();
+    expect(selection).toMatchObject({ kind: 'invalid', error: { code: 'missing-credentials' } });
   });
 
   it('calls backend playback and control endpoints with bearer pairing token', async () => {

@@ -1,8 +1,7 @@
-import type { NormalizedPlayback, PlaybackCommand } from '@spotify-wallpaper/shared-types';
+import type { NormalizedPlayback, PlaybackCommand, PlaybackProvider } from '@spotify-wallpaper/shared-types';
 import { fetchCurrentPlayback, sendPlaybackCommand } from '../client';
 import { refreshAccessToken, shouldRefreshToken } from '../token';
 import type { Fetcher, SpotifyCredentials, SpotifyResult, SpotifyTokenState } from '../types';
-import type { PlaybackProvider } from './types';
 import { mergeAbortSignals } from './signals';
 
 const PRIMARY_ENDPOINT_DEGRADED_COOLDOWN_MS = 5000;

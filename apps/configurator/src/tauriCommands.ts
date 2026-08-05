@@ -8,8 +8,6 @@ export type SpotifyOAuthResult =
   | { ok: true; status: 'copied' }
   | { ok: false; reason: 'unavailable' | 'invalid' | 'failed'; errorCode: SpotifyAuthErrorCode; message: string };
 
-export type SpotifyAuthorizeResult = SpotifyOAuthResult;
-
 export type SpotifyAuthErrorCode =
   | 'invalid_input'
   | 'listener_unavailable'
@@ -49,7 +47,7 @@ export const writeRainmeterJson = async (outputPath: string, payloadJson: string
 
 export const authorizeSpotifyAndCopySwpt1 = async (
   clientId: string
-): Promise<SpotifyAuthorizeResult> => {
+): Promise<SpotifyOAuthResult> => {
   if (!clientId.trim()) {
     return { ok: false, reason: 'invalid', errorCode: 'invalid_input', message: 'Client ID is required.' };
   }

@@ -45,8 +45,6 @@ export const resolveTransitionPreset = (settings: WallpaperPreferences): Wallpap
   return settings.transitions.preset === 'crossfade' ? 'crossfade' : 'fade';
 };
 
-export const transitionCssClass = (state: TrackTransitionState): string => `transition-${state.resolvedPreset}`;
-
 const playbackKey = (playback: NormalizedPlayback): string => {
   if (playback.id) {
     return `${playback.itemType}:${playback.id}`;

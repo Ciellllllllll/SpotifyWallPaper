@@ -88,12 +88,6 @@ export interface SpotifyBackoff {
   updatedAtMs: number;
 }
 
-export interface DeletionTombstone {
-  publicId: string;
-  deletedAtMs: number;
-  expiresAtMs: number;
-}
-
 interface OAuthSessionRow {
   state_digest: string;
   browser_digest: string;

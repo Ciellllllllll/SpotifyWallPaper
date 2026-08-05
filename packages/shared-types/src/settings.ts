@@ -597,18 +597,6 @@ export const serializeWallpaperPreferences = (input: unknown): string => {
   return JSON.stringify(migrated.preferences);
 };
 
-export const withPresetItems = <T extends { layout: { preset: LayoutPresetName; items: Record<LayoutItemKey, LayoutItem> } }>(
-  settings: T,
-  preset: LayoutPresetName
-): T => ({
-  ...settings,
-  layout: {
-    ...settings.layout,
-    preset,
-    items: clonePresetItems(preset)
-  }
-});
-
 const parseSettingsInput = (input: unknown): Record<string, unknown> | null => {
   if (typeof input === 'string') {
     try {

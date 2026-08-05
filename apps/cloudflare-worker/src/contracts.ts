@@ -1,4 +1,4 @@
-import type { NormalizedPlayback, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
+import type { SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
 
 export type ApiResult<T> =
   | {
@@ -9,5 +9,3 @@ export type ApiResult<T> =
       ok: false;
       error: SpotifyPlaybackError;
     };
-
-export type PlaybackResult = ApiResult<NormalizedPlayback>;

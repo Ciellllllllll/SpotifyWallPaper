@@ -1,4 +1,4 @@
-import type { VisualizerFrame, WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+import type { VisualizerFrame, WallpaperPreferences } from '@spotify-wallpaper/shared-types';
 import { normalizeSamplesWithCore } from '../wasm/visualCore';
 import { normalizeSamplesFallback } from '../wasm/fallback';
 
@@ -88,17 +88,6 @@ export const buildWaveformPath = (frame: VisualizerFrame, pointCount = 48): stri
   });
 
   return `M ${points.join(' L ')}`;
-};
-
-export const visualizerColor = (
-  mode: WallpaperPreferences['visualizer']['colorMode'],
-  theme: WallpaperTheme
-): string => {
-  if (mode === 'white') {
-    return '#ffffff';
-  }
-
-  return mode === 'accent' ? theme.accentColor : theme.primaryColor;
 };
 
 const normalizeSample = (sample: number, settings: WallpaperPreferences['visualizer']): number => {

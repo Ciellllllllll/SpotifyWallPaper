@@ -1,11 +1,5 @@
 import type { NormalizedPlayback, WallpaperPreferences, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
 import { isTrustedPublicBackendOrigin } from './providers/backendProvider';
-import { playbackProviderFromSettings, selectPlaybackProvider, credentialsFromCredential, hasSpotifyCredentials, backendConfigFromCredential } from './providers/factory';
-import { BackendPlaybackProvider } from './providers/backendProvider';
-import { DirectPlaybackProvider } from './providers/directProvider';
-import { MockPlaybackProvider } from './providers/mockProvider';
-import type { BackendPlaybackProviderConfig, PlaybackProvider, ProviderSelection } from './providers/types';
-import type { CredentialInput } from '../settings/credentialBoundary';
 import type { SpotifyResult } from './types';
 
 const DEFAULT_PLAYING_INTERVAL_MS = 1000;
@@ -15,20 +9,6 @@ const PUBLIC_BACKEND_PAUSED_INTERVAL_MS = 5000;
 const DEFAULT_ERROR_BACKOFF_MS = 5000;
 const MAX_ERROR_BACKOFF_MS = 60_000;
 const ACTIVE_TRANSIENT_ERROR_BACKOFF_MS = 5000;
-
-export type SpotifyPlaybackProvider = PlaybackProvider;
-export type { BackendPlaybackProviderConfig, PlaybackProvider, ProviderSelection };
-export {
-  BackendPlaybackProvider,
-  DirectPlaybackProvider,
-  MockPlaybackProvider,
-  backendConfigFromCredential,
-  credentialsFromCredential,
-  hasSpotifyCredentials,
-  playbackProviderFromSettings,
-  selectPlaybackProvider
-};
-export { DirectPlaybackProvider as SpotifyPlaybackSession };
 
 export interface PollDecisionInput {
   playback?: NormalizedPlayback | null;
@@ -78,6 +58,3 @@ const clampInterval = (value: number | undefined, fallback: number): number =>
 
 const isTrustedPublicBackend = (settings: WallpaperPreferences | undefined): boolean =>
   settings?.spotify.provider === 'backend' && !!settings.spotify.backendOrigin && isTrustedPublicBackendOrigin(settings.spotify.backendOrigin);
-
-// Keep the import surface intentionally narrow while preserving the legacy polling module path.
-export type { CredentialInput };

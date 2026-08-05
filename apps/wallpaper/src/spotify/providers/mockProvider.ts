@@ -1,6 +1,5 @@
 import { mockPlayback } from '../../mock/mockPlayback';
-import type { PlaybackCommand } from '@spotify-wallpaper/shared-types';
-import type { PlaybackProvider } from './types';
+import type { PlaybackCommand, PlaybackProvider } from '@spotify-wallpaper/shared-types';
 import type { SpotifyResult } from '../types';
 
 export class MockPlaybackProvider implements PlaybackProvider {
