@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "value": {
+    "source": "spotify",
+    "itemType": "none",
+    "id": null,
+    "uri": null,
+    "title": "Nothing Playing",
+    "artists": [],
+    "albumName": "",
+    "imageUrls": ["mock/album-placeholder.svg"],
+    "albumImageUrl": "mock/album-placeholder.svg",
+    "durationMs": 0,
+    "progressMs": 0,
+    "isPlaying": false,
+    "device": null,
+    "deviceName": null,
+    "shuffleState": null,
+    "repeatState": null,
+    "volumePercent": null,
+    "externalUrl": null,
+    "fetchedAt": "2026-08-04T00:00:00.000Z"
+  }
+}

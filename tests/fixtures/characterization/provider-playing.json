@@ -1,0 +1,12 @@
+{
+  "source": "mock",
+  "itemType": "track",
+  "id": "mock-track-001",
+  "title": "Afterglow Atlas",
+  "artists": ["Nami Kuroda", "The Static Lights"],
+  "albumName": "Mock Horizon",
+  "albumImageUrl": "mock/album-placeholder.svg",
+  "durationMs": 242000,
+  "progressMs": 94000,
+  "isPlaying": true
+}

@@ -1,0 +1,12 @@
+{
+  "source": "mock",
+  "itemType": "track",
+  "id": "mock-track-no-art",
+  "title": "Missing Art Fixture",
+  "artists": ["Fixture Artist"],
+  "albumName": "No Artwork",
+  "albumImageUrl": null,
+  "durationMs": 120000,
+  "progressMs": 0,
+  "isPlaying": false
+}

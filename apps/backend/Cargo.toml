@@ -9,7 +9,6 @@ path = "src/lib.rs"
 [dependencies]
 aes-gcm = "0.10"
 anyhow = "1.0"
-async-trait = "0.1"
 axum = "0.7"
 base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
@@ -25,8 +24,6 @@ subtle = "2.6"
 thiserror = "2.0"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "sync"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
-tracing = "0.1"
-url = "2.5"
 zeroize = "1.8"
 
 [dev-dependencies]

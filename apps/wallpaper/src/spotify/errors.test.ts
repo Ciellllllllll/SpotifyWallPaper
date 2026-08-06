@@ -14,6 +14,13 @@ describe('Spotify error classification', () => {
     expect(error.retryAfterMs).toBe(7000);
   });
 
+  it.each(['2147484', '86401', '1.5', '7seconds', '-1'])(
+    'drops an unsafe retry-after header: %s',
+    (value) => {
+      expect(classifySpotifyStatus(429, value).retryAfterMs).toBeUndefined();
+    }
+  );
+
   it('classifies no active device and network errors', () => {
     expect(classifySpotifyStatus(204).kind).toBe('unavailable');
     expect(classifyNetworkError().kind).toBe('network_error');

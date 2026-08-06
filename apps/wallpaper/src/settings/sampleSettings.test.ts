@@ -20,7 +20,7 @@ describe('sample settings', () => {
       expect(() => JSON.parse(source), file).not.toThrow();
       expect(source, file).not.toMatch(secretValuePattern);
       expect(loaded.warning ?? '', file).not.toContain('malformed');
-      expect(loaded.settings.schemaVersion, file).toBe(1);
+      expect(loaded.settings.schemaVersion, file).toBe(2);
     }
   });
 });

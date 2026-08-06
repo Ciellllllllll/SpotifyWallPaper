@@ -1,436 +1,196 @@
 import { describe, expect, it } from 'vitest';
+import { applyWallpaperPreferencesPatch } from '@spotify-wallpaper/shared-types';
 import { defaultSettings } from '../settings/defaultSettings';
-import { applySettingsPatch, parseWallpaperProperties } from './properties';
+import { parseWallpaperProperties, registerWallpaperPropertyListener } from './properties';
 
 const encodeWallpaperEngineToken = (clientId: string, refreshToken: string): string => {
   const json = JSON.stringify({ v: 1, clientId, refreshToken });
   let binary = '';
-  for (const byte of new TextEncoder().encode(json)) {
-    binary += String.fromCharCode(byte);
-  }
+  for (const byte of new TextEncoder().encode(json)) binary += String.fromCharCode(byte);
   return `swpt1.${btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')}`;
 };
 
 describe('Wallpaper Engine property adapter', () => {
-  it('parses basic Wallpaper Engine properties into a settings patch', () => {
+  it('parses preferences separately from backend credential input', () => {
     const result = parseWallpaperProperties({
-      spotify_client_id: { value: 'client-id' },
-      spotify_refresh_token: { value: 'secret-refresh-token' },
       spotify_playback_provider: { value: 'backend' },
       spotify_backend_url: { value: 'https://localhost:49320/' },
       spotify_pairing_token: { value: 'secret-pairing-token' },
       selected_preset: { value: 'Bottom Player' },
-      background_mode: { value: 'solid-color' },
-      theme_mode: { value: 'fallback' },
-      album_art_visible: { value: false },
-      track_text_visible: { value: true },
-      player_visible: { value: true },
-      player_controls_enabled: { value: false },
-      player_show_device: { value: false },
-      player_show_volume: { value: true },
-      player_show_shuffle_repeat: { value: false },
-      seekbar_visible: { value: true },
-      seekbar_style: { value: 'album-ring' },
-      visualizer_enabled: { value: false },
-      visualizer_mode: { value: 'waveform-line' },
-      transitions_enabled: { value: true },
-      transition_preset: { value: 'blur-fade' },
-      clock_enabled: { value: true },
-      clock_hour12: { value: true },
-      clock_show_seconds: { value: true },
-      clock_show_date: { value: true },
-      clock_show_weekday: { value: false },
-      performance_mode: { value: 'low-power' },
       debug_enabled: { value: true }
     });
 
-    expect(result.warning).toBeNull();
-    expect(result.patch).toMatchObject({
-      spotify: {
-        clientId: 'client-id',
-        refreshToken: 'secret-refresh-token',
-        hasRefreshToken: true,
-        playbackProvider: 'backend',
-        backendUrl: 'https://localhost:49320/',
-        pairingToken: 'secret-pairing-token'
-      },
-      layout: { preset: 'Bottom Player' },
-      background: { mode: 'solid-color' },
-      theme: { mode: 'fallback' },
-      albumArt: { visible: false },
-      text: { visible: true },
-      player: {
-        visible: true,
-        controlsEnabled: false,
-        showDevice: false,
-        showVolume: true,
-        showShuffleRepeat: false
-      },
-      seekbar: { visible: true, style: 'album-ring' },
-      visualizer: { enabled: false, mode: 'waveform-line' },
-      transitions: { enabled: true, preset: 'blur-fade' },
-      clock: {
-        enabled: true,
-        hour12: true,
-        showSeconds: true,
-        showDate: true,
-        showWeekday: false
-      },
-      performance: { mode: 'low-power' },
-      debug: { enabled: true }
-    });
+    expect(result.patch.spotify).toEqual({ provider: 'backend', backendOrigin: 'https://localhost:49320/' });
+    expect(result.credential).toEqual({ kind: 'replace', value: { kind: 'backend', pairingToken: 'secret-pairing-token' } });
+    expect(JSON.stringify(result.patch)).not.toMatch(/secret-pairing-token|pairingToken/i);
+    expect(result.patch.layout?.preset).toBe('Bottom Player');
+    expect(result.patch.debug?.enabled).toBe(true);
+    expect(result.safetyGateOpen).toBe(true);
   });
 
-  it('merges settings JSON with explicit property overrides', () => {
+  it('ignores credentials embedded in settings JSON', () => {
     const result = parseWallpaperProperties({
       settings_json: {
         value: JSON.stringify({
-          spotify: {
-            clientId: 'json-client',
-            refreshToken: 'json-refresh-token'
-          },
-          debug: {
-            enabled: false
-          }
-        })
-      },
-      debug_enabled: { value: true }
-    });
-    const merged = applySettingsPatch(defaultSettings, result.patch);
-
-    expect(merged.spotify.clientId).toBe('json-client');
-    expect(merged.spotify.refreshToken).toBe('json-refresh-token');
-    expect(merged.debug.enabled).toBe(true);
-  });
-
-  it('keeps existing Spotify token when settings JSON has no token fields', () => {
-    const result = parseWallpaperProperties({
-      settings_json: {
-        value: JSON.stringify({
-          spotify: {
-            hasRefreshToken: true
-          },
-          debug: {
-            enabled: true
-          }
+          schemaVersion: 1,
+          spotify: { playbackProvider: 'direct', clientId: 'json-client', refreshToken: 'json-refresh-token', hasRefreshToken: true },
+          debug: { enabled: true }
         })
       }
     });
-    const merged = applySettingsPatch(
-      {
-        ...defaultSettings,
-        spotify: {
-          ...defaultSettings.spotify,
-          clientId: 'existing-client',
-          refreshToken: 'existing-refresh-token',
-          hasRefreshToken: true
-        }
-      },
-      result.patch
-    );
 
-    expect(merged.spotify.clientId).toBe('existing-client');
-    expect(merged.spotify.refreshToken).toBe('existing-refresh-token');
-    expect(merged.spotify.hasRefreshToken).toBe(true);
-    expect(merged.debug.enabled).toBe(true);
+    expect(result.patch).toEqual({});
+    expect(result.settingsReplacement?.spotify.provider).toBe('direct');
+    expect(result.settingsReplacement?.debug.enabled).toBe(true);
+    expect(JSON.stringify(result.patch)).not.toMatch(/json-client|json-refresh-token|clientId|refreshToken/i);
+    expect(result.credential).toEqual({ kind: 'retain' });
   });
 
-  it('clears existing Spotify token when settings JSON explicitly disables credentials', () => {
+  it('accepts direct credentials only from explicit Wallpaper Engine properties', () => {
     const result = parseWallpaperProperties({
-      settings_json: {
-        value: JSON.stringify({
-          spotify: {
-            hasRefreshToken: false
-          }
-        })
-      }
+      spotify_playback_provider: { value: 'direct' },
+      spotify_client_id: { value: 'property-client' },
+      spotify_refresh_token: { value: 'property-refresh-token' }
     });
-    const merged = applySettingsPatch(
-      {
-        ...defaultSettings,
-        spotify: {
-          ...defaultSettings.spotify,
-          clientId: 'existing-client',
-          refreshToken: 'existing-refresh-token',
-          hasRefreshToken: true
-        }
-      },
-      result.patch
-    );
 
-    expect(merged.spotify.clientId).toBe('existing-client');
-    expect(merged.spotify.refreshToken).toBe('');
-    expect(merged.spotify.hasRefreshToken).toBe(false);
+    expect(result.credential).toEqual({ kind: 'replace', value: { kind: 'direct', clientId: 'property-client', refreshToken: 'property-refresh-token' } });
+    expect(result.patch.spotify).toEqual({ provider: 'direct' });
   });
 
-  it('clears existing Spotify token when settings JSON changes only the client id', () => {
-    const result = parseWallpaperProperties({
-      settings_json: {
-        value: JSON.stringify({
-          spotify: {
-            clientId: 'new-client'
-          }
-        })
-      }
-    });
-    const merged = applySettingsPatch(
-      {
-        ...defaultSettings,
-        spotify: {
-          ...defaultSettings.spotify,
-          clientId: 'existing-client',
-          refreshToken: 'existing-refresh-token',
-          hasRefreshToken: true
-        }
-      },
-      result.patch
-    );
-
-    expect(merged.spotify.clientId).toBe('new-client');
-    expect(merged.spotify.refreshToken).toBe('');
-    expect(merged.spotify.hasRefreshToken).toBe(false);
-  });
-
-  it('clears existing Spotify token when the client id property is cleared', () => {
-    const result = parseWallpaperProperties({
-      spotify_client_id: { value: '' }
-    });
-    const merged = applySettingsPatch(
-      {
-        ...defaultSettings,
-        spotify: {
-          ...defaultSettings.spotify,
-          clientId: 'existing-client',
-          refreshToken: 'existing-refresh-token',
-          hasRefreshToken: true
-        }
-      },
-      result.patch
-    );
-
-    expect(merged.spotify.clientId).toBe('');
-    expect(merged.spotify.refreshToken).toBe('');
-    expect(merged.spotify.hasRefreshToken).toBe(false);
-  });
-
-  it('lets explicit Spotify token properties override settings JSON token fields', () => {
-    const result = parseWallpaperProperties({
-      settings_json: {
-        value: JSON.stringify({
-          spotify: {
-            clientId: 'json-client',
-            refreshToken: 'json-refresh-token'
-          }
-        })
-      },
-      spotify_refresh_token: { value: encodeWallpaperEngineToken('property-client', 'property-refresh-token') }
-    });
-    const merged = applySettingsPatch(defaultSettings, result.patch);
-
-    expect(merged.spotify.clientId).toBe('property-client');
-    expect(merged.spotify.refreshToken).toBe('property-refresh-token');
-    expect(merged.spotify.hasRefreshToken).toBe(true);
-  });
-
-  it('accepts a single Wallpaper Engine token in the refresh token property', () => {
+  it('parses the one-shot swpt1 property into the direct credential update', () => {
     const result = parseWallpaperProperties({
       spotify_refresh_token: { value: encodeWallpaperEngineToken('bundled-client-id', 'bundled-refresh-token') }
     });
 
-    expect(result.warning).toBeNull();
-    expect(result.patch.spotify).toEqual({
-      clientId: 'bundled-client-id',
-      refreshToken: 'bundled-refresh-token',
-      hasRefreshToken: true
-    });
+    expect(result.credential).toEqual({ kind: 'replace', value: { kind: 'direct', clientId: 'bundled-client-id', refreshToken: 'bundled-refresh-token' } });
+    expect(result.patch.spotify).toBeUndefined();
   });
 
-  it('does not treat malformed Wallpaper Engine token bundles as raw refresh tokens', () => {
-    const result = parseWallpaperProperties({
+  it('fails closed for malformed or cleared credential properties', () => {
+    expect(parseWallpaperProperties({
       spotify_client_id: { value: 'client-id' },
       spotify_refresh_token: { value: 'swpt1.not-valid-base64' }
+    }).credential).toEqual({ kind: 'clear' });
+    expect(parseWallpaperProperties({ spotify_pairing_token: { value: '' } }).credential).toEqual({ kind: 'clear' });
+  });
+
+  it('keeps credentials outside the v2 preference patch', () => {
+    const merged = applyWallpaperPreferencesPatch(defaultSettings, { debug: { enabled: true }, spotify: { provider: 'mock' } });
+
+    expect(merged.debug.enabled).toBe(true);
+    expect(merged.spotify.provider).toBe('mock');
+    expect(JSON.stringify(merged)).not.toMatch(/clientId|refreshToken|pairingToken|hasRefreshToken/i);
+  });
+
+  it('accumulates partial Wallpaper Engine callbacks into a complete snapshot', () => {
+    const results: ReturnType<typeof parseWallpaperProperties>[] = [];
+    const target = {} as Window;
+    registerWallpaperPropertyListener((result) => results.push(result), target);
+    target.wallpaperPropertyListener?.applyUserProperties?.({ spotify_playback_provider: { value: 'backend' } });
+    target.wallpaperPropertyListener?.applyUserProperties?.({
+      spotify_backend_url: { value: 'http://127.0.0.1:49320/' },
+      spotify_pairing_token: { value: 'pairing-token' }
     });
 
-    expect(result.warning).toBeNull();
-    expect(result.patch.spotify).toEqual({
-      clientId: 'client-id',
-      refreshToken: '',
-      hasRefreshToken: false
+    expect(results).toHaveLength(2);
+    expect(results[1].patch.spotify).toMatchObject({ provider: 'backend', backendOrigin: 'http://127.0.0.1:49320/' });
+    expect(results[1].credential).toEqual({ kind: 'replace', value: { kind: 'backend', pairingToken: 'pairing-token' } });
+  });
+
+  it('closes the safety gate for future settings and keeps it closed for later callbacks', () => {
+    const results: ReturnType<typeof parseWallpaperProperties>[] = [];
+    const target = {} as Window;
+    registerWallpaperPropertyListener((result) => results.push(result), target);
+    target.wallpaperPropertyListener?.applyUserProperties?.({
+      settings_json: { value: JSON.stringify({ schemaVersion: 99, spotify: { provider: 'direct' } }) }
+    });
+    target.wallpaperPropertyListener?.applyUserProperties?.({
+      spotify_playback_provider: { value: 'direct' },
+      spotify_client_id: { value: 'client' },
+      spotify_refresh_token: { value: 'refresh' }
+    });
+    expect(results[0].safetyGateOpen).toBe(false);
+    expect(results[1].safetyGateOpen).toBe(false);
+  });
+
+  it('resolves competing credential fields using the current provider, never arrival order', () => {
+    const properties = {
+      spotify_client_id: { value: 'direct-client' },
+      spotify_refresh_token: { value: 'direct-refresh' },
+      spotify_pairing_token: { value: 'backend-pairing' }
+    };
+
+    expect(parseWallpaperProperties(properties, 'direct').credential).toEqual({
+      kind: 'replace',
+      value: { kind: 'direct', clientId: 'direct-client', refreshToken: 'direct-refresh' }
+    });
+    expect(parseWallpaperProperties(properties, 'backend').credential).toEqual({
+      kind: 'replace',
+      value: { kind: 'backend', pairingToken: 'backend-pairing' }
+    });
+    expect(parseWallpaperProperties(properties).credential).toEqual({ kind: 'clear' });
+  });
+
+  it('selects provider from property patch, then settings replacement, then host hint', () => {
+    const credentials = {
+      spotify_client_id: { value: 'direct-client' },
+      spotify_refresh_token: { value: 'direct-refresh' },
+      spotify_pairing_token: { value: 'backend-pairing' }
+    };
+    const replacementSelected = parseWallpaperProperties({
+      ...credentials,
+      settings_json: { value: JSON.stringify({ schemaVersion: 2, spotify: { provider: 'direct' } }) }
+    }, 'backend');
+    const patchSelected = parseWallpaperProperties({
+      ...credentials,
+      settings_json: { value: JSON.stringify({ schemaVersion: 2, spotify: { provider: 'direct' } }) },
+      spotify_playback_provider: { value: 'backend' }
+    }, 'direct');
+
+    expect(replacementSelected.credential).toEqual({
+      kind: 'replace',
+      value: { kind: 'direct', clientId: 'direct-client', refreshToken: 'direct-refresh' }
+    });
+    expect(patchSelected.credential).toEqual({
+      kind: 'replace',
+      value: { kind: 'backend', pairingToken: 'backend-pairing' }
     });
   });
 
-  it('applies background and theme settings from pasted settings JSON', () => {
+  it('uses settings_json as a complete preference replacement, including optional fields', () => {
+    const base = {
+      ...defaultSettings,
+      spotify: { ...defaultSettings.spotify, provider: 'backend' as const, backendOrigin: 'https://api.wallpaper.example' }
+    };
     const result = parseWallpaperProperties({
-      settings_json: {
-        value: JSON.stringify({
-          theme: {
-            mode: 'custom',
-            textColor: '#101820',
-            autoReadability: false,
-            customPrimaryColor: '#f2aa4c'
-          },
-          background: {
-            mode: 'solid-color',
-            opacity: 0.44,
-            blurPx: 14,
-            solidColor: '#222831'
-          }
-        })
-      }
+      settings_json: { value: JSON.stringify({ schemaVersion: 2, spotify: { provider: 'mock' }, player: { displayMode: 'album-details' } }) }
     });
-    const merged = applySettingsPatch(defaultSettings, result.patch);
+    const merged = applyWallpaperPreferencesPatch(result.settingsReplacement ?? base, result.patch);
 
-    expect(result.warning).toBeNull();
-    expect(merged.theme).toMatchObject({
-      mode: 'custom',
-      textColor: '#101820',
-      autoReadability: false,
-      customPrimaryColor: '#f2aa4c'
-    });
-    expect(merged.background).toMatchObject({
-      mode: 'solid-color',
-      opacity: 0.44,
-      blurPx: 14,
-      solidColor: '#222831'
-    });
+    expect(merged.spotify.provider).toBe('mock');
+    expect(merged.spotify.backendOrigin).toBeUndefined();
+    expect(merged.player.displayMode).toBe('album-details');
   });
 
-  it('applies visualizer tuning settings from pasted settings JSON', () => {
-    const result = parseWallpaperProperties({
-      settings_json: {
-        value: JSON.stringify({
-          visualizer: {
-            enabled: true,
-            mode: 'waveform-line',
-            intensity: 1.4,
-            sensitivity: 1.6,
-            barCount: 40,
-            colorMode: 'accent'
-          }
-        })
-      }
-    });
-    const merged = applySettingsPatch(defaultSettings, result.patch);
+  it('applies individual properties over a complete settings JSON replacement', () => {
+    const results: Array<ReturnType<typeof parseWallpaperProperties> & { settings?: typeof defaultSettings }> = [];
+    const target = {} as Window;
+    registerWallpaperPropertyListener(
+      (result) => results.push(result),
+      target,
+      () => 'backend',
+      () => defaultSettings
+    );
 
-    expect(merged.visualizer).toMatchObject({
-      enabled: true,
-      mode: 'waveform-line',
-      intensity: 1.4,
-      sensitivity: 1.6,
-      barCount: 40,
-      colorMode: 'accent'
-    });
-  });
-
-  it('applies transition settings from pasted settings JSON', () => {
-    const result = parseWallpaperProperties({
-      settings_json: {
-        value: JSON.stringify({
-          transitions: {
-            enabled: true,
-            preset: 'blur-fade',
-            durationMs: 900,
-            easing: 'ease-in-out',
-            background: true,
-            albumArt: false,
-            text: true,
-            visualizer: true,
-            reduceMotion: true
-          }
-        })
-      }
-    });
-    const merged = applySettingsPatch(defaultSettings, result.patch);
-
-    expect(merged.transitions).toMatchObject({
-      enabled: true,
-      preset: 'blur-fade',
-      durationMs: 900,
-      easing: 'ease-in-out',
-      albumArt: false,
-      visualizer: true,
-      reduceMotion: true
-    });
-  });
-
-  it('applies player, seekbar, and clock settings from pasted settings JSON', () => {
-    const result = parseWallpaperProperties({
-      settings_json: {
-        value: JSON.stringify({
-          player: {
-            visible: true,
-            controlsEnabled: false,
-            showDevice: false,
-            showVolume: true,
-            showShuffleRepeat: false
-          },
-          seekbar: {
-            visible: true,
-            style: 'album-ring'
-          },
-          clock: {
-            enabled: true,
-            hour12: true,
-            showSeconds: true,
-            showDate: true,
-            showWeekday: true,
-            fontSizePx: 48,
-            fontWeight: 800,
-            letterSpacingPx: 2,
-            opacity: 0.8,
-            colorMode: 'fixed',
-            fixedColor: '#abcdef'
-          }
-        })
-      }
-    });
-    const merged = applySettingsPatch(defaultSettings, result.patch);
-
-    expect(merged.player).toMatchObject({
-      controlsEnabled: false,
-      showDevice: false,
-      showVolume: true,
-      showShuffleRepeat: false
-    });
-    expect(merged.seekbar.style).toBe('album-ring');
-    expect(merged.clock).toMatchObject({
-      hour12: true,
-      showSeconds: true,
-      showDate: true,
-      showWeekday: true,
-      fontSizePx: 48,
-      fontWeight: 800,
-      letterSpacingPx: 2,
-      opacity: 0.8,
-      colorMode: 'fixed',
-      fixedColor: '#abcdef'
-    });
-  });
-
-  it('falls back safely for malformed settings JSON without exposing token-like values in warnings', () => {
-    const result = parseWallpaperProperties({
-      settings_json: { value: '{secret-refresh-token' }
+    target.wallpaperPropertyListener?.applyUserProperties?.({
+      settings_json: { value: JSON.stringify({ schemaVersion: 2, spotify: { provider: 'mock' }, debug: { enabled: false } }) },
+      spotify_playback_provider: { value: 'direct' },
+      debug_enabled: { value: true }
     });
 
-    expect(result.warning).toContain('malformed');
-    expect(result.warning).not.toContain('secret-refresh-token');
-  });
-
-  it('applies backend provider settings from properties without requiring Spotify credentials', () => {
-    const result = parseWallpaperProperties({
-      spotify_playback_provider: { value: 'backend' },
-      spotify_backend_url: { value: 'https://localhost:49320/' },
-      spotify_pairing_token: { value: 'secret-pairing-token' }
-    });
-    const merged = applySettingsPatch(defaultSettings, result.patch);
-
-    expect(result.warning).toBeNull();
-    expect(merged.spotify).toMatchObject({
-      playbackProvider: 'backend',
-      backendUrl: 'https://localhost:49320/',
-      pairingToken: 'secret-pairing-token',
-      clientId: '',
-      hasRefreshToken: false
-    });
+    expect(results[0].settings?.spotify.provider).toBe('direct');
+    expect(results[0].settings?.debug.enabled).toBe(true);
+    expect(results[0].patch.spotify?.provider).toBe('direct');
+    expect(results[0].settingsReplacement?.spotify.provider).toBe('mock');
   });
 });

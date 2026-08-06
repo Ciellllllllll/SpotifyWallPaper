@@ -48,7 +48,14 @@ mod tests {
 
     #[test]
     fn smooths_decays_clamps_and_gates_samples() {
-        let output = normalize_samples(&[-1.0, 0.05, 0.5, 2.0], &[0.8, 0.2, 0.1, 0.0], 0.5, 0.25, 1.0, 0.1);
+        let output = normalize_samples(
+            &[-1.0, 0.05, 0.5, 2.0],
+            &[0.8, 0.2, 0.1, 0.0],
+            0.5,
+            0.25,
+            1.0,
+            0.1,
+        );
 
         assert_eq!(output.samples[0], 0.6);
         assert_eq!(output.samples[1], 0.15);

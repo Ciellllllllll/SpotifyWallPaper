@@ -5,18 +5,23 @@ export type RainmeterWriteResult =
 type CommandFailure = { ok: false; reason: 'unavailable' | 'invalid' | 'failed'; message: string };
 
 export type SpotifyOAuthResult =
-  | { ok: true; refreshToken: string; expiresIn: number | null }
-  | { ok: false; reason: 'unavailable' | 'invalid' | 'failed'; message: string };
+  | { ok: true; status: 'copied' }
+  | { ok: false; reason: 'unavailable' | 'invalid' | 'failed'; errorCode: SpotifyAuthErrorCode; message: string };
 
-export type SpotifyAuthorizeResult = SpotifyOAuthResult;
-
-export type SpotifyAuthStartResult =
-  | { ok: true; authUrl: string; state: string }
-  | { ok: false; reason: 'unavailable' | 'invalid' | 'failed'; message: string };
-
-export type ExternalOpenResult =
-  | { ok: true }
-  | { ok: false; reason: 'unavailable' | 'invalid' | 'failed'; message: string };
+export type SpotifyAuthErrorCode =
+  | 'invalid_input'
+  | 'listener_unavailable'
+  | 'browser_open_failed'
+  | 'callback_unavailable'
+  | 'callback_invalid'
+  | 'state_mismatch'
+  | 'authorization_denied'
+  | 'token_exchange_failed'
+  | 'token_encoding_failed'
+  | 'copy_not_confirmed'
+  | 'clipboard_unavailable'
+  | 'native_unavailable'
+  | 'native_failed';
 
 export const writeRainmeterJson = async (outputPath: string, payloadJson: string): Promise<RainmeterWriteResult> => {
   if (!outputPath.trim()) {
@@ -40,76 +45,26 @@ export const writeRainmeterJson = async (outputPath: string, payloadJson: string
   }
 };
 
-export const startSpotifyPkceAuth = async (clientId: string, redirectUri: string): Promise<SpotifyAuthStartResult> => {
-  if (!clientId.trim() || !redirectUri.trim()) {
-    return { ok: false, reason: 'invalid', message: 'Client ID and redirect URI are required.' };
-  }
-
-  try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const response = await invoke<{ auth_url: string; state: string }>('start_spotify_pkce_auth', {
-      clientId: clientId.trim(),
-      redirectUri: redirectUri.trim()
-    });
-    return { ok: true, authUrl: response.auth_url, state: response.state };
-  } catch (error) {
-    return commandError(error);
-  }
-};
-
-export const authorizeSpotifyPkce = async (
-  clientId: string,
-  redirectUri: string
-): Promise<SpotifyAuthorizeResult> => {
-  if (!clientId.trim() || !redirectUri.trim()) {
-    return { ok: false, reason: 'invalid', message: 'Client ID and redirect URI are required.' };
-  }
-
-  try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const response = await invoke<{ refresh_token: string; expires_in?: number }>('authorize_spotify_pkce', {
-      clientId: clientId.trim(),
-      redirectUri: redirectUri.trim()
-    });
-    return { ok: true, refreshToken: response.refresh_token, expiresIn: response.expires_in ?? null };
-  } catch (error) {
-    return commandError(error);
-  }
-};
-
-export const openExternalUrl = async (url: string): Promise<ExternalOpenResult> => {
-  if (!url.trim()) {
-    return { ok: false, reason: 'invalid', message: 'Authorization URL is unavailable.' };
-  }
-
-  try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('open_external_url', {
-      url: url.trim()
-    });
-    return { ok: true };
-  } catch (error) {
-    return commandError(error);
-  }
-};
-
-export const exchangeSpotifyCallback = async (
-  clientId: string,
-  callbackUrl: string
+export const authorizeSpotifyAndCopySwpt1 = async (
+  clientId: string
 ): Promise<SpotifyOAuthResult> => {
-  if (!clientId.trim() || !callbackUrl.trim()) {
-    return { ok: false, reason: 'invalid', message: 'Client ID and callback URL are required.' };
+  if (!clientId.trim()) {
+    return { ok: false, reason: 'invalid', errorCode: 'invalid_input', message: 'Client ID is required.' };
   }
 
   try {
     const { invoke } = await import('@tauri-apps/api/core');
-    const response = await invoke<{ refresh_token: string; expires_in?: number }>('exchange_spotify_callback', {
-      clientId: clientId.trim(),
-      callbackUrl: callbackUrl.trim()
-    });
-    return { ok: true, refreshToken: response.refresh_token, expiresIn: response.expires_in ?? null };
+    const response = await invoke<unknown>('authorize_spotify_and_copy_swpt1', { clientId: clientId.trim() });
+    if (isCopiedResponse(response)) return { ok: true, status: 'copied' };
+    const errorCode = normalizeSpotifyAuthErrorCode(response);
+    return {
+      ok: false,
+      reason: 'failed',
+      errorCode,
+      message: spotifyAuthorizeErrorMessage(errorCode)
+    };
   } catch (error) {
-    return commandError(error);
+    return spotifyCommandError(error);
   }
 };
 
@@ -167,6 +122,71 @@ const sanitizeErrorMessage = (message: string): string =>
     .replace(/access[_-]?token=[^&\s]+/gi, 'access_token=[redacted]')
     .replace(/refresh[_-]?token=[^&\s]+/gi, 'refresh_token=[redacted]')
     .replace(/code=[^&\s]+/gi, 'code=[redacted]');
+
+const spotifyAuthorizeErrorMessage = (errorCode?: string): string => {
+  switch (errorCode) {
+    case 'invalid_input':
+    case 'invalid_redirect_uri':
+      return 'Client ID or local redirect URI is invalid.';
+    case 'authorization_denied':
+    case 'state_mismatch':
+      return 'Spotify authorization was denied or could not be verified.';
+    case 'copy_not_confirmed':
+      return 'Clipboard copy was cancelled.';
+    case 'clipboard_unavailable':
+      return 'Native clipboard is unavailable.';
+    case 'native_unavailable':
+      return 'Tauri shell unavailable in browser preview.';
+    case 'native_failed':
+      return 'Native Spotify authorization failed.';
+    default:
+      return 'Spotify authorization could not be completed.';
+  }
+};
+
+const isCopiedResponse = (value: unknown): value is { status: 'copied' } =>
+  typeof value === 'object' && value !== null && (value as { status?: unknown }).status === 'copied';
+
+const normalizeSpotifyAuthErrorCode = (value: unknown): SpotifyAuthErrorCode => {
+  const candidate = typeof value === 'object' && value !== null ? (value as { error_code?: unknown }).error_code : null;
+  return typeof candidate === 'string' && spotifyAuthErrorCodes.has(candidate as SpotifyAuthErrorCode)
+    ? (candidate as SpotifyAuthErrorCode)
+    : 'native_failed';
+};
+
+const spotifyAuthErrorCodes = new Set<SpotifyAuthErrorCode>([
+  'invalid_input',
+  'listener_unavailable',
+  'browser_open_failed',
+  'callback_unavailable',
+  'callback_invalid',
+  'state_mismatch',
+  'authorization_denied',
+  'token_exchange_failed',
+  'token_encoding_failed',
+  'copy_not_confirmed',
+  'clipboard_unavailable',
+  'native_unavailable',
+  'native_failed'
+]);
+
+const spotifyCommandError = (error: unknown): Extract<SpotifyOAuthResult, { ok: false }> => {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('__TAURI_INTERNALS__') || message.includes('not a function')) {
+    return {
+      ok: false,
+      reason: 'unavailable',
+      errorCode: 'native_unavailable',
+      message: 'Tauri shell unavailable in browser preview.'
+    };
+  }
+  return {
+    ok: false,
+    reason: 'failed',
+    errorCode: 'native_failed',
+    message: 'Native Spotify authorization failed.'
+  };
+};
 
 const commandError = (error: unknown): CommandFailure => {
   const message = error instanceof Error ? error.message : String(error);

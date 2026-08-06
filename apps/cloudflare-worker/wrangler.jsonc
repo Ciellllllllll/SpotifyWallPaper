@@ -1,0 +1,230 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "spotify-wallpaper-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-18",
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/*.md"],
+      "fallthrough": true
+    }
+  ],
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+  "vars": {
+    "ENVIRONMENT": "development",
+    "PUBLIC_BASE_URL": "http://127.0.0.1:8787"
+  },
+  "secrets": {
+    "required": [
+      "TOKEN_ENCRYPTION_KEYRING",
+      "TOKEN_ENCRYPTION_ACTIVE_KEY_ID",
+      "PAIRING_HMAC_KEYRING",
+      "PAIRING_HMAC_ACTIVE_KEY_ID",
+      "OAUTH_STATE_HMAC_KEY"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "spotify-wallpaper-local",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations"
+    },
+    {
+      "binding": "DELETION_DB",
+      "database_name": "spotify-wallpaper-deletion-local",
+      "database_id": "00000000-0000-0000-0000-000000000002",
+      "migrations_dir": "migrations/deletion-ledger"
+    }
+  ],
+  "analytics_engine_datasets": [
+    {
+      "binding": "METRICS",
+      "dataset": "spotify_wallpaper_development"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "AUTH_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 1000,
+        "period": 60
+      }
+    },
+    {
+      "name": "PLAYBACK_RATE_LIMITER",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 1000,
+        "period": 60
+      }
+    },
+    {
+      "name": "CONTROL_RATE_LIMITER",
+      "namespace_id": "1003",
+      "simple": {
+        "limit": 1000,
+        "period": 60
+      }
+    },
+    {
+      "name": "PRE_AUTH_RATE_LIMITER",
+      "namespace_id": "1004",
+      "simple": {
+        "limit": 10000,
+        "period": 60
+      }
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "invocation_logs": false,
+      "head_sampling_rate": 0
+    }
+  },
+  "env": {
+    "preview": {
+      "vars": {
+        "ENVIRONMENT": "preview",
+        "PUBLIC_BASE_URL": "https://replace-preview-before-deploy.example"
+      },
+      "secrets": {
+        "required": [
+          "TOKEN_ENCRYPTION_KEYRING",
+          "TOKEN_ENCRYPTION_ACTIVE_KEY_ID",
+          "PAIRING_HMAC_KEYRING",
+          "PAIRING_HMAC_ACTIVE_KEY_ID",
+          "OAUTH_STATE_HMAC_KEY"
+        ]
+      },
+      "analytics_engine_datasets": [
+        {
+          "binding": "METRICS",
+          "dataset": "spotify_wallpaper_preview"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "spotify-wallpaper-preview",
+          "database_id": "00000000-0000-0000-0000-000000000001",
+          "migrations_dir": "migrations"
+        },
+        {
+          "binding": "DELETION_DB",
+          "database_name": "spotify-wallpaper-deletion-preview",
+          "database_id": "00000000-0000-0000-0000-000000000002",
+          "migrations_dir": "migrations/deletion-ledger"
+        }
+      ],
+      "ratelimits": [
+        {
+          "name": "AUTH_RATE_LIMITER",
+          "namespace_id": "1101",
+          "simple": {
+            "limit": 60,
+            "period": 60
+          }
+        },
+        {
+          "name": "PLAYBACK_RATE_LIMITER",
+          "namespace_id": "1102",
+          "simple": {
+            "limit": 120,
+            "period": 60
+          }
+        },
+        {
+          "name": "CONTROL_RATE_LIMITER",
+          "namespace_id": "1103",
+          "simple": {
+            "limit": 60,
+            "period": 60
+          }
+        },
+        {
+          "name": "PRE_AUTH_RATE_LIMITER",
+          "namespace_id": "1104",
+          "simple": {
+            "limit": 6000,
+            "period": 60
+          }
+        }
+      ]
+    },
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production",
+        "PUBLIC_BASE_URL": "https://replace-production-before-deploy.example"
+      },
+      "secrets": {
+        "required": [
+          "TOKEN_ENCRYPTION_KEYRING",
+          "TOKEN_ENCRYPTION_ACTIVE_KEY_ID",
+          "PAIRING_HMAC_KEYRING",
+          "PAIRING_HMAC_ACTIVE_KEY_ID",
+          "OAUTH_STATE_HMAC_KEY"
+        ]
+      },
+      "analytics_engine_datasets": [
+        {
+          "binding": "METRICS",
+          "dataset": "spotify_wallpaper_production"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "spotify-wallpaper-production",
+          "database_id": "00000000-0000-0000-0000-000000000001",
+          "migrations_dir": "migrations"
+        },
+        {
+          "binding": "DELETION_DB",
+          "database_name": "spotify-wallpaper-deletion-production",
+          "database_id": "00000000-0000-0000-0000-000000000002",
+          "migrations_dir": "migrations/deletion-ledger"
+        }
+      ],
+      "ratelimits": [
+        {
+          "name": "AUTH_RATE_LIMITER",
+          "namespace_id": "1201",
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
+        },
+        {
+          "name": "PLAYBACK_RATE_LIMITER",
+          "namespace_id": "1202",
+          "simple": {
+            "limit": 120,
+            "period": 60
+          }
+        },
+        {
+          "name": "CONTROL_RATE_LIMITER",
+          "namespace_id": "1203",
+          "simple": {
+            "limit": 60,
+            "period": 60
+          }
+        },
+        {
+          "name": "PRE_AUTH_RATE_LIMITER",
+          "namespace_id": "1204",
+          "simple": {
+            "limit": 6000,
+            "period": 60
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "request": {
+    "type": "seek",
+    "positionMs": 42000
+  },
+  "result": {
+    "ok": true,
+    "value": null
+  }
+}

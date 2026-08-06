@@ -1,0 +1,12 @@
+{
+  "source": "mock",
+  "itemType": "none",
+  "id": null,
+  "title": "",
+  "artists": [],
+  "albumName": "",
+  "albumImageUrl": "mock/album-placeholder.svg",
+  "durationMs": 0,
+  "progressMs": 0,
+  "isPlaying": false
+}

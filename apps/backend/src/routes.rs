@@ -356,7 +356,9 @@ impl ApiErr {
 struct SpotifyPlaybackError {
     kind: SpotifyErrorKind,
     message: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
     retry_after_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     status: Option<u16>,
 }
 
@@ -374,4 +376,123 @@ fn encode_component(input: &str) -> String {
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::spotify::{NormalizedPlayback, SpotifyErrorKind};
+
+    #[test]
+    fn serializes_provider_v1_success_and_error_fixtures_exactly() {
+        let success_fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/contracts/provider-v1/success-playing.json"
+        ))
+        .expect("success provider-v1 fixture");
+        let success = NormalizedPlayback {
+            source: "spotify",
+            item_type: "track",
+            id: Some("track-1".to_string()),
+            uri: Some("spotify:track:track-1".to_string()),
+            title: "Example Track".to_string(),
+            artists: vec!["Example Artist".to_string()],
+            album_name: "Example Album".to_string(),
+            image_urls: vec!["https://i.scdn.co/image/example".to_string()],
+            album_image_url: "https://i.scdn.co/image/example".to_string(),
+            duration_ms: 180_000,
+            progress_ms: 12_000,
+            is_playing: true,
+            device: Some(crate::spotify::PlaybackDeviceState {
+                id: None,
+                name: None,
+                device_type: None,
+                is_active: false,
+                is_restricted: false,
+                volume_percent: Some(75),
+            }),
+            device_name: None,
+            shuffle_state: Some(false),
+            repeat_state: Some("off".to_string()),
+            volume_percent: Some(75),
+            external_url: Some("https://open.spotify.com/track/track-1".to_string()),
+            fetched_at: "2026-08-04T00:00:00.000Z".to_string(),
+        };
+        assert_eq!(
+            serde_json::to_value(ApiOk::new(success)).expect("success response"),
+            success_fixture
+        );
+
+        let unauthorized_fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/contracts/provider-v1/error-unauthorized.json"
+        ))
+        .expect("unauthorized provider-v1 fixture");
+        let unauthorized = ApiErr::new(SpotifyPlaybackError {
+            kind: SpotifyErrorKind::Unauthorized,
+            message: "Spotify authorization is required.",
+            retry_after_ms: None,
+            status: Some(401),
+        });
+        assert_eq!(
+            serde_json::to_value(unauthorized).expect("unauthorized response"),
+            unauthorized_fixture
+        );
+
+        let rate_limited_fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/contracts/provider-v1/error-rate-limited.json"
+        ))
+        .expect("rate-limited provider-v1 fixture");
+        let rate_limited = ApiErr::new(SpotifyPlaybackError {
+            kind: SpotifyErrorKind::RateLimited,
+            message: "Spotify rate limit reached.",
+            retry_after_ms: Some(5_000),
+            status: Some(429),
+        });
+        assert_eq!(
+            serde_json::to_value(rate_limited).expect("rate-limited response"),
+            rate_limited_fixture
+        );
+    }
+
+    #[test]
+    fn serializes_provider_v1_control_success_as_null() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/contracts/provider-v1/control-seek.json"
+        ))
+        .expect("control provider-v1 fixture");
+        let command: PlaybackCommand =
+            serde_json::from_value(fixture["request"].clone()).expect("control request");
+        assert!(matches!(
+            command,
+            PlaybackCommand::Seek {
+                position_ms: 42_000
+            }
+        ));
+        assert_eq!(
+            serde_json::to_value(ApiOk::new(())).expect("control response"),
+            fixture["result"]
+        );
+
+        for invalid in [
+            serde_json::json!({ "type": "seek", "positionMs": 42_000, "credential": "unexpected" }),
+            serde_json::json!({ "type": "seek" }),
+            serde_json::json!({ "type": "volume", "volumePercent": 101 }),
+            serde_json::json!({ "type": "repeat", "state": "all" }),
+        ] {
+            assert!(serde_json::from_value::<PlaybackCommand>(invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn deserializes_all_provider_v1_control_request_fixtures() {
+        let fixtures: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+            "../../../tests/contracts/provider-v1/control-requests.json"
+        ))
+        .expect("control request fixtures");
+
+        assert_eq!(fixtures.len(), 8);
+        for fixture in fixtures {
+            serde_json::from_value::<PlaybackCommand>(fixture)
+                .expect("strict playback command fixture");
+        }
+    }
 }

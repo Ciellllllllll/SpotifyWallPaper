@@ -1,8 +1,8 @@
-import type { WallpaperSettings } from '@spotify-wallpaper/shared-types';
-import { clonePresetItems, defaultLayoutPreset, isLayoutPresetName } from '../layout/presets';
-import { defaultSettings } from './defaultSettings';
-import { repairSettings } from './repairSettings';
-import { readStoredSpotifyCredentials } from './spotifyCredentialCache';
+import {
+  defaultWallpaperPreferences,
+  type WallpaperPreferences
+} from '@spotify-wallpaper/shared-types';
+import { loadWallpaperPreferences } from './loadPreferences';
 
 const SETTINGS_GLOBAL = '__SPOTIFY_WALLPAPER_SETTINGS__';
 const SETTINGS_STORAGE_KEY = 'spotify-wallpaper-settings';
@@ -14,244 +14,82 @@ declare global {
 }
 
 export interface LoadedSettings {
-  settings: WallpaperSettings;
+  settings: WallpaperPreferences;
   warning: string | null;
+  networkAllowed: boolean;
+  reauthorizationRequired: boolean;
+  safetyGateOpen: boolean;
 }
 
 type StorageTarget = Pick<Window, 'localStorage'>;
 
 export const loadSettings = (
-  source: unknown = readDefaultSettingsSource(),
+  source: unknown = undefined,
   storageTarget: StorageTarget | undefined = currentWindow()
 ): LoadedSettings => {
-  if (source === undefined || source === null || source === '') {
-    return withStoredSpotifyCredentials({ settings: defaultSettings, warning: null }, storageTarget);
+  const sourceResult = source === undefined
+    ? readDefaultSettingsSource(storageTarget)
+    : { value: source, fromStorage: false };
+  if (sourceResult.readFailed) {
+    return {
+      settings: defaultWallpaperPreferences(),
+      warning: 'Legacy settings could not be read; Spotify network is disabled.',
+      networkAllowed: false,
+      reauthorizationRequired: false,
+      safetyGateOpen: false
+    };
   }
-
-  const parsed = typeof source === 'string' ? parseJson(source) : source;
-  if (!parsed || typeof parsed !== 'object') {
-    return withStoredSpotifyCredentials(
-      { settings: defaultSettings, warning: 'Settings were malformed; defaults are active.' },
-      storageTarget
-    );
-  }
-
-  const record = parsed as Record<string, unknown>;
-  const spotify = record.spotify && typeof record.spotify === 'object' ? (record.spotify as Record<string, unknown>) : {};
-  const layout = record.layout && typeof record.layout === 'object' ? (record.layout as Record<string, unknown>) : {};
-  const theme = record.theme && typeof record.theme === 'object' ? (record.theme as Record<string, unknown>) : {};
-  const background = record.background && typeof record.background === 'object' ? (record.background as Record<string, unknown>) : {};
-  const player = record.player && typeof record.player === 'object' ? (record.player as Record<string, unknown>) : {};
-  const seekbar = record.seekbar && typeof record.seekbar === 'object' ? (record.seekbar as Record<string, unknown>) : {};
-  const visualizer = record.visualizer && typeof record.visualizer === 'object' ? (record.visualizer as Record<string, unknown>) : {};
-  const clock = record.clock && typeof record.clock === 'object' ? (record.clock as Record<string, unknown>) : {};
-  const transitions = record.transitions && typeof record.transitions === 'object' ? (record.transitions as Record<string, unknown>) : {};
-  const performance = record.performance && typeof record.performance === 'object' ? (record.performance as Record<string, unknown>) : {};
-  const rainmeter = record.rainmeter && typeof record.rainmeter === 'object' ? (record.rainmeter as Record<string, unknown>) : {};
-  const debug = record.debug && typeof record.debug === 'object' ? (record.debug as Record<string, unknown>) : {};
-  const preset = isLayoutPresetName(layout.preset) ? layout.preset : defaultLayoutPreset;
-  const allowsStoredSpotifyCredentials =
-    spotify.hasRefreshToken !== false && spotify.clientId !== '' && spotify.refreshToken !== '';
-
-  return withStoredSpotifyCredentials(repairSettings({
-    ...defaultSettings,
-    schemaVersion: numberOr(record.schemaVersion, defaultSettings.schemaVersion) ?? defaultSettings.schemaVersion,
-    spotify: {
-      ...defaultSettings.spotify,
-      playbackProvider:
-        spotify.playbackProvider === 'backend' || spotify.playbackProvider === 'direct'
-          ? spotify.playbackProvider
-          : defaultSettings.spotify.playbackProvider,
-      clientId: stringOr(spotify.clientId, defaultSettings.spotify.clientId),
-      refreshToken: stringOrUndefined(spotify.refreshToken),
-      hasRefreshToken: Boolean(spotify.refreshToken) || Boolean(spotify.hasRefreshToken),
-      backendUrl: stringOr(spotify.backendUrl, defaultSettings.spotify.backendUrl ?? ''),
-      pairingToken: stringOrUndefined(spotify.pairingToken),
-      pollIntervalPlayingMs: numberOr(spotify.pollIntervalPlayingMs, defaultSettings.spotify.pollIntervalPlayingMs),
-      pollIntervalPausedMs: numberOr(spotify.pollIntervalPausedMs, defaultSettings.spotify.pollIntervalPausedMs)
-    },
-    layout: {
-      ...defaultSettings.layout,
-      preset,
-      items:
-        layout.items && typeof layout.items === 'object'
-          ? (layout.items as WallpaperSettings['layout']['items'])
-          : clonePresetItems(preset)
-    },
-    theme: {
-      ...defaultSettings.theme,
-      mode: stringOr(theme.mode, defaultSettings.theme.mode) as WallpaperSettings['theme']['mode'],
-      textColor: stringOr(theme.textColor, defaultSettings.theme.textColor),
-      customPrimaryColor: stringOrUndefined(theme.customPrimaryColor),
-      autoReadability: booleanOr(theme.autoReadability, defaultSettings.theme.autoReadability)
-    },
-    background: {
-      ...defaultSettings.background,
-      mode: stringOr(background.mode, defaultSettings.background.mode) as WallpaperSettings['background']['mode'],
-      opacity: numberOr(background.opacity, defaultSettings.background.opacity) ?? defaultSettings.background.opacity,
-      blurPx: numberOr(background.blurPx, defaultSettings.background.blurPx) ?? defaultSettings.background.blurPx,
-      solidColor: stringOr(background.solidColor, defaultSettings.background.solidColor)
-    },
-    player: {
-      ...defaultSettings.player,
-      visible: booleanOr(player.visible, defaultSettings.player.visible),
-      controlsEnabled: booleanOr(player.controlsEnabled, defaultSettings.player.controlsEnabled),
-      showDevice: booleanOr(player.showDevice, defaultSettings.player.showDevice),
-      showVolume: booleanOr(player.showVolume, defaultSettings.player.showVolume),
-      showShuffleRepeat: booleanOr(player.showShuffleRepeat, defaultSettings.player.showShuffleRepeat)
-    },
-    seekbar: {
-      ...defaultSettings.seekbar,
-      visible: booleanOr(seekbar.visible, defaultSettings.seekbar.visible),
-      style: stringOr(seekbar.style, defaultSettings.seekbar.style) as WallpaperSettings['seekbar']['style']
-    },
-    visualizer: {
-      ...defaultSettings.visualizer,
-      enabled: booleanOr(visualizer.enabled, defaultSettings.visualizer.enabled),
-      mode: stringOr(visualizer.mode, defaultSettings.visualizer.mode) as WallpaperSettings['visualizer']['mode'],
-      intensity: numberOr(visualizer.intensity, defaultSettings.visualizer.intensity) ?? defaultSettings.visualizer.intensity,
-      sensitivity:
-        numberOr(visualizer.sensitivity, defaultSettings.visualizer.sensitivity) ?? defaultSettings.visualizer.sensitivity,
-      smoothing: numberOr(visualizer.smoothing, defaultSettings.visualizer.smoothing) ?? defaultSettings.visualizer.smoothing,
-      decay: numberOr(visualizer.decay, defaultSettings.visualizer.decay) ?? defaultSettings.visualizer.decay,
-      bassWeight: numberOr(visualizer.bassWeight, defaultSettings.visualizer.bassWeight) ?? defaultSettings.visualizer.bassWeight,
-      midWeight: numberOr(visualizer.midWeight, defaultSettings.visualizer.midWeight) ?? defaultSettings.visualizer.midWeight,
-      trebleWeight:
-        numberOr(visualizer.trebleWeight, defaultSettings.visualizer.trebleWeight) ?? defaultSettings.visualizer.trebleWeight,
-      barCount: numberOr(visualizer.barCount, defaultSettings.visualizer.barCount) ?? defaultSettings.visualizer.barCount,
-      lineWidth: numberOr(visualizer.lineWidth, defaultSettings.visualizer.lineWidth) ?? defaultSettings.visualizer.lineWidth,
-      radius: numberOr(visualizer.radius, defaultSettings.visualizer.radius) ?? defaultSettings.visualizer.radius,
-      gap: numberOr(visualizer.gap, defaultSettings.visualizer.gap) ?? defaultSettings.visualizer.gap,
-      rotationSpeed:
-        numberOr(visualizer.rotationSpeed, defaultSettings.visualizer.rotationSpeed) ?? defaultSettings.visualizer.rotationSpeed,
-      particleCount:
-        numberOr(visualizer.particleCount, defaultSettings.visualizer.particleCount) ?? defaultSettings.visualizer.particleCount,
-      particleLife:
-        numberOr(visualizer.particleLife, defaultSettings.visualizer.particleLife) ?? defaultSettings.visualizer.particleLife,
-      glowStrength:
-        numberOr(visualizer.glowStrength, defaultSettings.visualizer.glowStrength) ?? defaultSettings.visualizer.glowStrength,
-      colorMode: stringOr(visualizer.colorMode, defaultSettings.visualizer.colorMode) as WallpaperSettings['visualizer']['colorMode'],
-      mirrorMode: stringOr(visualizer.mirrorMode, defaultSettings.visualizer.mirrorMode) as WallpaperSettings['visualizer']['mirrorMode'],
-      clampMax: numberOr(visualizer.clampMax, defaultSettings.visualizer.clampMax) ?? defaultSettings.visualizer.clampMax,
-      noiseGate: numberOr(visualizer.noiseGate, defaultSettings.visualizer.noiseGate) ?? defaultSettings.visualizer.noiseGate,
-      idleAnimation: booleanOr(visualizer.idleAnimation, defaultSettings.visualizer.idleAnimation)
-    },
-    clock: {
-      ...defaultSettings.clock,
-      enabled: booleanOr(clock.enabled, defaultSettings.clock.enabled),
-      hour12: booleanOr(clock.hour12, defaultSettings.clock.hour12),
-      showSeconds: booleanOr(clock.showSeconds, defaultSettings.clock.showSeconds),
-      showDate: booleanOr(clock.showDate, defaultSettings.clock.showDate),
-      showWeekday: booleanOr(clock.showWeekday, defaultSettings.clock.showWeekday),
-      fontSizePx: numberOr(clock.fontSizePx, defaultSettings.clock.fontSizePx) ?? defaultSettings.clock.fontSizePx,
-      fontWeight: numberOr(clock.fontWeight, defaultSettings.clock.fontWeight) ?? defaultSettings.clock.fontWeight,
-      letterSpacingPx: numberOr(clock.letterSpacingPx, defaultSettings.clock.letterSpacingPx) ?? defaultSettings.clock.letterSpacingPx,
-      opacity: numberOr(clock.opacity, defaultSettings.clock.opacity) ?? defaultSettings.clock.opacity,
-      colorMode: stringOr(clock.colorMode, defaultSettings.clock.colorMode) as WallpaperSettings['clock']['colorMode'],
-      fixedColor: stringOr(clock.fixedColor, defaultSettings.clock.fixedColor)
-    },
-    transitions: {
-      ...defaultSettings.transitions,
-      enabled: booleanOr(transitions.enabled, defaultSettings.transitions.enabled),
-      preset: stringOr(transitions.preset, defaultSettings.transitions.preset) as WallpaperSettings['transitions']['preset'],
-      durationMs:
-        numberOr(transitions.durationMs, defaultSettings.transitions.durationMs) ?? defaultSettings.transitions.durationMs,
-      easing: stringOr(transitions.easing, defaultSettings.transitions.easing) as WallpaperSettings['transitions']['easing'],
-      background: booleanOr(transitions.background, defaultSettings.transitions.background),
-      albumArt: booleanOr(transitions.albumArt, defaultSettings.transitions.albumArt),
-      text: booleanOr(transitions.text, defaultSettings.transitions.text),
-      visualizer: booleanOr(transitions.visualizer, defaultSettings.transitions.visualizer),
-      reduceMotion: booleanOr(transitions.reduceMotion, defaultSettings.transitions.reduceMotion)
-    },
-    performance: {
-      ...defaultSettings.performance,
-      mode:
-        performance.mode === 'low-power' || performance.mode === 'standard' || performance.mode === 'high-effect'
-          ? performance.mode
-          : defaultSettings.performance.mode
-    },
-    rainmeter: {
-      ...defaultSettings.rainmeter,
-      enabled: booleanOr(rainmeter.enabled, defaultSettings.rainmeter.enabled),
-      outputPath: stringOr(rainmeter.outputPath, defaultSettings.rainmeter.outputPath),
-      outputMode: stringOr(rainmeter.outputMode, defaultSettings.rainmeter.outputMode) as WallpaperSettings['rainmeter']['outputMode'],
-      stoppedUpdateIntervalMs:
-        numberOr(rainmeter.stoppedUpdateIntervalMs, defaultSettings.rainmeter.stoppedUpdateIntervalMs) ??
-        defaultSettings.rainmeter.stoppedUpdateIntervalMs
-    },
-    debug: {
-      ...defaultSettings.debug,
-      enabled: booleanOr(debug.enabled, defaultSettings.debug.enabled)
-    }
-  }), storageTarget, allowsStoredSpotifyCredentials);
-};
-
-const withStoredSpotifyCredentials = (
-  loaded: LoadedSettings,
-  storageTarget: StorageTarget | undefined,
-  allowStoredCredentials = true
-): LoadedSettings => {
-  if (!allowStoredCredentials) {
-    return loaded;
-  }
-
-  const explicitClientId = loaded.settings.spotify.clientId;
-  const explicitRefreshToken = loaded.settings.spotify.refreshToken;
-  if (explicitClientId && explicitRefreshToken) {
-    return loaded;
-  }
-
-  const stored = readStoredSpotifyCredentials(storageTarget);
-  if (!stored) {
-    return loaded;
-  }
-
-  if (explicitClientId && explicitClientId !== stored.clientId) {
-    return loaded;
-  }
-
-  return {
-    ...loaded,
-    settings: {
-      ...loaded.settings,
-      spotify: {
-        ...loaded.settings.spotify,
-        clientId: explicitClientId || stored.clientId,
-        refreshToken: explicitRefreshToken || stored.refreshToken,
-        hasRefreshToken: Boolean(explicitRefreshToken || stored.refreshToken)
+  const loaded = loadWallpaperPreferences(sourceResult.value, storageTarget);
+  if (sourceResult.fromStorage && storageTarget) {
+    try {
+      // The legacy settings document may contain embedded credentials. Remove it
+      // and only write back the allowlisted, secret-free v2 preferences.
+      storageTarget.localStorage.removeItem(SETTINGS_STORAGE_KEY);
+      if (loaded.storageRewriteAllowed) {
+        // `loaded.preferences` has already passed the shared v2 repair/migration
+        // boundary, so serializing this object cannot reintroduce legacy fields.
+        storageTarget.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(loaded.preferences));
       }
+    } catch {
+      return {
+        settings: defaultWallpaperPreferences(),
+        warning: 'Legacy settings cleanup failed; Spotify network is disabled.',
+        networkAllowed: false,
+        reauthorizationRequired: false,
+        safetyGateOpen: false
+      };
     }
+  }
+  return {
+    settings: loaded.preferences,
+    warning: loaded.warning,
+    networkAllowed: loaded.networkAllowed,
+    reauthorizationRequired: loaded.reauthorizationRequired,
+    safetyGateOpen: loaded.safetyGateOpen
   };
 };
 
-const readDefaultSettingsSource = (target = currentWindow()): unknown => {
+const readDefaultSettingsSource = (target: StorageTarget | undefined = currentWindow()): {
+  value: unknown;
+  fromStorage: boolean;
+  readFailed?: boolean;
+} => {
   if (!target) {
-    return undefined;
+    return { value: defaultWallpaperPreferences(), fromStorage: false };
   }
 
-  if (target[SETTINGS_GLOBAL] !== undefined) {
-    return target[SETTINGS_GLOBAL];
+  const globalSettings = (target as Window & { __SPOTIFY_WALLPAPER_SETTINGS__?: unknown })[SETTINGS_GLOBAL];
+  if (globalSettings !== undefined) {
+    return { value: globalSettings, fromStorage: false };
   }
 
   try {
-    return target.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? undefined;
+    const value = target.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    return value === null ? { value: defaultWallpaperPreferences(), fromStorage: false } : { value, fromStorage: true };
   } catch {
-    return undefined;
+    return { value: defaultWallpaperPreferences(), fromStorage: false, readFailed: true };
   }
 };
 
-const parseJson = (source: string): unknown => {
-  try {
-    return JSON.parse(source);
-  } catch {
-    return null;
-  }
-};
-
-const stringOr = (value: unknown, fallback: string): string => (typeof value === 'string' ? value : fallback);
-const stringOrUndefined = (value: unknown): string | undefined => (typeof value === 'string' && value ? value : undefined);
-const numberOr = (value: unknown, fallback: number | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-const booleanOr = (value: unknown, fallback: boolean): boolean => (typeof value === 'boolean' ? value : fallback);
 const currentWindow = (): (Window & { __SPOTIFY_WALLPAPER_SETTINGS__?: unknown }) | undefined =>
   typeof window === 'undefined' ? undefined : window;

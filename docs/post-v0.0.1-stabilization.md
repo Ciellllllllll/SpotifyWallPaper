@@ -6,15 +6,21 @@ Rust is the source of truth for these pure calculations when the generated WASM 
 
 - Visualizer smoothing, decay, clamping, and peak normalization: `crates/visual-core/src/visualizer.rs`
 - Theme readability and contrast selection: `crates/visual-core/src/theme.rs`
-- Percent-based layout rectangle calculation: `crates/visual-core/src/layout.rs`
+
+Phase 8 retired the Rust layout ABI. Layout and safe-area semantics remain
+TypeScript-owned, while the WASM adapter exposes only typed-array visual
+normalization and readability calculations.
 
 The wallpaper loads `/wasm/spotify_wallpaper_visual_core.js` at runtime through `apps/wallpaper/src/wasm/visualCore.ts`. If the generated WASM bundle is missing or fails to initialize, the wallpaper keeps running with TypeScript fallback logic. This fallback exists so browser preview and Wallpaper Engine startup never depend on Tauri, Rust tooling, or a generated asset.
 
 ## Known Remaining TypeScript Fallbacks
 
 - Album color extraction remains TypeScript/browser-owned because it requires image loading and canvas pixel reads. Rust may receive sampled colors later, but it must not own DOM or Canvas.
-- Full settings object repair remains TypeScript-owned in the wallpaper for now because the Rust `config-schema` crate currently validates the numeric safety core, not the full nested app schema. The long-term target is to expand Rust schema validation and reduce this fallback.
-- Layout CSS generation remains TypeScript-owned for non-percent units and CSS transform string construction. Rust owns the percent-to-viewport rectangle calculation when WASM is available.
+- Full settings object repair remains TypeScript-owned in the wallpaper. The
+  retired Rust `config-schema` crate is no longer a runtime or workspace
+  authority; shared TypeScript settings contracts own migration and repair.
+- Layout CSS generation remains TypeScript-owned for all units and CSS
+  transform string construction.
 - Visualizer bar layout, waveform SVG path generation, and color selection remain TypeScript-owned because they are rendering-adjacent. Rust owns sample normalization.
 
 ## Build WASM For Wallpaper Runtime

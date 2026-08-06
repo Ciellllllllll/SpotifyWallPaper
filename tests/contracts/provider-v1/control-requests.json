@@ -1,0 +1,10 @@
+[
+  { "type": "play" },
+  { "type": "pause" },
+  { "type": "next" },
+  { "type": "previous" },
+  { "type": "seek", "positionMs": 12345 },
+  { "type": "volume", "volumePercent": 42 },
+  { "type": "shuffle", "state": true },
+  { "type": "repeat", "state": "context" }
+]

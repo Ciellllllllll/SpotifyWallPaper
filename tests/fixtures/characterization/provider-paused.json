@@ -1,0 +1,12 @@
+{
+  "source": "mock",
+  "itemType": "track",
+  "id": "mock-track-paused",
+  "title": "Paused Fixture",
+  "artists": ["Fixture Artist"],
+  "albumName": "Fixture Album",
+  "albumImageUrl": "mock/album-placeholder.svg",
+  "durationMs": 180000,
+  "progressMs": 60000,
+  "isPlaying": false
+}
