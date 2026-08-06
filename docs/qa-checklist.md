@@ -22,7 +22,6 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm mock album art or placeholder is visible.
 - Confirm title, artists, progress, seekbar, and clock are visible.
 - Confirm visualizer renders from mock or idle audio data.
-- Confirm lyrics can be enabled with user LRC text.
 - Confirm malformed settings JSON falls back safely.
 - Confirm no Wallpaper Engine object is required.
 
@@ -34,15 +33,18 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm `project.json` uses only Wallpaper Engine supported user property types: `color`, `slider`, `bool`, `combo`, `textinput`, `file`, or `directory`.
 - Confirm user properties apply:
   - `spotify_client_id`
-  - `spotify_refresh_token`
+  - `spotify_refresh_token` (legacy `swpt1.` bundle only)
   - `settings_json`
   - `selected_preset`
   - `visualizer_enabled`
-  - `lyrics_enabled`
   - `performance_mode`
   - `debug_enabled`
 - Confirm `settings_json` is editable as single-line JSON with valid JSON, an empty value, and malformed JSON; malformed JSON must not crash the wallpaper.
-- Confirm `spotify_client_id` and `spotify_refresh_token` accept empty and dummy values. Use dummy values for public QA because the Refresh Token field can be visible.
+- Confirm `spotify_client_id` and `spotify_refresh_token` accept empty and dummy values without logging or persisting the value outside the Wallpaper Engine user property.
+- In legacy direct mode, confirm `spotify_refresh_token` accepts a dummy `swpt1.` bundle and applies its bundled Client ID and Refresh Token without requiring `spotify_client_id`; raw Refresh Tokens are never entered into `settings_json`.
+- Confirm `spotify_playback_provider=backend` uses only the release-configured public origin in a Workshop build.
+- Confirm an explicit invalid or untrusted `spotify_backend_url` does not fall back to direct mode and never receives a Pairing Token.
+- Confirm `spotify_pairing_token` accepts a dummy `swpb1.` value without exposing it in debug, warnings, or errors.
 - Treat `play-in-window` or CLI `applyProperties` checks as diagnostics only; RC-2 pass/fail requires Wallpaper Engine UI editing and applying the wallpaper to an actual display.
 - Confirm browser fallback still works after Wallpaper Engine changes.
 - Post-v0.0.1 Codex status: not executed in this environment because Wallpaper Engine is not available. Must be completed on a Windows machine with Wallpaper Engine installed.
@@ -63,6 +65,31 @@ Resource-intensive commands should run through `h5i capture run`.
 - Premium checks when available: play, pause, next, previous, seek, volume, shuffle, and repeat.
 - Non-Premium or restricted-device checks: controls remain disabled or show non-fatal status text without breaking passive display.
 
+## Public Backend Beta
+
+- Confirm the Spotify app registers the exact production custom-domain callback ending in `/auth/callback`.
+- Confirm Development Mode owner Premium, one-Client-ID-per-new-developer, and five-user allowlist restrictions are communicated before authorization.
+- Confirm `/setup` links `/privacy` and `/terms`, requires explicit acceptance
+  for initial authorization and reauthorization, and rejects missing consent
+  without creating an OAuth session.
+- Confirm `swpb_oauth` is documented as a strictly necessary ten-minute
+  first-party cookie and no tracking cookie is created.
+- Confirm `/setup` initial authorization displays a `swpb1.` Pairing Token once with `Cache-Control: no-store`.
+- Confirm the Pairing Token appears in no URL, cookie, Web Storage, IndexedDB, log, metric, screenshot, or persisted backend row.
+- Confirm playback and every control use `Authorization: Bearer` and normalized Spotify responses.
+- Confirm 50 concurrent expired-token requests perform one Spotify refresh.
+- Confirm Spotify 429, network errors, D1 errors, and Worker rate limits return fixed safe states.
+- Confirm `invalid_grant` stops refresh retries, removes encrypted Spotify tokens, and requests reauthorization.
+- Confirm reauthorization from `/setup` retains the existing Pairing Token.
+- Confirm `DELETE /api/account` immediately invalidates the Pairing Token and removes live credentials.
+- Confirm the separate non-secret deletion tombstone remains for 35 days and is replayed after a D1 restore.
+- Confirm one failed tombstone does not block later rows and that retry,
+  pending, oldest-pending, and failed counts reach aggregate metrics.
+- Confirm consumed OAuth sessions are deleted and abandoned expired sessions
+  are purged by scheduled maintenance.
+- Confirm the user is told to disconnect the app separately in Spotify account settings.
+- Confirm mock, legacy direct, loopback Rust, and public Worker modes all remain usable independently.
+
 ## Visual And Settings Regression
 
 - Confirm all layout presets render without overlap at desktop and narrow widths.
@@ -75,10 +102,10 @@ Resource-intensive commands should run through `h5i capture run`.
 ## Optional Configurator
 
 - Open `http://127.0.0.1:1420/`.
-- Confirm generated settings JSON excludes Refresh Token by default.
-- Confirm PKCE auth start opens a Spotify authorization URL without a Client Secret.
-- Confirm pasted callback URL exchanges for a Refresh Token and saves it into the local configurator draft.
-- Confirm exported settings still exclude the Refresh Token by default after OAuth.
+- Confirm generated settings JSON is `schemaVersion: 2` and excludes all credential fields and values.
+- Confirm the single native auth command starts PKCE without a Client Secret and returns only status/fixed error codes to the WebView.
+- Confirm verifier, state, callback URL, authorization code, and Refresh Token never enter the WebView draft, logs, settings JSON, or export.
+- Confirm native confirmation copies an approved `swpt1.` bundle to the clipboard once and does not expose it in app state.
 - Confirm imported malformed JSON leaves defaults active.
 - Confirm the Tauri shell can validate settings JSON.
 - Confirm the wallpaper still runs without the configurator.
@@ -97,3 +124,28 @@ Resource-intensive commands should run through `h5i capture run`.
 
 - Update release notes with implemented features, known gaps, and verification commands.
 - Update the phase report with docs read, tests run, risks, and next task.
+
+## Spotify Distribution Gates
+
+Confirm the legacy auth workflow has no Pages write/deploy capability and any
+historical Pages deployment is disabled.
+
+Do not begin a Spotify-connected Limited beta until policy or a
+policy-compatible build, operator-reviewed Privacy/EULA, infrastructure,
+smoke, alert-delivery, Security, and SpecGuard evidence are recorded.
+
+Do not publish generally until the phase report also contains evidence for
+every item:
+
+- Spotify approval or a documented policy-compatible redesign covering BYO
+  authorization, sound-recording/visual synchronization, product naming, and
+  Spotify Mark usage.
+- Original, unmodified Spotify artwork with no crop, blur, animation,
+  distortion, or overlay, plus required Spotify logo attribution and link.
+- Published privacy notice with real operator and private incident contacts.
+- Published operator-reviewed EULA and pre-authorization consent.
+- Fixed production custom domain and exact Spotify callback registration.
+- Verified non-budget operational alert configuration and delivery.
+- Completed Spotify-connected limited beta.
+- Completed 72-hour Wallpaper Engine soak.
+- Verified cost, abuse, deletion-reconciliation, and incident alerts.

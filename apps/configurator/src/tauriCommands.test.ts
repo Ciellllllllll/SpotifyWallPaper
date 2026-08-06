@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { authorizeSpotifyPkce, openExternalUrl, writeRainmeterJson } from './tauriCommands';
+import { authorizeSpotifyAndCopySwpt1, writeRainmeterJson } from './tauriCommands';
 
 const invoke = vi.fn();
 
@@ -42,26 +42,42 @@ describe('tauri commands', () => {
     expect(result.message).toContain('[redacted]');
   });
 
-  it('opens an external URL through the Tauri command', async () => {
-    invoke.mockResolvedValue(undefined);
+  it('returns only copy status from the native Spotify authorization flow', async () => {
+    invoke.mockResolvedValue({ status: 'copied' });
 
-    const result = await openExternalUrl(' https://accounts.spotify.com/authorize?client_id=abc ');
+    const result = await authorizeSpotifyAndCopySwpt1('client-id');
 
-    expect(result).toEqual({ ok: true });
-    expect(invoke).toHaveBeenCalledWith('open_external_url', {
-      url: 'https://accounts.spotify.com/authorize?client_id=abc'
-    });
+    expect(result).toEqual({ ok: true, status: 'copied' });
+    expect(invoke).toHaveBeenCalledWith('authorize_spotify_and_copy_swpt1', { clientId: 'client-id' });
   });
 
-  it('runs Spotify authorization through the automatic Tauri flow', async () => {
-    invoke.mockResolvedValue({ refresh_token: 'refresh-token', expires_in: 3600 });
+  it('maps native fixed error codes without returning token material', async () => {
+    invoke.mockResolvedValue({ status: 'error', error_code: 'copy_not_confirmed' });
 
-    const result = await authorizeSpotifyPkce('client-id', 'http://127.0.0.1:8899/callback');
+    const result = await authorizeSpotifyAndCopySwpt1('client-id');
 
-    expect(result).toEqual({ ok: true, refreshToken: 'refresh-token', expiresIn: 3600 });
-    expect(invoke).toHaveBeenCalledWith('authorize_spotify_pkce', {
-      clientId: 'client-id',
-      redirectUri: 'http://127.0.0.1:8899/callback'
+    expect(result).toEqual({ ok: false, reason: 'failed', errorCode: 'copy_not_confirmed', message: 'Clipboard copy was cancelled.' });
+    expect(JSON.stringify(result)).not.toMatch(/refresh|access|code=/i);
+  });
+
+  it('maps unknown native codes and rejection text to fixed OAuth errors', async () => {
+    invoke.mockResolvedValue({ status: 'error', error_code: 'secret-refresh-token' });
+    const unknown = await authorizeSpotifyAndCopySwpt1('client-id');
+    expect(unknown).toEqual({
+      ok: false,
+      reason: 'failed',
+      errorCode: 'native_failed',
+      message: 'Native Spotify authorization failed.'
     });
+
+    invoke.mockRejectedValue(new Error('refresh_token=secret-refresh-token code=secret-code'));
+    const rejected = await authorizeSpotifyAndCopySwpt1('client-id');
+    expect(rejected).toEqual({
+      ok: false,
+      reason: 'failed',
+      errorCode: 'native_failed',
+      message: 'Native Spotify authorization failed.'
+    });
+    expect(JSON.stringify(rejected)).not.toContain('secret-');
   });
 });

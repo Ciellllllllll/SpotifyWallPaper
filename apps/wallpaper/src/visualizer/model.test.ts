@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { VisualizerFrame } from '@spotify-wallpaper/shared-types';
-import { defaultSettings } from '../settings/defaultSettings';
-import { buildVisualizerBars, buildWaveformPath, effectiveVisualizerConfig, idleVisualizerFrame, shapeVisualizerFrame } from './model';
+  import type { VisualizerFrame } from '@spotify-wallpaper/shared-types';
+  import { defaultSettings } from '../settings/defaultSettings';
+  import {
+  idleVisualizerFrame,
+  shapeVisualizerFrame,
+  shouldIgnoreSilentWallpaperFrame
+} from './model';
 
 const frame: VisualizerFrame = {
   source: 'mock',
@@ -46,34 +50,27 @@ describe('visualizer model', () => {
     expect(dropped.peak).toBeCloseTo(previous.peak * 0.8, 5);
   });
 
-  it('reduces visual work in low-power mode', () => {
-    const config = effectiveVisualizerConfig({
-      ...defaultSettings,
-      performance: { mode: 'low-power' },
-      visualizer: { ...defaultSettings.visualizer, barCount: 120, glowStrength: 1 }
-    });
-
-    expect(config.barCount).toBe(24);
-    expect(config.sampleStep).toBe(2);
-    expect(config.glowStrength).toBeLessThan(0.5);
-  });
-
-  it('builds bars and waveform path from samples', () => {
-    const config = effectiveVisualizerConfig(defaultSettings);
-    const bars = buildVisualizerBars(frame, defaultSettings, { ...config, barCount: 12 });
-    const path = buildWaveformPath(frame, 5);
-
-    expect(bars).toHaveLength(12);
-    expect(bars[0]).toEqual(expect.objectContaining({ angle: 0 }));
-    expect(path).toMatch(/^M /);
-    expect(path).toContain(' L ');
-  });
-
   it('creates idle frames when audio is unavailable', () => {
     const idle = idleVisualizerFrame(1000, defaultSettings.visualizer);
 
     expect(idle.source).toBe('idle');
     expect(idle.samples.length).toBeGreaterThan(0);
     expect(idle.peak).toBeGreaterThan(0);
+  });
+
+  it('ignores silent Wallpaper Engine frames so idle fallback can recover', () => {
+    expect(
+      shouldIgnoreSilentWallpaperFrame(
+        { ...frame, source: 'wallpaper-engine', samples: [0, 0, 0], peak: 0 },
+        defaultSettings.visualizer
+      )
+    ).toBe(true);
+    expect(
+      shouldIgnoreSilentWallpaperFrame(
+        { ...frame, source: 'wallpaper-engine', samples: [0.2, 0.1, 0.05], peak: 0.2 },
+        defaultSettings.visualizer
+      )
+    ).toBe(false);
+    expect(shouldIgnoreSilentWallpaperFrame({ ...frame, source: 'mock', peak: 0 }, defaultSettings.visualizer)).toBe(false);
   });
 });

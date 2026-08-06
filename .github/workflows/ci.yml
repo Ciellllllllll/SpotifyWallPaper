@@ -4,11 +4,10 @@ on:
   pull_request:
   push:
     branches:
-      - main
-      - feature/**
+      - master
 
 jobs:
-  check:
+  web:
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -20,37 +19,99 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Verify repository authority
+        run: npm run verify:repository-authority
+
+      - name: Setup Rust and WASM tooling
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Dependency audit
+        run: npm audit --audit-level=moderate
+
+      - name: Build shared types for clean-clone consumers
+        run: npm run build:shared-types
+
+      - name: TypeScript tests
+        run: npm test
+
+      - name: TypeScript checks
+        run: npm run check
+
+      - name: Web builds and generated WASM
+        run: npm run build
+
+      - name: Actual WASM parity
+        run: npm run test:wasm-parity
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+
+      - name: Browser characterization
+        run: npx playwright test tests/playwright/wallpaper-characterization.spec.ts
+
+  rust:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Install npm dependencies
-        run: npm ci
+      - name: Rust formatting
+        run: cargo fmt --manifest-path crates/visual-core/Cargo.toml -- --check
 
-      - name: TypeScript tests
-        run: npm run test --workspaces --if-present
+      - name: Visual core check
+        run: cargo check --manifest-path crates/visual-core/Cargo.toml --all-features
 
-      - name: TypeScript checks
-        run: npm run check
-
-      - name: Web builds
-        run: npm run build
-
-      - name: Rust workspace check
-        run: cargo check --workspace
-
-      - name: Rust workspace tests
-        run: cargo test --workspace
+      - name: Visual core tests
+        run: cargo test --manifest-path crates/visual-core/Cargo.toml --all-features
 
       - name: Rust WASM target check
-        run: cargo check -p spotify-wallpaper-visual-core --target wasm32-unknown-unknown
+        run: cargo check --manifest-path crates/visual-core/Cargo.toml --target wasm32-unknown-unknown --all-features
+
+  tauri:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Tauri formatting
+        run: cargo fmt --manifest-path apps/configurator/src-tauri/Cargo.toml -- --check
 
       - name: Tauri backend check
-        run: cargo check --manifest-path apps/configurator/src-tauri/Cargo.toml
+        run: cargo check --manifest-path apps/configurator/src-tauri/Cargo.toml --all-features
 
       - name: Tauri backend tests
-        run: cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml
+        run: cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml --all-features
 
-      - name: npm audit
-        run: npm audit --audit-level=moderate
+  loopback:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Loopback backend formatting
+        run: cargo fmt --manifest-path apps/backend/Cargo.toml -- --check
+
+      - name: Loopback backend check
+        run: cargo check --manifest-path apps/backend/Cargo.toml --all-features
+
+      - name: Loopback backend tests
+        run: cargo test --manifest-path apps/backend/Cargo.toml --all-features

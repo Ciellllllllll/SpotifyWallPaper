@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "value": {
+    "source": "spotify",
+    "itemType": "track",
+    "id": "track-1",
+    "uri": "spotify:track:track-1",
+    "title": "Example Track",
+    "artists": ["Example Artist"],
+    "albumName": "Example Album",
+    "imageUrls": ["https://i.scdn.co/image/example"],
+    "albumImageUrl": "https://i.scdn.co/image/example",
+    "durationMs": 180000,
+    "progressMs": 12000,
+    "isPlaying": true,
+    "device": {
+      "id": null,
+      "name": null,
+      "type": null,
+      "isActive": false,
+      "isRestricted": false,
+      "volumePercent": 75
+    },
+    "deviceName": null,
+    "shuffleState": false,
+    "repeatState": "off",
+    "volumePercent": 75,
+    "externalUrl": "https://open.spotify.com/track/track-1",
+    "fetchedAt": "2026-08-04T00:00:00.000Z"
+  }
+}

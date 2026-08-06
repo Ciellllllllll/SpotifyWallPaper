@@ -6,6 +6,7 @@ const VERIFIER_KEY = `${STORAGE_PREFIX}:code-verifier`;
 const STATE_KEY = `${STORAGE_PREFIX}:state`;
 const CREATED_AT_KEY = `${STORAGE_PREFIX}:created-at`;
 const MAX_AUTH_AGE_MS = 10 * 60 * 1000;
+const WALLPAPER_ENGINE_TOKEN_PREFIX = 'swpt1.';
 
 export const SPOTIFY_SCOPES = [
   'user-read-currently-playing',
@@ -22,6 +23,7 @@ export interface CallbackParams {
   code: string | null;
   state: string | null;
   error: string | null;
+  errorDescription: string | null;
 }
 
 export type TokenExchangeResult =
@@ -34,8 +36,22 @@ export interface AuthStorage {
   removeItem(key: string): void;
 }
 
+export interface WallpaperEngineTokenPayload {
+  clientId: string;
+  refreshToken: string;
+}
+
 export const buildRedirectUri = (origin: string, basePath: string): string =>
   new URL('callback', new URL(ensureTrailingSlash(basePath), origin)).toString();
+
+export const encodeWallpaperEngineToken = ({ clientId, refreshToken }: WallpaperEngineTokenPayload): string => {
+  const payload = JSON.stringify({
+    v: 1,
+    clientId: clientId.trim(),
+    refreshToken: refreshToken.trim()
+  });
+  return `${WALLPAPER_ENGINE_TOKEN_PREFIX}${base64UrlEncode(new TextEncoder().encode(payload))}`;
+};
 
 export const buildAuthorizeUrl = async (
   config: AuthConfig,
@@ -66,7 +82,8 @@ export const parseCallbackParams = (url: string): CallbackParams => {
   return {
     code: parsed.searchParams.get('code'),
     state: parsed.searchParams.get('state'),
-    error: parsed.searchParams.get('error')
+    error: parsed.searchParams.get('error'),
+    errorDescription: parsed.searchParams.get('error_description')
   };
 };
 
@@ -80,7 +97,7 @@ export const exchangeCallbackForToken = async (
   const callback = parseCallbackParams(callbackUrl);
   try {
     if (callback.error) {
-      return { ok: false, message: 'Spotify authorization was denied or cancelled.' };
+      return { ok: false, message: spotifyAuthorizationErrorMessage(callback.error, callback.errorDescription) };
     }
 
     if (!callback.code || !callback.state) {
@@ -178,6 +195,29 @@ const base64UrlEncode = (bytes: Uint8Array): string => {
 };
 
 const ensureTrailingSlash = (value: string): string => (value.endsWith('/') ? value : `${value}/`);
+
+const spotifyAuthorizationErrorMessage = (error: string, description: string | null): string => {
+  const normalizedError = error.toLowerCase();
+  const normalizedDescription = description?.toLowerCase() ?? '';
+
+  if (normalizedError === 'access_denied') {
+    if (normalizedDescription.includes('user') || normalizedDescription.includes('developer')) {
+      return 'Spotify rejected authorization. If the app is in Development mode, add this Spotify account under Spotify Dashboard > User Management, then start again.';
+    }
+
+    return 'Spotify authorization was denied or cancelled. Start again and choose Agree on the Spotify authorization screen.';
+  }
+
+  if (normalizedError === 'invalid_request') {
+    return 'Spotify rejected the authorization request. Check that the Spotify Redirect URI exactly matches https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/callback.';
+  }
+
+  if (normalizedError === 'server_error') {
+    return 'Spotify returned server_error before issuing a code. In Spotify Dashboard, confirm this Client ID belongs to the app and add https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/callback under Redirect URIs exactly.';
+  }
+
+  return `Spotify returned authorization error: ${error}. Check the Spotify app settings and start again.`;
+};
 
 const isTokenPayload = (value: unknown): value is { refresh_token: string; expires_in?: number } => {
   if (!value || typeof value !== 'object') {

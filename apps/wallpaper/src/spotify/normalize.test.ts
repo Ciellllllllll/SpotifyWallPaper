@@ -47,6 +47,43 @@ describe('normalizeSpotifyPlayback', () => {
     expect(result.value.playback.albumImageUrl).toBe('https://i.scdn.co/image/show');
   });
 
+  it('uses currently_playing_type when item.type is missing', () => {
+    const result = normalizeSpotifyPlayback(
+      {
+        ...trackFixture,
+        currently_playing_type: 'track',
+        item: {
+          ...trackFixture.item,
+          type: undefined
+        }
+      },
+      fetchedAt
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.playback.itemType).toBe('track');
+    expect(result.value.playback.title).toBe('Current Song');
+  });
+
+  it('falls back to an empty playback model for non-track playback types', () => {
+    const result = normalizeSpotifyPlayback(
+      {
+        ...trackFixture,
+        currently_playing_type: 'ad',
+        item: {
+          name: 'Advertisement'
+        }
+      },
+      fetchedAt
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.playback.itemType).toBe('none');
+    expect(result.value.playback.title).toBe('Nothing Playing');
+  });
+
   it('returns a safe empty playback model and item_null warning for null item', () => {
     const result = normalizeSpotifyPlayback(itemNullFixture, fetchedAt);
 

@@ -3,6 +3,7 @@ import type { SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
 export interface SpotifyTokenState {
   accessToken: string;
   expiresAtMs: number;
+  refreshToken?: string;
 }
 
 export interface SpotifyCredentials {
@@ -10,22 +11,13 @@ export interface SpotifyCredentials {
   refreshToken: string;
 }
 
-export type SpotifyPlaybackCommand =
-  | { type: 'play' }
-  | { type: 'pause' }
-  | { type: 'next' }
-  | { type: 'previous' }
-  | { type: 'seek'; positionMs: number }
-  | { type: 'volume'; volumePercent: number }
-  | { type: 'shuffle'; state: boolean }
-  | { type: 'repeat'; state: 'off' | 'track' | 'context' };
-
 export type Fetcher = typeof fetch;
 
 export type SpotifyResult<T> =
   | {
       ok: true;
       value: T;
+      degraded?: SpotifyPlaybackError;
     }
   | {
       ok: false;
@@ -54,4 +46,5 @@ export interface SpotifyPlaybackResponse {
   device?: unknown;
   shuffle_state?: unknown;
   repeat_state?: unknown;
+  currently_playing_type?: unknown;
 }

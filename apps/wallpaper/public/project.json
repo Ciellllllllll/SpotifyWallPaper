@@ -1,7 +1,8 @@
 {
-  "description": "Spotify-linked Web Wallpaper with mock fallback, configurable layout, lyrics, visualizer, and optional Spotify playback integration.",
+  "description": "Spotify-linked Web Wallpaper with mock fallback, configurable layout, visualizer, and optional Spotify playback integration.",
   "file": "index.html",
   "general": {
+    "supportsaudioprocessing": true,
     "properties": {
       "spotify_client_id": {
         "text": "Spotify Client ID",
@@ -9,7 +10,26 @@
         "value": ""
       },
       "spotify_refresh_token": {
-        "text": "Spotify Refresh Token",
+        "text": "Spotify Token / Refresh Token",
+        "type": "textinput",
+        "value": ""
+      },
+      "spotify_playback_provider": {
+        "text": "Spotify Playback Provider",
+        "type": "combo",
+        "value": "direct",
+        "options": [
+          { "label": "Direct", "value": "direct" },
+          { "label": "Backend Proxy", "value": "backend" }
+        ]
+      },
+      "spotify_backend_url": {
+        "text": "Spotify Backend URL",
+        "type": "textinput",
+        "value": ""
+      },
+      "spotify_pairing_token": {
+        "text": "Spotify Backend Pairing Token",
         "type": "textinput",
         "value": ""
       },
@@ -25,7 +45,6 @@
         "options": [
           { "label": "Minimal", "value": "Minimal" },
           { "label": "Center Album", "value": "Center Album" },
-          { "label": "Lyrics Focus", "value": "Lyrics Focus" },
           { "label": "Visualizer Heavy", "value": "Visualizer Heavy" },
           { "label": "Rainmeter Hybrid", "value": "Rainmeter Hybrid" },
           { "label": "Left Dock", "value": "Left Dock" },
@@ -117,20 +136,6 @@
           { "label": "Album Ring", "value": "album-ring" },
           { "label": "Radial Bars", "value": "radial-bars" },
           { "label": "Waveform Line", "value": "waveform-line" }
-        ]
-      },
-      "lyrics_enabled": {
-        "text": "Lyrics Enabled",
-        "type": "bool",
-        "value": false
-      },
-      "lyrics_mode": {
-        "text": "Lyrics Mode",
-        "type": "combo",
-        "value": "current",
-        "options": [
-          { "label": "Current Line", "value": "current" },
-          { "label": "Context Lines", "value": "context" }
         ]
       },
       "transitions_enabled": {

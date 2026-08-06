@@ -1,0 +1,32 @@
+{
+  "name": "@spotify-wallpaper/cloudflare-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist --env=\"\"",
+    "check": "npm run types && tsc -p tsconfig.json --noEmit",
+    "deploy:preview": "node prepare-deploy-config.mjs preview && wrangler deploy --config .wrangler.preview.generated.json --env preview",
+    "deploy:production": "node prepare-deploy-config.mjs production && wrangler deploy --config .wrangler.production.generated.json --env production",
+    "dev": "wrangler dev",
+    "migrate:deletion:preview": "node prepare-deploy-config.mjs preview && wrangler d1 migrations apply DELETION_DB --remote --config .wrangler.preview.generated.json --env preview",
+    "migrate:deletion:production": "node prepare-deploy-config.mjs production && wrangler d1 migrations apply DELETION_DB --remote --config .wrangler.production.generated.json --env production",
+    "migrate:primary:preview": "node prepare-deploy-config.mjs preview && wrangler d1 migrations apply DB --remote --config .wrangler.preview.generated.json --env preview",
+    "migrate:primary:production": "node prepare-deploy-config.mjs production && wrangler d1 migrations apply DB --remote --config .wrangler.production.generated.json --env production",
+    "prepare:deploy:preview": "node prepare-deploy-config.mjs preview",
+    "prepare:deploy:production": "node prepare-deploy-config.mjs production",
+    "test": "npm run test:worker && npm run test:node",
+    "test:node": "vitest run --config vitest.node.config.ts",
+    "test:worker": "vitest run",
+    "types": "wrangler types && node normalize-generated-types.mjs"
+  },
+  "dependencies": {
+    "@spotify-wallpaper/shared-types": "*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.19.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.115.0"
+  }
+}

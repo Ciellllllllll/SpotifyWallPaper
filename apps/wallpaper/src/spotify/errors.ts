@@ -40,8 +40,11 @@ const parseRetryAfterMs = (value?: string | null): number | undefined => {
     return undefined;
   }
 
-  const seconds = Number.parseInt(value, 10);
-  if (!Number.isFinite(seconds) || seconds < 0) {
+  if (!/^[0-9]+$/.test(value)) {
+    return undefined;
+  }
+  const seconds = Number(value);
+  if (!Number.isSafeInteger(seconds) || seconds > 86_400) {
     return undefined;
   }
 

@@ -37,13 +37,6 @@
     "visible": true,
     "style": "line"
   },
-  "lyrics": {
-    "enabled": false,
-    "sourceText": "",
-    "mode": "current",
-    "offsetMs": 0,
-    "showMissingState": true
-  },
   "visualizer": {
     "enabled": false,
     "mode": "album-ring",
@@ -89,7 +82,6 @@
     "background": true,
     "albumArt": true,
     "text": true,
-    "lyrics": true,
     "visualizer": false,
     "reduceMotion": true
   },

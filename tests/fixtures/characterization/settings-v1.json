@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "spotify": {
+    "playbackProvider": "direct",
+    "clientId": "",
+    "hasRefreshToken": false,
+    "backendUrl": "",
+    "pollIntervalPlayingMs": 1000,
+    "pollIntervalPausedMs": 3000
+  },
+  "layout": {
+    "preset": "default"
+  },
+  "text": {
+    "visible": true
+  },
+  "player": {
+    "visible": true
+  }
+}

@@ -7,13 +7,13 @@
     layoutPresetOptions,
     type ConfiguratorDraft
   } from './settingsModel';
+  import WallpaperView from '@spotify-wallpaper/wallpaper-view/WallpaperView.svelte';
+  import type { WallpaperPreferences, WallpaperViewIntent, WallpaperViewModel } from '@spotify-wallpaper/shared-types';
   import { buildRainmeterOutput, exportRainmeterJson } from './rainmeter/rainmeterExport';
+  import { applyPreviewIntent } from './previewIntent';
   import {
-    authorizeSpotifyPkce,
-    exchangeSpotifyCallback,
-    openExternalUrl,
+    authorizeSpotifyAndCopySwpt1,
     startRainmeterScheduler,
-    startSpotifyPkceAuth,
     stopRainmeterScheduler,
     updateRainmeterScheduler,
     writeRainmeterJson
@@ -24,55 +24,94 @@
   let importWarning: string | null = null;
   let copyStatus = '';
   let rainmeterStatus = '';
-  let spotifyRedirectUri = 'http://127.0.0.1:8899/callback';
-  let spotifyCallbackUrl = '';
-  let spotifyAuthUrl = '';
   let oauthStatus = '';
   let rainmeterSchedulerRunning = false;
+  let previewDisplayMode: WallpaperPreferences['player']['displayMode'] = 'album-details';
+
+  const previewPlayback = {
+    source: 'mock' as const,
+    itemType: 'track' as const,
+    id: 'mock-track',
+    uri: 'spotify:track:mock-track',
+    title: 'Afterglow Atlas',
+    artists: ['Nami Kuroda', 'The Static Lights'],
+    albumName: 'Mock Signals',
+    imageUrls: [],
+    albumImageUrl: '',
+    durationMs: 200_000,
+    progressMs: 84_000,
+    isPlaying: true,
+    device: null,
+    deviceName: 'Browser Mock',
+    shuffleState: false,
+    repeatState: 'off' as const,
+    volumePercent: 72,
+    externalUrl: null,
+    fetchedAt: '2026-06-14T00:00:00.000Z'
+  };
+
+  const previewTheme = {
+    primaryColor: '#93cab3',
+    secondaryColor: '#496a8f',
+    accentColor: '#f2c66a',
+    mutedColor: '#b9c7d3',
+    darkColor: '#101318',
+    lightColor: '#f6f7fb',
+    readableTextColor: '#f6f7fb',
+    overlayOpacity: 0.72,
+    shadowStrength: 0.5,
+    source: 'fallback' as const
+  };
 
   $: settings = buildSettings(draft);
   $: settingsJson = exportSettingsJson(draft);
+  $: previewSettings = {
+    ...settings,
+    player: { ...settings.player, displayMode: previewDisplayMode }
+  } satisfies WallpaperPreferences;
+  let previewViewModel: WallpaperViewModel;
+  $: previewViewModel = {
+    settings: previewSettings,
+    playback: { ...previewPlayback, isPlaying: settings.player.controlsEnabled },
+    previousPlayback: null,
+    visualizerFrame: null,
+    theme: previewTheme,
+    transitionState: null,
+    nowMs: Date.parse('2026-06-14T22:10:36.000Z'),
+    progressNowMs: Date.parse('2026-06-14T22:10:36.000Z'),
+    playbackMode: 'configurator mock',
+    providerSelection: 'mock',
+    providerConfigurationError: null,
+    spotifyStatusText: 'mock preview',
+    controlStatusText: '',
+    controlBusy: false,
+    canControlPlayback: false,
+    lastPollingDelayMs: null,
+    consecutiveErrors: 0,
+    visualCoreStatus: 'typescript-fallback',
+    credentialConfigured: false,
+    settingsWarning: null,
+    settingsSource: 'configurator draft'
+  } satisfies WallpaperViewModel;
   $: rainmeterJson = exportRainmeterJson(
     buildRainmeterOutput(
-      {
-        source: 'mock',
-        itemType: 'track',
-        id: 'mock-track',
-        uri: 'spotify:track:mock-track',
-        title: 'Afterglow Atlas',
-        artists: ['Nami Kuroda', 'The Static Lights'],
-        albumName: 'Mock Signals',
-        imageUrls: [],
-        albumImageUrl: '',
-        durationMs: 200000,
-        progressMs: 84000,
-        isPlaying: settings.player.controlsEnabled,
-        device: null,
-        deviceName: 'Browser Mock',
-        shuffleState: false,
-        repeatState: 'off',
-        volumePercent: 72,
-        externalUrl: null,
-        fetchedAt: '2026-06-14T00:00:00.000Z'
-      },
-      {
-        primaryColor: '#93cab3',
-        secondaryColor: '#496a8f',
-        accentColor: '#f2c66a',
-        readableTextColor: '#f6f7fb'
-      },
+      previewPlayback,
+      previewTheme,
       {
         albumArtLocalPath: 'D:\\SpotifyWallPaper\\cache\\album.jpg',
         timestamp: '2026-06-14T00:00:00.000Z'
       }
     )
   );
-  $: previewClasses = ['mock-wallpaper', `preset-${draft.preset.toLowerCase().replaceAll(' ', '-')}`].join(' ');
-  $: exportSummary = draft.includeRefreshToken && draft.spotifyRefreshToken.trim() ? 'includes refresh token' : 'token excluded';
+  $: exportSummary = 'settings v2 export is secret-free';
   $: rainmeterSummary = settings.rainmeter.enabled ? 'Rainmeter JSON enabled' : 'Rainmeter off';
 
   const update = <K extends keyof ConfiguratorDraft>(key: K, value: ConfiguratorDraft[K]) => {
-    draft = { ...draft, [key]: value };
+    draft = {
+      ...draft,
+      [key]: value,
+      ...(key === 'preset' ? { presetChanged: true } : {})
+    };
     copyStatus = '';
     rainmeterStatus = '';
   };
@@ -80,6 +119,7 @@
   const importSettings = () => {
     const imported = importSettingsJson(importSource);
     draft = imported.draft;
+    previewDisplayMode = 'album-details';
     importWarning = imported.warning;
     copyStatus = imported.warning ? '' : 'Imported settings JSON';
   };
@@ -104,47 +144,17 @@
   };
 
   const startSpotifyAuth = async () => {
-    oauthStatus = 'Opening browser; waiting for Spotify authorization...';
-    spotifyAuthUrl = '';
-    const automatic = await authorizeSpotifyPkce(draft.spotifyClientId, spotifyRedirectUri);
-    if (automatic.ok) {
-      update('spotifyRefreshToken', automatic.refreshToken);
-      update('includeRefreshToken', false);
-      oauthStatus = 'Refresh token saved locally; export still excludes token by default';
-      return;
-    }
-
-    const result = await startSpotifyPkceAuth(draft.spotifyClientId, spotifyRedirectUri);
-    if (!result.ok) {
-      oauthStatus = automatic.message;
-      return;
-    }
-
-    spotifyAuthUrl = result.authUrl;
-    const opened = await openExternalUrl(result.authUrl);
-    if (opened.ok) {
-      oauthStatus = 'Spotify authorization opened';
-      return;
-    }
-
-    const popup = window.open(result.authUrl, '_blank', 'noopener,noreferrer');
-    oauthStatus = popup
-      ? `${automatic.message} Manual authorization opened.`
-      : `${automatic.message} Copy the authorization URL below and open it in your browser.`;
-  };
-
-  const exchangeCallback = async () => {
-    oauthStatus = '';
-    const result = await exchangeSpotifyCallback(draft.spotifyClientId, spotifyCallbackUrl);
+    oauthStatus = 'Opening Spotify authorization; waiting for native confirmation...';
+    const result = await authorizeSpotifyAndCopySwpt1(draft.spotifyClientId);
     if (!result.ok) {
       oauthStatus = result.message;
       return;
     }
+    oauthStatus = 'Native confirmation accepted; swpt1 copied once to the clipboard.';
+  };
 
-    update('spotifyRefreshToken', result.refreshToken);
-    update('includeRefreshToken', false);
-    oauthStatus = 'Refresh token saved locally; export still excludes token by default';
-    spotifyCallbackUrl = '';
+  const handlePreviewIntent = (intent: WallpaperViewIntent) => {
+    previewDisplayMode = applyPreviewIntent(previewDisplayMode, intent);
   };
 
   const startScheduler = async () => {
@@ -192,52 +202,28 @@
       <fieldset>
         <legend>Spotify</legend>
         <label>
-          <span>Client ID</span>
-          <input value={draft.spotifyClientId} on:input={(event) => update('spotifyClientId', event.currentTarget.value)} />
+          <span>Playback provider</span>
+          <select value={draft.provider} on:change={(event) => update('provider', event.currentTarget.value as ConfiguratorDraft['provider'])}>
+            <option value="mock">Browser mock</option>
+            <option value="direct">Spotify direct</option>
+            <option value="backend">Public backend</option>
+          </select>
         </label>
-        <label>
-          <span>Redirect URI</span>
-          <input value={spotifyRedirectUri} on:input={(event) => (spotifyRedirectUri = event.currentTarget.value)} />
-        </label>
-        <div class="export-actions">
-          <button type="button" on:click={startSpotifyAuth}>Start Auth</button>
-          <span>{oauthStatus}</span>
-        </div>
-        {#if spotifyAuthUrl}
+        {#if draft.provider === 'backend'}
           <label>
-            <span>Authorization URL</span>
-            <input readonly type="password" value={spotifyAuthUrl} autocomplete="off" />
+            <span>Backend origin</span>
+            <input value={draft.backendOrigin} placeholder="https://example.workers.dev" on:input={(event) => update('backendOrigin', event.currentTarget.value)} />
           </label>
         {/if}
         <label>
-          <span>Callback URL</span>
-          <input
-            type="password"
-            value={spotifyCallbackUrl}
-            autocomplete="off"
-            on:input={(event) => (spotifyCallbackUrl = event.currentTarget.value)}
-          />
+          <span>Client ID</span>
+          <input value={draft.spotifyClientId} on:input={(event) => update('spotifyClientId', event.currentTarget.value)} />
         </label>
         <div class="export-actions">
-          <button type="button" on:click={exchangeCallback}>Save Token</button>
+          <button type="button" on:click={startSpotifyAuth}>Authorize and copy swpt1</button>
+          <span>{oauthStatus}</span>
         </div>
-        <label>
-          <span>Refresh token</span>
-          <input
-            type="password"
-            value={draft.spotifyRefreshToken}
-            autocomplete="off"
-            on:input={(event) => update('spotifyRefreshToken', event.currentTarget.value)}
-          />
-        </label>
-        <label class="check-row">
-          <input
-            type="checkbox"
-            checked={draft.includeRefreshToken}
-            on:change={(event) => update('includeRefreshToken', event.currentTarget.checked)}
-          />
-          <span>Include token in export</span>
-        </label>
+        <p class="auth-note">The native flow keeps OAuth material in Rust and copies a one-time swpt1 token only after confirmation.</p>
       </fieldset>
 
       <fieldset>
@@ -297,10 +283,6 @@
           <span>Visualizer</span>
         </label>
         <label class="check-row">
-          <input type="checkbox" checked={draft.lyricsEnabled} on:change={(event) => update('lyricsEnabled', event.currentTarget.checked)} />
-          <span>Lyrics</span>
-        </label>
-        <label class="check-row">
           <input type="checkbox" checked={draft.transitionEnabled} on:change={(event) => update('transitionEnabled', event.currentTarget.checked)} />
           <span>Transitions</span>
         </label>
@@ -340,17 +322,8 @@
     </form>
 
     <section class="preview-pane" aria-label="Mock wallpaper preview">
-      <div class={previewClasses}>
-        <div class="preview-album"></div>
-        <div class="preview-copy">
-          <span>{settings.player.controlsEnabled ? 'Controls ready' : 'Controls off'}</span>
-          <strong>Afterglow Atlas</strong>
-          <small>Nami Kuroda, The Static Lights</small>
-          <div class="preview-progress"><span></span></div>
-        </div>
-        {#if settings.clock.enabled}
-          <div class="preview-clock">22:10{settings.clock.showSeconds ? ':36' : ''}</div>
-        {/if}
+      <div class="preview-shell">
+        <WallpaperView model={previewViewModel} showDebug={false} onIntent={handlePreviewIntent} />
       </div>
 
       <div class="export-actions">
@@ -521,101 +494,13 @@
     align-content: start;
   }
 
-  .mock-wallpaper {
-    position: relative;
+  .preview-shell {
+    height: 560px;
     min-height: 360px;
     overflow: hidden;
     border: 1px solid #c9d3dc;
     border-radius: 8px;
-    background:
-      radial-gradient(circle at 20% 18%, rgb(124 177 199 / 42%), transparent 34%),
-      linear-gradient(135deg, #15191f, #28313a 54%, #101318);
-  }
-
-  .preview-album {
-    position: absolute;
-    left: 34px;
-    top: 50%;
-    width: 180px;
-    aspect-ratio: 1;
-    border-radius: 8px;
-    background:
-      linear-gradient(135deg, rgb(255 255 255 / 26%), transparent),
-      linear-gradient(145deg, #93cab3, #496a8f 55%, #f2c66a);
-    box-shadow: 0 22px 52px rgb(0 0 0 / 36%);
-    transform: translateY(-50%);
-  }
-
-  .preview-copy {
-    position: absolute;
-    left: 248px;
-    top: 50%;
-    display: grid;
-    gap: 8px;
-    width: min(48%, 520px);
-    color: #f6f7fb;
-    transform: translateY(-50%);
-  }
-
-  .preview-copy span,
-  .preview-copy small {
-    color: rgb(246 247 251 / 72%);
-  }
-
-  .preview-copy strong {
-    overflow-wrap: anywhere;
-    font-size: 2.2rem;
-    line-height: 1;
-  }
-
-  .preview-progress {
-    width: min(100%, 360px);
-    height: 8px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: rgb(255 255 255 / 20%);
-  }
-
-  .preview-progress span {
-    display: block;
-    width: 42%;
-    height: 100%;
-    background: linear-gradient(90deg, #93cab3, #f2c66a);
-  }
-
-  .preview-clock {
-    position: absolute;
-    right: 24px;
-    bottom: 22px;
-    color: #f6f7fb;
-    font-size: 1.6rem;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .preset-bottom-player .preview-album {
-    top: auto;
-    bottom: 20px;
-    width: 110px;
-    transform: none;
-  }
-
-  .preset-bottom-player .preview-copy {
-    left: 164px;
-    top: auto;
-    bottom: 30px;
-    transform: none;
-  }
-
-  .preset-ambient-background .preview-album {
-    display: none;
-  }
-
-  .preset-ambient-background .preview-copy {
-    left: 50%;
-    top: 50%;
-    text-align: center;
-    transform: translate(-50%, -50%);
+    background: #111318;
   }
 
   .export-actions {

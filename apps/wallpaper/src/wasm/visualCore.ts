@@ -1,9 +1,5 @@
-import type { LayoutItem, LyricLine, VisualizerFrame, WallpaperSettings } from '@spotify-wallpaper/shared-types';
-
-export interface LrcParseResult {
-  offsetMs: number;
-  lines: LyricLine[];
-}
+import type { VisualizerFrame } from '@spotify-wallpaper/shared-types';
+import type { WallpaperPreferences } from '@spotify-wallpaper/shared-types';
 
 export interface ReadabilityResult {
   text: { r: number; g: number; b: number };
@@ -12,19 +8,17 @@ export interface ReadabilityResult {
   contrastRatio: number;
 }
 
-export interface LayoutRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 interface VisualCoreModule {
   default?: () => Promise<void>;
-  parse_lrc_json: (input: string) => string;
-  normalize_visualizer_json: (inputJson: string) => string;
-  readability_json: (r: number, g: number, b: number) => string;
-  calculate_layout_rect_json: (inputJson: string) => string;
+  normalize_visualizer: (
+    current: Float32Array,
+    previous: Float32Array,
+    smoothing: number,
+    decay: number,
+    clampMax: number,
+    noiseGate: number
+  ) => Float32Array;
+  readability: (r: number, g: number, b: number) => Float32Array;
 }
 
 let coreModule: VisualCoreModule | null = null;
@@ -60,67 +54,66 @@ const visualCoreModuleUrl = (): string =>
 
 export const visualCoreStatus = (): 'wasm' | 'typescript-fallback' => (coreModule ? 'wasm' : 'typescript-fallback');
 
-export const parseLrcWithCore = (input: string, fallback: () => LrcParseResult): LrcParseResult => {
-  const output = callJson<LrcParseResult>(() => coreModule?.parse_lrc_json(input));
-  return output?.lines ? output : fallback();
-};
-
 export const normalizeSamplesWithCore = (
   frame: VisualizerFrame,
   previous: VisualizerFrame | null,
-  settings: WallpaperSettings['visualizer']
-): { samples: number[]; peak: number } | null =>
-  callJson(() =>
-    coreModule?.normalize_visualizer_json(
-      JSON.stringify({
-        current: frame.samples,
-        previous: previous?.samples ?? [],
-        smoothing: settings.smoothing,
-        decay: settings.decay,
-        clampMax: 1,
-        noiseGate: 0
-      })
-    )
-  );
-
-export const readabilityWithCore = (r: number, g: number, b: number): ReadabilityResult | null =>
-  callJson(() => coreModule?.readability_json(Math.round(r), Math.round(g), Math.round(b)));
-
-export const layoutRectWithCore = (item: LayoutItem): LayoutRect | null => {
-  if (item.unit !== 'percent' || typeof window === 'undefined') {
-    return null;
-  }
-
-  return callJson(() =>
-    coreModule?.calculate_layout_rect_json(
-      JSON.stringify({
-        xPercent: item.x,
-        yPercent: item.y,
-        width: item.width,
-        height: item.height,
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-        safeMargin: item.safeAreaMargin,
-        anchor: item.anchor,
-        clampToSafeArea: item.responsive === 'clamp-safe-area'
-      })
-    )
-  );
-};
-
-const callJson = <T>(callback: () => string | undefined): T | null => {
-  if (!coreModule) {
+  settings: WallpaperPreferences['visualizer']
+): { samples: number[]; peak: number } | null => {
+  const core = coreModule;
+  if (!core) {
     return null;
   }
 
   try {
-    const raw = callback();
-    if (!raw) {
+    const output = core.normalize_visualizer(
+      Float32Array.from(frame.samples),
+      Float32Array.from(previous?.samples ?? []),
+      settings.smoothing,
+      settings.decay,
+      settings.clampMax,
+      settings.noiseGate
+    );
+    if (!(output instanceof Float32Array) || output.length === 0) {
       return null;
     }
-    const parsed = JSON.parse(raw) as T & { error?: string };
-    return parsed && !parsed.error ? parsed : null;
+    return decodeNormalizationOutput(output);
   } catch {
     return null;
   }
 };
+
+export const readabilityWithCore = (r: number, g: number, b: number): ReadabilityResult | null => {
+  const core = coreModule;
+  if (!core) {
+    return null;
+  }
+
+  try {
+    const output = core.readability(Math.round(r), Math.round(g), Math.round(b));
+    return decodeReadabilityOutput(output);
+  } catch {
+    return null;
+  }
+};
+
+export const decodeNormalizationOutput = (output: Float32Array): { samples: number[]; peak: number } | null => {
+  if (!(output instanceof Float32Array) || output.length === 0) {
+    return null;
+  }
+  const samples = Array.from(output.slice(1), finiteOrZero);
+  return { peak: finiteOrZero(output[0]), samples: samples.length > 0 ? samples : [0] };
+};
+
+export const decodeReadabilityOutput = (output: Float32Array): ReadabilityResult | null => {
+  if (!(output instanceof Float32Array) || output.length < 6) {
+    return null;
+  }
+  return {
+    text: { r: finiteOrZero(output[0]), g: finiteOrZero(output[1]), b: finiteOrZero(output[2]) },
+    overlayOpacity: finiteOrZero(output[3]),
+    shadowStrength: finiteOrZero(output[4]),
+    contrastRatio: finiteOrZero(output[5])
+  };
+};
+
+const finiteOrZero = (value: number): number => (Number.isFinite(value) ? value : 0);

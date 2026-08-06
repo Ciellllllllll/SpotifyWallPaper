@@ -1,0 +1,14 @@
+{
+  "previous": {
+    "id": "track-a",
+    "title": "Transition A",
+    "albumName": "Transition Album A"
+  },
+  "current": {
+    "id": "track-b",
+    "title": "Transition B",
+    "albumName": "Transition Album B"
+  },
+  "reduceMotion": true,
+  "expectedPreset": "fade"
+}

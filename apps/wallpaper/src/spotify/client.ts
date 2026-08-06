@@ -1,25 +1,84 @@
-import type { NormalizedPlayback } from '@spotify-wallpaper/shared-types';
+import type { NormalizedPlayback, PlaybackCommand, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
 import { classifyNetworkError, classifySpotifyStatus } from './errors';
 import { normalizeSpotifyPlayback } from './normalize';
-import type { Fetcher, SpotifyPlaybackCommand, SpotifyResult } from './types';
+import type { Fetcher, SpotifyResult } from './types';
 
 const CURRENT_PLAYBACK_ENDPOINT = 'https://api.spotify.com/v1/me/player';
+const CURRENTLY_PLAYING_ENDPOINT = 'https://api.spotify.com/v1/me/player/currently-playing';
 const PLAYER_ENDPOINT = 'https://api.spotify.com/v1/me/player';
+
+export interface FetchCurrentPlaybackOptions {
+  skipPrimaryEndpoint?: boolean;
+  signal?: AbortSignal;
+}
 
 export const fetchCurrentPlayback = async (
   accessToken: string,
   fetcher: Fetcher = fetch,
-  fetchedAt = new Date().toISOString()
+  fetchedAt = new Date().toISOString(),
+  options: FetchCurrentPlaybackOptions = {}
 ): Promise<SpotifyResult<NormalizedPlayback>> => {
+  if (options.skipPrimaryEndpoint) {
+    return fetchCurrentlyPlayingFallback(accessToken, fetcher, fetchedAt, undefined, options.signal);
+  }
+
   let response: Response;
   try {
     response = await fetcher(CURRENT_PLAYBACK_ENDPOINT, {
       headers: {
         authorization: `Bearer ${accessToken}`
-      }
+      },
+      signal: options.signal
     });
   } catch {
     return { ok: false, error: classifyNetworkError() };
+  }
+
+  if (response.status === 204) {
+    return fetchCurrentlyPlayingFallback(
+      accessToken,
+      fetcher,
+      fetchedAt,
+      classifySpotifyStatus(response.status, response.headers.get('retry-after')),
+      options.signal
+    );
+  }
+
+  if (!response.ok) {
+    const error = classifySpotifyStatus(response.status, response.headers.get('retry-after'));
+    if (error.kind === 'unauthorized' || error.kind === 'forbidden' || error.kind === 'rate_limited') {
+      return { ok: false, error };
+    }
+
+    return fetchCurrentlyPlayingFallback(accessToken, fetcher, fetchedAt, error, options.signal);
+  }
+
+  const payload = await response.json().catch(() => null);
+  const normalized = normalizeSpotifyPlayback(payload, fetchedAt);
+  if (!normalized.ok) {
+    return fetchCurrentlyPlayingFallback(accessToken, fetcher, fetchedAt, normalized.error, options.signal);
+  }
+
+  return { ok: true, value: normalized.value.playback };
+};
+
+const fetchCurrentlyPlayingFallback = async (
+  accessToken: string,
+  fetcher: Fetcher,
+  fetchedAt: string,
+  firstError?: SpotifyPlaybackError,
+  signal?: AbortSignal
+): Promise<SpotifyResult<NormalizedPlayback>> => {
+  let response: Response;
+  try {
+    response = await fetcher(CURRENTLY_PLAYING_ENDPOINT, {
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      },
+      signal
+    });
+  } catch {
+    return { ok: false, error: firstError ?? classifyNetworkError() };
   }
 
   if (response.status === 204) {
@@ -32,17 +91,16 @@ export const fetchCurrentPlayback = async (
 
   const payload = await response.json().catch(() => null);
   const normalized = normalizeSpotifyPlayback(payload, fetchedAt);
-  if (!normalized.ok) {
-    return normalized;
-  }
-
-  return { ok: true, value: normalized.value.playback };
+  return normalized.ok
+    ? { ok: true, value: normalized.value.playback, degraded: firstError }
+    : { ok: false, error: firstError ?? normalized.error };
 };
 
 export const sendPlaybackCommand = async (
   accessToken: string,
-  command: SpotifyPlaybackCommand,
-  fetcher: Fetcher = fetch
+  command: PlaybackCommand,
+  fetcher: Fetcher = fetch,
+  signal?: AbortSignal
 ): Promise<SpotifyResult<void>> => {
   const request = playbackCommandRequest(command);
   let response: Response;
@@ -51,7 +109,8 @@ export const sendPlaybackCommand = async (
       method: request.method,
       headers: {
         authorization: `Bearer ${accessToken}`
-      }
+      },
+      signal
     });
   } catch {
     return { ok: false, error: classifyNetworkError() };
@@ -64,7 +123,7 @@ export const sendPlaybackCommand = async (
   return { ok: false, error: classifySpotifyStatus(response.status, response.headers.get('retry-after')) };
 };
 
-const playbackCommandRequest = (command: SpotifyPlaybackCommand): { method: string; url: string } => {
+const playbackCommandRequest = (command: PlaybackCommand): { method: string; url: string } => {
   const url = new URL(PLAYER_ENDPOINT);
 
   switch (command.type) {

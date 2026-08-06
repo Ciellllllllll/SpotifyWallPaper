@@ -1,15 +1,31 @@
-import type { WallpaperSettings } from '@spotify-wallpaper/shared-types';
-import { clonePresetItems, isLayoutPresetName } from '../layout/presets';
+import {
+  applyWallpaperPreferencesPatch,
+  clonePresetItems,
+  isLayoutPresetName,
+  type PlaybackProviderKind,
+  type WallpaperPreferences,
+  type WallpaperPreferencesPatch
+} from '@spotify-wallpaper/shared-types';
 import { loadSettings } from '../settings/loadSettings';
-import { repairSettings } from '../settings/repairSettings';
-import type { SettingsPatch, WallpaperEngineProperties, WallpaperPropertyResult } from './types';
+import { isWallpaperEngineSpotifyToken, parseWallpaperEngineSpotifyToken } from '../spotify/wallpaperEngineToken';
+import type { CredentialInput } from '../settings/credentialBoundary';
+import type { CredentialUpdate, ProviderHint, WallpaperEngineProperties, WallpaperPropertyResult } from './types';
 
-export const parseWallpaperProperties = (properties: WallpaperEngineProperties): WallpaperPropertyResult => {
-  const patch: SettingsPatch = {};
+export const parseWallpaperProperties = (
+  properties: WallpaperEngineProperties,
+  providerHint?: PlaybackProviderKind
+): WallpaperPropertyResult => {
+  const patch: WallpaperPreferencesPatch = {};
   let warning: string | null = null;
+  let credential: CredentialUpdate = { kind: 'retain' };
+  let safetyGateOpen = true;
+  let settingsReplacement: WallpaperPreferences | undefined;
 
   const clientId = stringProperty(properties, 'spotify_client_id');
   const refreshToken = stringProperty(properties, 'spotify_refresh_token');
+  const playbackProvider = stringProperty(properties, 'spotify_playback_provider');
+  const backendUrl = stringProperty(properties, 'spotify_backend_url');
+  const pairingToken = stringProperty(properties, 'spotify_pairing_token');
   const settingsJson = stringProperty(properties, 'settings_json');
   const selectedPreset = stringProperty(properties, 'selected_preset');
   const backgroundMode = stringProperty(properties, 'background_mode');
@@ -25,8 +41,6 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
   const seekbarStyle = stringProperty(properties, 'seekbar_style');
   const visualizerEnabled = booleanProperty(properties, 'visualizer_enabled');
   const visualizerMode = stringProperty(properties, 'visualizer_mode');
-  const lyricsEnabled = booleanProperty(properties, 'lyrics_enabled');
-  const lyricsMode = stringProperty(properties, 'lyrics_mode');
   const transitionsEnabled = booleanProperty(properties, 'transitions_enabled');
   const transitionPreset = stringProperty(properties, 'transition_preset');
   const clockEnabled = booleanProperty(properties, 'clock_enabled');
@@ -39,16 +53,60 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
 
   if (settingsJson) {
     const loaded = loadSettings(settingsJson);
-    patchFromSettings(patch, loaded.settings);
     warning = loaded.warning;
+    safetyGateOpen = loaded.safetyGateOpen;
+    settingsReplacement = loaded.settings;
   }
 
-  if (clientId !== undefined || refreshToken !== undefined) {
+  if (
+    playbackProvider === 'mock' ||
+    playbackProvider === 'direct' ||
+    playbackProvider === 'backend' ||
+    backendUrl !== undefined
+  ) {
     patch.spotify = {
       ...patch.spotify,
-      ...(clientId !== undefined ? { clientId } : {}),
-      ...(refreshToken !== undefined ? { refreshToken, hasRefreshToken: refreshToken.length > 0 } : {})
+      ...(playbackProvider === 'mock' || playbackProvider === 'direct' || playbackProvider === 'backend'
+        ? { provider: playbackProvider }
+        : {}),
+      ...(backendUrl !== undefined ? { backendOrigin: backendUrl } : {})
     };
+    if (playbackProvider === 'mock' || playbackProvider === 'direct' || playbackProvider === 'backend') {
+      credential = { kind: 'clear' };
+    }
+  }
+
+  const bundledToken = refreshToken !== undefined ? parseWallpaperEngineSpotifyToken(refreshToken) : null;
+  const directCredential = bundledToken
+    ? { kind: 'replace', value: { kind: 'direct', ...bundledToken } } as CredentialUpdate
+    : refreshToken !== undefined && isWallpaperEngineSpotifyToken(refreshToken)
+      ? { kind: 'clear' } as CredentialUpdate
+      : clientId !== undefined || refreshToken !== undefined
+        ? clientId && refreshToken
+          ? { kind: 'replace', value: { kind: 'direct', clientId, refreshToken } } as CredentialUpdate
+          : { kind: 'clear' } as CredentialUpdate
+        : null;
+  const backendCredential = pairingToken !== undefined
+    ? pairingToken.length > 0
+      ? { kind: 'replace', value: { kind: 'backend', pairingToken } } as CredentialUpdate
+      : { kind: 'clear' } as CredentialUpdate
+    : null;
+  const selectedProvider = patch.spotify?.provider ?? settingsReplacement?.spotify.provider ?? providerHint;
+  if (selectedProvider === 'mock') {
+    if (directCredential || backendCredential) {
+      credential = { kind: 'clear' };
+    }
+  } else if (selectedProvider === 'direct') {
+    credential = directCredential ?? (backendCredential ? { kind: 'clear' } : credential);
+  } else if (selectedProvider === 'backend') {
+    credential = backendCredential ?? (directCredential ? { kind: 'clear' } : credential);
+  } else if (backendCredential && directCredential) {
+    // Without an explicit/current provider, never guess which credential wins.
+    credential = { kind: 'clear' };
+  } else if (backendCredential) {
+    credential = backendCredential;
+  } else if (directCredential) {
+    credential = directCredential;
   }
 
   if (selectedPreset !== undefined) {
@@ -106,14 +164,6 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
     patch.visualizer = { ...patch.visualizer, mode: visualizerMode };
   }
 
-  if (lyricsEnabled !== undefined) {
-    patch.lyrics = { ...patch.lyrics, enabled: lyricsEnabled };
-  }
-
-  if (lyricsMode === 'current' || lyricsMode === 'context') {
-    patch.lyrics = { ...patch.lyrics, mode: lyricsMode };
-  }
-
   if (transitionsEnabled !== undefined) {
     patch.transitions = { ...patch.transitions, enabled: transitionsEnabled };
   }
@@ -153,99 +203,26 @@ export const parseWallpaperProperties = (properties: WallpaperEngineProperties):
     patch.debug = { ...patch.debug, enabled: debugEnabled };
   }
 
-  return { patch, warning };
+  return { patch, warning, credential, safetyGateOpen, settingsReplacement };
 };
-
-export const applySettingsPatch = (settings: WallpaperSettings, patch: SettingsPatch): WallpaperSettings =>
-  repairSettings({
-    ...settings,
-    schemaVersion: patch.schemaVersion ?? settings.schemaVersion,
-    spotify: {
-      ...settings.spotify,
-      ...patch.spotify
-    },
-    layout: {
-      ...settings.layout,
-      ...patch.layout
-    },
-    theme: {
-      ...settings.theme,
-      ...patch.theme
-    },
-    background: {
-      ...settings.background,
-      ...patch.background
-    },
-    albumArt: {
-      ...settings.albumArt,
-      ...patch.albumArt
-    },
-    text: {
-      ...settings.text,
-      ...patch.text
-    },
-    player: {
-      ...settings.player,
-      ...patch.player
-    },
-    seekbar: {
-      ...settings.seekbar,
-      ...patch.seekbar
-    },
-    lyrics: {
-      ...settings.lyrics,
-      ...patch.lyrics
-    },
-    visualizer: {
-      ...settings.visualizer,
-      ...patch.visualizer
-    },
-    clock: {
-      ...settings.clock,
-      ...patch.clock
-    },
-    transitions: {
-      ...settings.transitions,
-      ...patch.transitions
-    },
-    performance: {
-      ...settings.performance,
-      ...patch.performance
-    },
-    rainmeter: {
-      ...settings.rainmeter,
-      ...patch.rainmeter
-    },
-    debug: {
-      ...settings.debug,
-      ...patch.debug
-    }
-  }).settings;
 
 export const registerWallpaperPropertyListener = (
-  onProperties: (result: WallpaperPropertyResult) => void,
-  target: Window = window
+  onProperties: (result: WallpaperPropertyResult & { settings?: WallpaperPreferences }) => void,
+  target: Window = window,
+  providerHint?: ProviderHint,
+  currentSettings?: () => WallpaperPreferences
 ): void => {
+  let snapshot: WallpaperEngineProperties = {};
   target.wallpaperPropertyListener = {
     applyUserProperties: (properties) => {
-      onProperties(parseWallpaperProperties(properties));
+      snapshot = { ...snapshot, ...properties };
+      const result = parseWallpaperProperties(snapshot, providerHint?.());
+      onProperties(currentSettings ? {
+        ...result,
+        settings: applyWallpaperPreferencesPatch(result.settingsReplacement ?? currentSettings(), result.patch)
+      } : result);
     }
   };
-};
-
-const patchFromSettings = (patch: SettingsPatch, settings: WallpaperSettings): void => {
-  patch.spotify = { ...patch.spotify, ...settings.spotify };
-  patch.layout = { ...patch.layout, ...settings.layout };
-  patch.theme = { ...patch.theme, ...settings.theme };
-  patch.background = { ...patch.background, ...settings.background };
-  patch.player = { ...patch.player, ...settings.player };
-  patch.seekbar = { ...patch.seekbar, ...settings.seekbar };
-  patch.lyrics = { ...patch.lyrics, ...settings.lyrics };
-  patch.visualizer = { ...patch.visualizer, ...settings.visualizer };
-  patch.clock = { ...patch.clock, ...settings.clock };
-  patch.transitions = { ...patch.transitions, ...settings.transitions };
-  patch.performance = { ...patch.performance, ...settings.performance };
-  patch.debug = { ...patch.debug, ...settings.debug };
 };
 
 const stringProperty = (properties: WallpaperEngineProperties, key: string): string | undefined => {

@@ -1,22 +1,10 @@
-name: Spotify Auth Pages
+name: Spotify Auth Pages Legacy Check
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - feature/**
-    paths:
-      - .github/workflows/spotify-auth-pages.yml
-      - apps/spotify-auth/**
-      - package.json
-      - package-lock.json
-      - tsconfig.base.json
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: spotify-auth-pages
@@ -27,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -44,27 +32,26 @@ jobs:
       - name: Test auth page
         run: npm run test -w @spotify-wallpaper/spotify-auth
 
+      - name: Configure Spotify Client ID
+        env:
+          SPOTIFY_CLIENT_ID_VARIABLE: ${{ vars.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_ID_SECRET: ${{ secrets.SPOTIFY_CLIENT_ID }}
+        run: |
+          if [ -n "$SPOTIFY_CLIENT_ID_VARIABLE" ]; then
+            echo "VITE_SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID_VARIABLE" >> "$GITHUB_ENV"
+            echo "Using SPOTIFY_CLIENT_ID from repository Variables."
+          elif [ -n "$SPOTIFY_CLIENT_ID_SECRET" ]; then
+            echo "VITE_SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID_SECRET" >> "$GITHUB_ENV"
+            echo "Using SPOTIFY_CLIENT_ID from repository Secrets."
+          else
+            echo "SPOTIFY_CLIENT_ID is not configured in repository Variables or Secrets." >&2
+            exit 1
+          fi
+
       - name: Build auth page
         run: npm run build -w @spotify-wallpaper/spotify-auth
         env:
           VITE_AUTH_BASE_PATH: /SpotifyWallPaper/spotify-auth/
-          VITE_SPOTIFY_CLIENT_ID: ${{ vars.SPOTIFY_CLIENT_ID }}
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: apps/spotify-auth/dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Prepare legacy static artifact
+        run: node apps/spotify-auth/prepare-pages.mjs

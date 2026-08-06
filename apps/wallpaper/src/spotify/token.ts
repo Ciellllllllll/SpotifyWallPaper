@@ -15,7 +15,8 @@ export const shouldRefreshToken = (token: SpotifyTokenState | null, nowMs = Date
 export const refreshAccessToken = async (
   credentials: SpotifyCredentials,
   fetcher: Fetcher = fetch,
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  signal?: AbortSignal
 ): Promise<SpotifyResult<SpotifyTokenState>> => {
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
@@ -30,13 +31,18 @@ export const refreshAccessToken = async (
       headers: {
         'content-type': 'application/x-www-form-urlencoded'
       },
-      body
+      body,
+      signal
     });
   } catch {
     return { ok: false, error: classifyNetworkError() };
   }
 
   if (!response.ok) {
+    const payload: unknown = await response.clone().json().catch(() => null);
+    if (payload !== null && typeof payload === 'object' && (payload as Record<string, unknown>).error === 'invalid_grant') {
+      return { ok: false, error: { kind: 'unauthorized', message: 'Spotify authorization is required.', status: response.status } };
+    }
     return { ok: false, error: classifySpotifyStatus(response.status, response.headers.get('retry-after')) };
   }
 
@@ -56,16 +62,18 @@ export const refreshAccessToken = async (
     ok: true,
     value: {
       accessToken: payload.access_token,
-      expiresAtMs: nowMs + payload.expires_in * 1000
+      expiresAtMs: nowMs + payload.expires_in * 1000,
+      ...(payload.refresh_token === undefined ? {} : { refreshToken: payload.refresh_token })
     }
   };
 };
 
-const isTokenPayload = (value: unknown): value is { access_token: string; expires_in: number } => {
+const isTokenPayload = (value: unknown): value is { access_token: string; expires_in: number; refresh_token?: string } => {
   if (!value || typeof value !== 'object') {
     return false;
   }
 
   const record = value as Record<string, unknown>;
-  return typeof record.access_token === 'string' && typeof record.expires_in === 'number';
+  return typeof record.access_token === 'string' && typeof record.expires_in === 'number' &&
+    (record.refresh_token === undefined || typeof record.refresh_token === 'string');
 };

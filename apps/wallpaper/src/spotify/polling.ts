@@ -1,106 +1,60 @@
-import type { NormalizedPlayback, SpotifyPlaybackError, WallpaperSettings } from '@spotify-wallpaper/shared-types';
-import { fetchCurrentPlayback, sendPlaybackCommand } from './client';
-import { refreshAccessToken, shouldRefreshToken } from './token';
-import type { Fetcher, SpotifyCredentials, SpotifyPlaybackCommand, SpotifyResult, SpotifyTokenState } from './types';
+import type { NormalizedPlayback, WallpaperPreferences, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
+import { isTrustedPublicBackendOrigin } from './providers/backendProvider';
+import type { SpotifyResult } from './types';
 
 const DEFAULT_PLAYING_INTERVAL_MS = 1000;
 const DEFAULT_PAUSED_INTERVAL_MS = 3000;
+const PUBLIC_BACKEND_PLAYING_INTERVAL_MS = 2000;
+const PUBLIC_BACKEND_PAUSED_INTERVAL_MS = 5000;
 const DEFAULT_ERROR_BACKOFF_MS = 5000;
 const MAX_ERROR_BACKOFF_MS = 60_000;
+const ACTIVE_TRANSIENT_ERROR_BACKOFF_MS = 5000;
 
 export interface PollDecisionInput {
   playback?: NormalizedPlayback | null;
   error?: SpotifyPlaybackError | null;
   consecutiveErrors?: number;
-  settings?: WallpaperSettings;
+  settings?: WallpaperPreferences;
 }
 
-export class SpotifyPlaybackSession {
-  private token: SpotifyTokenState | null = null;
-
-  constructor(
-    private readonly credentials: SpotifyCredentials,
-    private readonly fetcher: Fetcher = fetch
-  ) {}
-
-  async poll(nowMs = Date.now()): Promise<SpotifyResult<NormalizedPlayback>> {
-    const token = await this.accessToken(nowMs);
-    if (!token.ok) {
-      return token;
-    }
-
-    return fetchCurrentPlayback(token.value, this.fetcher, new Date(nowMs).toISOString());
-  }
-
-  async control(command: SpotifyPlaybackCommand, nowMs = Date.now()): Promise<SpotifyResult<void>> {
-    const token = await this.accessToken(nowMs);
-    if (!token.ok) {
-      return token;
-    }
-
-    return sendPlaybackCommand(token.value, command, this.fetcher);
-  }
-
-  private async accessToken(nowMs: number): Promise<SpotifyResult<string>> {
-    if (shouldRefreshToken(this.token, nowMs)) {
-      const refreshed = await refreshAccessToken(this.credentials, this.fetcher, nowMs);
-      if (!refreshed.ok) {
-        return refreshed;
-      }
-
-      this.token = refreshed.value;
-    }
-
-    if (!this.token) {
-      return {
-        ok: false,
-        error: {
-          kind: 'unauthorized',
-          message: 'Spotify access token is unavailable.'
-        }
-      };
-    }
-
-    return { ok: true, value: this.token.accessToken };
-  }
+export interface PlaybackHistory {
+  playback: NormalizedPlayback;
+  previousPlayback: NormalizedPlayback | null;
 }
 
-export const hasSpotifyCredentials = (settings: WallpaperSettings): settings is WallpaperSettings & {
-  spotify: WallpaperSettings['spotify'] & { refreshToken: string };
-} => Boolean(settings.spotify.clientId && settings.spotify.refreshToken);
-
-export const credentialsFromSettings = (settings: WallpaperSettings): SpotifyCredentials | null => {
-  if (!hasSpotifyCredentials(settings)) {
-    return null;
+export const playbackHistoryAfterPoll = (
+  history: PlaybackHistory,
+  result: SpotifyResult<NormalizedPlayback>
+): PlaybackHistory => {
+  if (!result.ok) return history;
+  if (history.playback.id !== result.value.id || history.playback.itemType !== result.value.itemType) {
+    return { playback: result.value, previousPlayback: history.playback };
   }
-
-  return {
-    clientId: settings.spotify.clientId,
-    refreshToken: settings.spotify.refreshToken
-  };
+  return { playback: result.value, previousPlayback: history.previousPlayback };
 };
 
 export const nextPollingDelayMs = ({ playback, error, consecutiveErrors = 0, settings }: PollDecisionInput): number => {
-  if (error?.kind === 'rate_limited' && error.retryAfterMs !== undefined) {
-    return Math.max(error.retryAfterMs, DEFAULT_PLAYING_INTERVAL_MS);
-  }
+  const publicBackend = isTrustedPublicBackend(settings);
+  const playingIntervalMs = pollingInterval(settings?.spotify.pollIntervalPlayingMs, DEFAULT_PLAYING_INTERVAL_MS, PUBLIC_BACKEND_PLAYING_INTERVAL_MS, publicBackend);
+  const pausedIntervalMs = pollingInterval(settings?.spotify.pollIntervalPausedMs, DEFAULT_PAUSED_INTERVAL_MS, PUBLIC_BACKEND_PAUSED_INTERVAL_MS, publicBackend);
 
+  if (error?.kind === 'rate_limited' && error.retryAfterMs !== undefined) return Math.max(error.retryAfterMs, playingIntervalMs);
   if (error) {
-    const multiplier = Math.max(1, consecutiveErrors + 1);
-    return Math.min(DEFAULT_ERROR_BACKOFF_MS * multiplier, MAX_ERROR_BACKOFF_MS);
+    if (playback?.isPlaying && (error.kind === 'network_error' || error.kind === 'unavailable' || error.kind === 'unknown_response_shape')) {
+      return ACTIVE_TRANSIENT_ERROR_BACKOFF_MS;
+    }
+    return Math.min(DEFAULT_ERROR_BACKOFF_MS * Math.max(1, consecutiveErrors + 1), MAX_ERROR_BACKOFF_MS);
   }
-
-  if (playback?.isPlaying) {
-    return clampInterval(settings?.spotify.pollIntervalPlayingMs, DEFAULT_PLAYING_INTERVAL_MS);
-  }
-
-  return clampInterval(settings?.spotify.pollIntervalPausedMs, DEFAULT_PAUSED_INTERVAL_MS);
+  return playback?.isPlaying ? playingIntervalMs : pausedIntervalMs;
 };
 
-const clampInterval = (value: number | undefined, fallback: number): number => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return fallback;
-  }
-
-  return Math.min(Math.max(value, 500), 60_000);
+const pollingInterval = (configured: number | undefined, localDefault: number, publicDefault: number, publicBackend: boolean): number => {
+  const value = publicBackend && (configured === undefined || configured === localDefault) ? publicDefault : configured;
+  return clampInterval(value, publicBackend ? publicDefault : localDefault);
 };
+
+const clampInterval = (value: number | undefined, fallback: number): number =>
+  typeof value !== 'number' || !Number.isFinite(value) ? fallback : Math.min(Math.max(value, 500), 60_000);
+
+const isTrustedPublicBackend = (settings: WallpaperPreferences | undefined): boolean =>
+  settings?.spotify.provider === 'backend' && !!settings.spotify.backendOrigin && isTrustedPublicBackendOrigin(settings.spotify.backendOrigin);

@@ -1,0 +1,8 @@
+{
+  "ok": false,
+  "error": {
+    "kind": "unauthorized",
+    "message": "Spotify authorization is required.",
+    "status": 401
+  }
+}

@@ -4,6 +4,7 @@ import {
   buildRedirectUri,
   clearAuthSession,
   codeChallenge,
+  encodeWallpaperEngineToken,
   exchangeCallbackForToken,
   generateCodeVerifier,
   parseCallbackParams,
@@ -40,6 +41,26 @@ describe('spotify auth PKCE', () => {
     );
   });
 
+  it('encodes a single Wallpaper Engine token containing client id and refresh token', () => {
+    const token = encodeWallpaperEngineToken({
+      clientId: ' public-client-id ',
+      refreshToken: ' refresh-token '
+    });
+    const encoded = token.slice('swpt1.'.length);
+    const base64 = encoded.replaceAll('-', '+').replaceAll('_', '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    const json = new TextDecoder().decode(
+      Uint8Array.from(atob(padded), (character) => character.charCodeAt(0))
+    );
+
+    expect(token.startsWith('swpt1.')).toBe(true);
+    expect(JSON.parse(json)).toEqual({
+      v: 1,
+      clientId: 'public-client-id',
+      refreshToken: 'refresh-token'
+    });
+  });
+
   it('stores only transient PKCE session values before authorization', async () => {
     const storage = memoryStorage();
     const url = await buildAuthorizeUrl(
@@ -60,10 +81,11 @@ describe('spotify auth PKCE', () => {
   });
 
   it('parses callback parameters without exposing the full callback URL', () => {
-    expect(parseCallbackParams('https://example.github.io/app/callback?code=abc&state=xyz')).toEqual({
+    expect(parseCallbackParams('https://example.github.io/app/callback?code=abc&state=xyz&error_description=nope')).toEqual({
       code: 'abc',
       state: 'xyz',
-      error: null
+      error: null,
+      errorDescription: 'nope'
     });
   });
 
@@ -107,6 +129,46 @@ describe('spotify auth PKCE', () => {
     );
 
     expect(result.ok).toBe(false);
+    expect(storage.values.size).toBe(0);
+  });
+
+  it('explains access_denied without leaking callback secrets', async () => {
+    const storage = memoryStorage();
+    await buildAuthorizeUrl({ clientId: 'client-id', redirectUri: 'https://example.github.io/app/callback' }, storage);
+
+    const result = await exchangeCallbackForToken(
+      'https://example.github.io/app/callback?error=access_denied&error_description=User%20not%20registered&state=ignored',
+      'client-id',
+      'https://example.github.io/app/callback',
+      vi.fn() as unknown as typeof fetch,
+      storage
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      message:
+        'Spotify rejected authorization. If the app is in Development mode, add this Spotify account under Spotify Dashboard > User Management, then start again.'
+    });
+    expect(storage.values.size).toBe(0);
+  });
+
+  it('explains Spotify server_error as an app settings check', async () => {
+    const storage = memoryStorage();
+    await buildAuthorizeUrl({ clientId: 'client-id', redirectUri: 'https://example.github.io/app/callback' }, storage);
+
+    const result = await exchangeCallbackForToken(
+      'https://example.github.io/app/callback?error=server_error&state=ignored',
+      'client-id',
+      'https://example.github.io/app/callback',
+      vi.fn() as unknown as typeof fetch,
+      storage
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      message:
+        'Spotify returned server_error before issuing a code. In Spotify Dashboard, confirm this Client ID belongs to the app and add https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/callback under Redirect URIs exactly.'
+    });
     expect(storage.values.size).toBe(0);
   });
 
