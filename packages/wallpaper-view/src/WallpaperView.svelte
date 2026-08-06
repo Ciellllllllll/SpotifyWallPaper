@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { LayoutItem, WallpaperViewIntent, WallpaperViewModel } from '@spotify-wallpaper/shared-types';
-  import { visualizerRingRadius, visualizerStyleVariables } from './visualizerStyle';
+  import { effectiveVisualizerConfig, visualizerRingRadius, visualizerStyleVariables } from './visualizerStyle';
 
   export let model: WallpaperViewModel;
   export let onIntent: (intent: WallpaperViewIntent) => void = () => undefined;
@@ -26,7 +26,11 @@
     ? settings.layout.items.seekbar
     : { ...settings.layout.items.seekbar, x: 50, y: 70.5, anchor: 'center' as const, width: Math.min(440, activeAlbumItem.width + 40), zIndex: 3 };
   $: activeTextColor = settings.theme.autoReadability ? model.theme.readableTextColor : settings.theme.textColor;
-  $: visualizerVariables = Object.entries(visualizerStyleVariables(settings.visualizer, model.theme))
+  $: effectiveVisualizer = effectiveVisualizerConfig(settings);
+  $: visualizerSamples = (model.visualizerFrame?.samples ?? [0])
+    .filter((_, index) => index % effectiveVisualizer.sampleStep === 0)
+    .slice(0, effectiveVisualizer.barCount);
+  $: visualizerVariables = Object.entries(visualizerStyleVariables(settings.visualizer, model.theme, effectiveVisualizer))
     .map(([key, value]) => `${key}: ${value}`)
     .join('; ');
   $: themeVariables = [
@@ -139,12 +143,12 @@
   {#if settings.visualizer.enabled}
     <div class="visualizer" aria-hidden="true" style={`${layoutStyle(activeAlbumItem)}; ${visualizerVariables}`}>
       {#if settings.visualizer.mode === 'waveform-line'}
-        <svg class="waveform" viewBox="0 0 100 40" preserveAspectRatio="none"><polyline points={(model.visualizerFrame?.samples ?? [0]).map((sample, index, samples) => `${(index / Math.max(1, samples.length - 1)) * 100},${20 - Math.max(-18, Math.min(18, sample * 20))}`).join(' ')} /></svg>
+        <svg class="waveform" viewBox="0 0 100 40" preserveAspectRatio="none"><polyline points={visualizerSamples.map((sample, index, samples) => `${(index / Math.max(1, samples.length - 1)) * 100},${20 - Math.max(-18, Math.min(18, sample * 20))}`).join(' ')} /></svg>
       {:else if settings.visualizer.mode === 'album-ring'}
         <svg class="visualizer-ring" viewBox="-100 -100 200 200"><circle class="ring-base" r={visualizerRingRadius(settings.visualizer.radius)} /><circle class="ring-active" r={visualizerRingRadius(settings.visualizer.radius)} stroke-dasharray={`${Math.max(0.08, (model.visualizerFrame?.peak ?? 0) * 0.94)} 1`} /></svg>
       {:else}
-        {#each (model.visualizerFrame?.samples ?? [0]).slice(0, settings.visualizer.barCount) as sample, index}
-          <span style={`--bar: ${Math.max(0.08, sample)}; --angle: ${(index / Math.max(1, Math.min(settings.visualizer.barCount, model.visualizerFrame?.samples.length ?? 1))) * 360}deg`}></span>
+        {#each visualizerSamples as sample, index}
+          <span style={`--bar: ${Math.max(0.08, sample)}; --angle: ${(index / Math.max(1, Math.min(effectiveVisualizer.barCount, visualizerSamples.length))) * 360}deg`}></span>
         {/each}
       {/if}
     </div>

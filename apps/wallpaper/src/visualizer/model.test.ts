@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { VisualizerFrame } from '@spotify-wallpaper/shared-types';
-import { defaultSettings } from '../settings/defaultSettings';
-import {
-  buildVisualizerBars,
-  buildWaveformPath,
-  effectiveVisualizerConfig,
+  import type { VisualizerFrame } from '@spotify-wallpaper/shared-types';
+  import { defaultSettings } from '../settings/defaultSettings';
+  import {
   idleVisualizerFrame,
   shapeVisualizerFrame,
   shouldIgnoreSilentWallpaperFrame
@@ -51,29 +48,6 @@ describe('visualizer model', () => {
 
     expect(dropped.peak).toBeGreaterThan(0);
     expect(dropped.peak).toBeCloseTo(previous.peak * 0.8, 5);
-  });
-
-  it('reduces visual work in low-power mode', () => {
-    const config = effectiveVisualizerConfig({
-      ...defaultSettings,
-      performance: { mode: 'low-power' },
-      visualizer: { ...defaultSettings.visualizer, barCount: 120, glowStrength: 1 }
-    });
-
-    expect(config.barCount).toBe(24);
-    expect(config.sampleStep).toBe(2);
-    expect(config.glowStrength).toBeLessThan(0.5);
-  });
-
-  it('builds bars and waveform path from samples', () => {
-    const config = effectiveVisualizerConfig(defaultSettings);
-    const bars = buildVisualizerBars(frame, defaultSettings, { ...config, barCount: 12 });
-    const path = buildWaveformPath(frame, 5);
-
-    expect(bars).toHaveLength(12);
-    expect(bars[0]).toEqual(expect.objectContaining({ angle: 0 }));
-    expect(path).toMatch(/^M /);
-    expect(path).toContain(' L ');
   });
 
   it('creates idle frames when audio is unavailable', () => {

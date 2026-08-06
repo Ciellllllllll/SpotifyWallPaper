@@ -74,6 +74,15 @@ Do not pass raw Spotify API responses directly to UI. Normalize into a display-s
 - external URL
 - fetched timestamp
 
+The dependency-free `normalizeSpotifyPlaybackPayload(raw, fetchedAt)` in
+`packages/shared-types` is the single TypeScript authority. It requires a valid
+`fetchedAt`, non-empty trimmed track/episode `id` and `uri`, finite bounded
+integers for numeric fields, `progressMs <= durationMs`, at most 32 artists and
+8 image URLs, and the `none` invariant (`id/uri=null`, zero duration/progress,
+not playing). Direct mode wraps its result to retain the `item_null` warning;
+the Worker uses the result directly. Rust normalization is intentionally kept
+at the language boundary and is aligned through provider-v1 fixtures.
+
 ## Polling
 
 Default polling:

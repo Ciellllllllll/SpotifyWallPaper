@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   isNormalizedPlaybackResultEnvelope,
-  isProviderResultEnvelope
+  isProviderResultEnvelope,
+  normalizeSpotifyPlaybackPayload
 } from '@spotify-wallpaper/shared-types';
 import errorRateLimited from '../../../tests/contracts/provider-v1/error-rate-limited.json';
 import errorUnauthorized from '../../../tests/contracts/provider-v1/error-unauthorized.json';
@@ -9,12 +10,11 @@ import controlSeek from '../../../tests/contracts/provider-v1/control-seek.json'
 import successItemNone from '../../../tests/contracts/provider-v1/success-item-none.json';
 import successPlaying from '../../../tests/contracts/provider-v1/success-playing.json';
 import { apiError } from '../src/http';
-import { emptySpotifyPlayback, normalizeSpotifyPlayback } from '../src/normalize';
 import { fetchSpotifyPlayback, sendSpotifyCommand } from '../src/spotify';
 
 describe('provider-v1 language-neutral fixtures', () => {
   it('serializes Worker normalization into the exact success-playing fixture', () => {
-    const result = normalizeSpotifyPlayback(
+    const result = normalizeSpotifyPlaybackPayload(
       {
         is_playing: true,
         progress_ms: 12_000,
@@ -49,11 +49,11 @@ describe('provider-v1 language-neutral fixtures', () => {
     expect(isNormalizedPlaybackResultEnvelope(result)).toBe(true);
   });
 
-  it('serializes Worker empty playback into the exact item-none fixture', () => {
-    const result = {
-      ok: true as const,
-      value: emptySpotifyPlayback('2026-08-04T00:00:00.000Z')
-    };
+  it('serializes shared empty playback into the exact item-none fixture', () => {
+    const result = normalizeSpotifyPlaybackPayload(
+      { item: null },
+      '2026-08-04T00:00:00.000Z'
+    );
 
     expect(result).toEqual(successItemNone);
     expect(isNormalizedPlaybackResultEnvelope(result)).toBe(true);

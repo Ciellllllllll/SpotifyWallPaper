@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use axum::http::StatusCode;
 use reqwest::{header::RETRY_AFTER, Method};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
@@ -11,40 +10,13 @@ const TOKEN_ENDPOINT: &str = "https://accounts.spotify.com/api/token";
 const PLAYER_ENDPOINT: &str = "https://api.spotify.com/v1/me/player";
 const FALLBACK_ALBUM_IMAGE: &str = "mock/album-placeholder.svg";
 
-#[async_trait]
-pub trait SpotifyClient: Send + Sync {
-    async fn exchange_code(
-        &self,
-        client_id: &str,
-        redirect_uri: &str,
-        code_verifier: &str,
-        code: &str,
-    ) -> Result<TokenExchange, SpotifyApiError>;
-
-    async fn refresh_access_token(
-        &self,
-        client_id: &str,
-        refresh_token: &str,
-    ) -> Result<TokenExchange, SpotifyApiError>;
-    async fn current_playback(
-        &self,
-        access_token: &str,
-    ) -> Result<NormalizedPlayback, SpotifyApiError>;
-    async fn control(
-        &self,
-        access_token: &str,
-        command: PlaybackCommand,
-    ) -> Result<(), SpotifyApiError>;
-}
-
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct RealSpotifyClient {
     http: reqwest::Client,
 }
 
-#[async_trait]
-impl SpotifyClient for RealSpotifyClient {
-    async fn exchange_code(
+impl RealSpotifyClient {
+    pub async fn exchange_code(
         &self,
         client_id: &str,
         redirect_uri: &str,
@@ -68,7 +40,7 @@ impl SpotifyClient for RealSpotifyClient {
         token_response(response).await
     }
 
-    async fn refresh_access_token(
+    pub async fn refresh_access_token(
         &self,
         client_id: &str,
         refresh_token: &str,
@@ -88,7 +60,7 @@ impl SpotifyClient for RealSpotifyClient {
         token_response(response).await
     }
 
-    async fn current_playback(
+    pub async fn current_playback(
         &self,
         access_token: &str,
     ) -> Result<NormalizedPlayback, SpotifyApiError> {
@@ -115,7 +87,7 @@ impl SpotifyClient for RealSpotifyClient {
         normalize_playback(&payload, chrono::Utc::now().to_rfc3339())
     }
 
-    async fn control(
+    pub async fn control(
         &self,
         access_token: &str,
         command: PlaybackCommand,

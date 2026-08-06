@@ -24,7 +24,9 @@ repair are owned by the shared TypeScript contract plus narrow native DTOs.
 
 TypeScript:
 
-- Spotify response normalization
+- Shared Spotify response normalization (track, episode, none, invalid shape,
+  numeric bounds, and collection caps)
+- Direct-provider warning wrapper and Worker provider-v1 fixture parity
 - error classification
 - settings load fallback
 - mock mode initialization
@@ -70,6 +72,8 @@ Confirm:
 - Pairing Token never appears in logs, URLs, debug output, or stored Worker pages.
 - D1 export does not contain plaintext Spotify or Pairing tokens.
 - Direct, loopback Rust, public Worker, and browser mock paths all work.
+- Shared TypeScript normalization remains the authority for direct and Worker
+  paths; Rust parity is checked at the provider-v1 fixture boundary.
 - `invalid_grant` stops refresh retries and permits reauthorization.
 - Arbitrary HTTPS origins and redirects receive no Bearer token.
 - Wallpaper Engine survives a 72-hour public-backend soak.

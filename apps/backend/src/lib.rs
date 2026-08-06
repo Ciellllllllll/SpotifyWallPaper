@@ -9,7 +9,7 @@ use std::{
 };
 
 use db::BackendDatabase;
-use spotify::{RealSpotifyClient, SpotifyClient};
+use spotify::RealSpotifyClient;
 
 pub use routes::app;
 
@@ -32,7 +32,7 @@ pub struct AppState {
     pub config: AppConfig,
     pub pending_auth: Arc<Mutex<HashMap<String, PendingAuthSession>>>,
     pub access_token: Arc<Mutex<Option<CachedAccessToken>>>,
-    pub spotify: Arc<dyn SpotifyClient>,
+    pub spotify: RealSpotifyClient,
 }
 
 impl AppState {
@@ -42,7 +42,7 @@ impl AppState {
             config,
             pending_auth: Arc::new(Mutex::new(HashMap::new())),
             access_token: Arc::new(Mutex::new(None)),
-            spotify: Arc::new(RealSpotifyClient::default()),
+            spotify: RealSpotifyClient::default(),
         }
     }
 }
@@ -61,4 +61,18 @@ pub struct PendingAuthSession {
     pub code_verifier: String,
     pub pairing_token: String,
     pub expires_at_ms: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AppState, RealSpotifyClient};
+
+    #[test]
+    fn app_state_exposes_the_concrete_cloneable_spotify_client() {
+        fn clone_client(state: &AppState) -> RealSpotifyClient {
+            state.spotify.clone()
+        }
+
+        let _ = clone_client;
+    }
 }

@@ -42,40 +42,6 @@ export interface PlaybackProvider {
   dispose(): void;
 }
 
-export const isProviderConfigurationError = (value: unknown): value is ProviderConfigurationError => {
-  if (!isRecord(value) || !hasExactKeys(value, ['kind', 'code', 'message'])) {
-    return false;
-  }
-  return (
-    value.kind === 'configuration' &&
-    ['missing-credentials', 'invalid-origin', 'unsupported-provider'].includes(value.code as string) &&
-    typeof value.message === 'string'
-  );
-};
-
-export const isProviderSelection = (value: unknown): value is ProviderSelection => {
-  if (!isRecord(value) || typeof value.kind !== 'string') {
-    return false;
-  }
-  if (value.kind === 'invalid') {
-    return hasExactKeys(value, ['kind', 'error']) && isProviderConfigurationError(value.error);
-  }
-  if (!hasExactKeys(value, ['kind', 'provider']) || !isRecord(value.provider)) {
-    return false;
-  }
-  const providerKind = value.provider.kind;
-  const kindMatches =
-    value.kind === 'mock'
-      ? providerKind === 'mock'
-      : value.kind === 'ready' && (providerKind === 'direct' || providerKind === 'backend');
-  return (
-    kindMatches &&
-    typeof value.provider.poll === 'function' &&
-    typeof value.provider.control === 'function' &&
-    typeof value.provider.dispose === 'function'
-  );
-};
-
 const providerErrorKinds: readonly ProviderErrorKind[] = [
   'unauthorized',
   'forbidden',

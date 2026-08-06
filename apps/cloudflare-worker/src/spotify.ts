@@ -1,7 +1,8 @@
-import type {
-  NormalizedPlayback,
-  PlaybackCommand,
-  SpotifyPlaybackError
+import {
+  normalizeSpotifyPlaybackPayload,
+  type NormalizedPlayback,
+  type PlaybackCommand,
+  type SpotifyPlaybackError
 } from '@spotify-wallpaper/shared-types';
 
 import type { ApiResult } from './contracts';
@@ -30,7 +31,6 @@ import {
   recordRefreshMetric,
   type RefreshMetricOutcome
 } from './metrics';
-import { emptySpotifyPlayback, normalizeSpotifyPlayback } from './normalize';
 
 const playbackEndpoint = 'https://api.spotify.com/v1/me/player';
 const tokenEndpoint = 'https://accounts.spotify.com/api/token';
@@ -69,10 +69,7 @@ export async function fetchSpotifyPlayback(
   }
 
   if (response.status === 204) {
-    return {
-      ok: true,
-      value: emptySpotifyPlayback(fetchedAt)
-    };
+    return normalizeSpotifyPlaybackPayload({ item: null }, fetchedAt);
   }
   if (!response.ok) {
     return {
@@ -83,7 +80,7 @@ export async function fetchSpotifyPlayback(
 
   const payload = await boundedJson(response);
   return payload.ok
-    ? normalizeSpotifyPlayback(payload.value, fetchedAt)
+    ? normalizeSpotifyPlaybackPayload(payload.value, fetchedAt)
     : payload;
 }
 

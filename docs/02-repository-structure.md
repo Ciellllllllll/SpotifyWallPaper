@@ -31,7 +31,9 @@ import the view; apps must not use relative imports across app boundaries.
   layout, and safe-area semantics remain TypeScript-owned.
 
 - `packages/shared-types/`
-  TypeScript shared types for normalized Spotify playback, settings, layout, theme, visualizer, Rainmeter output, and errors.
+  Dependency-free TypeScript shared types and the single Spotify playback
+  normalizer for normalized playback, settings, layout, theme, visualizer,
+  Rainmeter output, and errors.
 
 - `packages/wallpaper-view/`
   Shared presentational wallpaper/Configurator renderer. It accepts props and
@@ -69,6 +71,11 @@ The Rust/WASM core owns pure calculations only.
 The configurator owns setup workflows, settings editing, export/import, OAuth assistance, and optional Rainmeter output.
 
 Shared types define boundaries. Avoid passing raw Spotify API responses deep into UI components.
+
+`packages/shared-types/src/spotifyPlayback.ts` is the TypeScript normalization
+authority used by the direct provider and Cloudflare Worker. Provider modules
+keep transport, fallback, and warning policy; the Rust normalizer remains a
+separate language-boundary implementation checked against provider-v1 fixtures.
 
 The public Worker owns network and persistence concerns only. It does not render the wallpaper, process audio, mutate the DOM, or replace Rust/WASM visual logic.
 

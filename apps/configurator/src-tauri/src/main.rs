@@ -110,7 +110,7 @@ async fn authorize_spotify_and_copy_swpt1_inner(
 ) -> Result<(), &'static str> {
     let client_id = client_id.trim().to_string();
     let request =
-        build_spotify_oauth_request(&client_id, &redirect_uri).map_err(|_| "invalid_input")?;
+        build_spotify_oauth_request(&client_id, redirect_uri).map_err(|_| "invalid_input")?;
     let target =
         parse_loopback_redirect_uri(&request.redirect_uri).map_err(|_| "invalid_redirect_uri")?;
     let listener = TcpListener::bind(&target.bind_address).map_err(|_| "listener_unavailable")?;

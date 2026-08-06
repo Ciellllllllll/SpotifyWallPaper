@@ -14,7 +14,7 @@ const baselineDivergenceFixture = JSON.parse(
   readFileSync(resolve('tests/fixtures/characterization/known-baseline-divergences.json'), 'utf8')
 ) as { albumDetails: { progressVisible: boolean; controlsVisible: boolean } };
 
-async function freezeBrowserState(page: Page) {
+async function freezeBrowserState(page: Page, samples = audioFixture.samples) {
   await page.addInitScript(() => {
     const NativeDate = Date;
     const fixedNow = NativeDate.parse('2026-08-04T03:04:05.000Z');
@@ -40,7 +40,7 @@ async function freezeBrowserState(page: Page) {
     (window as Window & {
       wallpaperRegisterAudioListener?: (listener: (samples: number[]) => void) => void;
     }).wallpaperRegisterAudioListener = (listener) => listener(samples);
-  }, audioFixture.samples);
+  }, samples);
 }
 
 async function disableMotionAndCaret(page: Page) {
@@ -100,6 +100,33 @@ for (const viewport of viewports) {
         caret: 'hide',
         maxDiffPixelRatio: 0.002
       });
+    });
+
+    test('applies low-power sample and bar limits to waveform and radial rendering', async ({ page }) => {
+      const samples = Array.from({ length: 128 }, (_, index) => index / 128);
+      await freezeBrowserState(page, samples);
+      await page.addInitScript(() => {
+        if (!localStorage.getItem('spotify-wallpaper-settings')) {
+          localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+            schemaVersion: 2,
+            performance: { mode: 'low-power' },
+            visualizer: { mode: 'waveform-line', barCount: 120 }
+          }));
+        }
+      });
+      await page.goto('/');
+      await expect(page.locator('.waveform polyline')).toHaveCount(1);
+      await expect.poll(async () => page.locator('.waveform polyline').getAttribute('points').then((points) => points?.trim().split(' ').length ?? 0)).toBe(24);
+
+      await page.evaluate(() => {
+        const source = JSON.parse(localStorage.getItem('spotify-wallpaper-settings') ?? '{}') as Record<string, unknown> & { visualizer?: Record<string, unknown> };
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          ...source,
+          visualizer: { ...(source.visualizer ?? {}), mode: 'radial-bars', barCount: 120 }
+        }));
+      });
+      await page.reload();
+      await expect(page.locator('.visualizer span')).toHaveCount(24);
     });
   });
 }

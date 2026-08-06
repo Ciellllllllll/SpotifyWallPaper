@@ -5,11 +5,8 @@ import { join } from 'node:path';
 import {
   isNormalizedPlaybackResultEnvelope,
   isPlaybackCommand,
-  isProviderConfigurationError,
-  isProviderResultEnvelope,
-  isProviderSelection
+  isProviderResultEnvelope
 } from './provider';
-import type { ProviderSelection } from './provider';
 
 const fixturesDir = fileURLToPath(new URL('../../../tests/contracts/provider-v1/', import.meta.url));
 const fixtureNames = [
@@ -133,34 +130,4 @@ describe('provider-v1 JSON fixtures', () => {
     }
   });
 
-  it('separates provider configuration errors from network result errors', () => {
-    const invalid: ProviderSelection = {
-      kind: 'invalid',
-      error: {
-        kind: 'configuration',
-        code: 'missing-credentials',
-        message: 'Provider credentials are not configured.'
-      }
-    };
-
-    expect(isProviderConfigurationError(invalid.error)).toBe(true);
-    expect(isProviderConfigurationError({ kind: 'unauthorized', message: 'Authorization is required.' })).toBe(false);
-    const provider = {
-      kind: 'mock',
-      poll: async () => ({ ok: true, value: null }),
-      control: async () => ({ ok: true, value: undefined }),
-      dispose: () => undefined
-    } as const;
-    expect(isProviderSelection({ kind: 'mock', provider })).toBe(true);
-    expect(isProviderSelection({ kind: 'ready', provider })).toBe(false);
-    expect(isProviderSelection({ kind: 'mock', provider, credential: 'unexpected' })).toBe(false);
-
-    class PrototypeMockProvider {
-      readonly kind = 'mock' as const;
-      poll = async () => ({ ok: true as const, value: null });
-      control = async () => ({ ok: true as const, value: undefined });
-      dispose(): void {}
-    }
-    expect(isProviderSelection({ kind: 'mock', provider: new PrototypeMockProvider() })).toBe(true);
-  });
 });

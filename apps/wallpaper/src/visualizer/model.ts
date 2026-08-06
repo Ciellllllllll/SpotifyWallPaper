@@ -2,33 +2,6 @@ import type { VisualizerFrame, WallpaperPreferences } from '@spotify-wallpaper/s
 import { normalizeSamplesWithCore } from '../wasm/visualCore';
 import { normalizeSamplesFallback } from '../wasm/fallback';
 
-export interface EffectiveVisualizerConfig {
-  barCount: number;
-  glowStrength: number;
-  rotationSpeed: number;
-  sampleStep: number;
-}
-
-export interface VisualizerBar {
-  angle: number;
-  value: number;
-}
-
-export const effectiveVisualizerConfig = (settings: WallpaperPreferences): EffectiveVisualizerConfig => {
-  const requestedBars = settings.visualizer.barCount;
-  const maxBars =
-    settings.performance.mode === 'low-power' ? 24 : settings.performance.mode === 'high-effect' ? 120 : 72;
-  const sampleStep = settings.performance.mode === 'low-power' ? 2 : 1;
-  const glowScale = settings.performance.mode === 'low-power' ? 0.45 : settings.performance.mode === 'high-effect' ? 1.2 : 1;
-
-  return {
-    barCount: Math.max(8, Math.min(maxBars, Math.round(requestedBars))),
-    glowStrength: clamp01(settings.visualizer.glowStrength * glowScale),
-    rotationSpeed: settings.performance.mode === 'low-power' ? settings.visualizer.rotationSpeed * 0.35 : settings.visualizer.rotationSpeed,
-    sampleStep
-  };
-};
-
 export const shapeVisualizerFrame = (
   frame: VisualizerFrame,
   previous: VisualizerFrame | null,
@@ -60,35 +33,6 @@ export const shouldIgnoreSilentWallpaperFrame = (
   frame: VisualizerFrame,
   settings: WallpaperPreferences['visualizer']
 ): boolean => frame.source === 'wallpaper-engine' && frame.peak <= settings.noiseGate;
-
-export const buildVisualizerBars = (
-  frame: VisualizerFrame,
-  settings: WallpaperPreferences,
-  config: EffectiveVisualizerConfig = effectiveVisualizerConfig(settings)
-): VisualizerBar[] => {
-  const samples = downsample(frame.samples, config.barCount, config.sampleStep);
-  const mirrored = settings.visualizer.mirrorMode === 'mirror';
-
-  return samples.map((sample, index) => {
-    const sourceIndex = mirrored && index >= samples.length / 2 ? samples.length - 1 - index : index;
-    return {
-      angle: (index / samples.length) * 360,
-      value: clamp01(samples[Math.max(0, sourceIndex)])
-    };
-  });
-};
-
-export const buildWaveformPath = (frame: VisualizerFrame, pointCount = 48): string => {
-  const samples = downsample(frame.samples, Math.max(2, pointCount), 1);
-  const lastIndex = Math.max(1, samples.length - 1);
-  const points = samples.map((sample, index) => {
-    const x = (index / lastIndex) * 100;
-    const y = 62 - clamp01(sample) * 44;
-    return `${round(x)},${round(y)}`;
-  });
-
-  return `M ${points.join(' L ')}`;
-};
 
 const normalizeSample = (sample: number, settings: WallpaperPreferences['visualizer']): number => {
   if (!Number.isFinite(sample)) {
@@ -128,14 +72,6 @@ const frameFromSamples = (samples: number[], source: VisualizerFrame['source'], 
   };
 };
 
-const downsample = (samples: number[], count: number, step: number): number[] => {
-  const source = samples.length > 0 ? samples.filter((_, index) => index % step === 0) : [0];
-  return Array.from({ length: count }, (_, index) => {
-    const sourceIndex = Math.min(source.length - 1, Math.floor((index / count) * source.length));
-    return source[sourceIndex] ?? 0;
-  });
-};
-
 const average = (samples: number[]): number => {
   if (samples.length === 0) {
     return 0;
@@ -145,4 +81,3 @@ const average = (samples: number[]): number => {
 };
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
-const round = (value: number): number => Math.round(value * 100) / 100;
