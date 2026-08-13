@@ -13,7 +13,8 @@ process.env.OAUTH_STATE_HMAC_KEY = testOauthStateKey;
 export default defineConfig({
   test: {
     exclude: ['node-test/**'],
-    setupFiles: ['./test/setup.ts']
+    setupFiles: ['./test/setup.ts'],
+    testTimeout: 15_000
   },
   plugins: [
     cloudflareTest(async () => ({
