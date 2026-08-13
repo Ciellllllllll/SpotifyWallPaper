@@ -25,7 +25,6 @@ Architecture or cross-cutting work must also read:
 - `docs/02-repository-structure.md`
 - `docs/03-implementation-phases.md`
 - `docs/30-subagent-matrix.md`
-- `docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`
 
 Public backend work must also read `docs/25-public-backend.md`.
 
@@ -45,41 +44,54 @@ Do not remove mock/browser preview support.
 Do not discard previous track state immediately on track change; transitions need previous and current states.
 Please commit once each phase is complete. Please refer to previous commit messages when writing your commit message.
 
-## Active refactor execution policy
-The active structure-first refactor is governed by
-`docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`
-and `docs/superpowers/plans/2026-08-04-system-wide-refactor-ponytail.md`.
-Luna/MAX is the only implementation, test, finding-fix, and commit owner. A
-single `gpt-5.6-sol` / medium SubAgent is reused as a read-only reviewer; it
-must not edit files or run Git operations. No other model, reasoning level,
-fallback, implementation SubAgent, branch, worktree, push, PR, merge, or
-deploy is allowed.
+## Ponytail baseline and review policy
+For every implementation or QA plan, resolve the official Ponytail
+marketplace's latest stable release when the plan is finalized and again at
+execution start if that occurs on another day. Confirm the marketplace Git source with
+`codex plugin marketplace list --json`, refresh its snapshot with
+`codex plugin marketplace upgrade ponytail --json`, and cross-check the
+source and exact revision in `.codex-marketplace-install.json`, the snapshot
+and installed `.codex-plugin/plugin.json` plus `package.json`, and
+`codex plugin list --available --json --marketplace ponytail`. If the
+advertised stable differs from the installed version, update with
+`codex plugin add ponytail@ponytail --json`.
 
-Ponytail 4.8.4 standard SessionStart, SubagentStart, and UserPromptSubmit
-hooks must remain trusted/enabled and full mode must be active before each
-Phase. After Sol's explicit PASS on the exact diff, run the final
-`@ponytail-audit`; only `Lean already. Ship.` is PONYTAIL PASS. A finding or
-diff change returns to Sol review. Commit only after consecutive Sol and
-Ponytail PASS results, then verify HEAD and a clean worktree.
+Do not adopt a prerelease, source mismatch, indeterminate version, update that
+needs additional authority, or version with unknown compatibility. Stop on
+failure; do not automatically remove Ponytail or fall back to an older
+version. After an update, restart Codex Desktop and use a new task to verify
+identity/version, standard trusted/enabled `SessionStart`, `SubagentStart`, and
+`UserPromptSubmit` hooks, permissions, full mode, the `ponytail` and
+`ponytail-audit` skills, the whole-repository read-only audit contract, and the
+`Lean already. Ship.`
+sentinel. An update also invalidates any earlier reviewer: create a new
+read-only reviewer with the same model, reasoning level, permissions, and
+scope, then review the complete plan again.
+
+Freeze the resolved source, snapshot revision, exact version, verification
+time, hooks, mode, and audit result for that plan in `.codex/reports` and in
+the report's `Review outcome`; a tracked plan or report must carry the same
+baseline. Preserve exact versions in historical evidence. For each frozen
+diff, obtain an explicit read-only Sol review PASS before the Ponytail full
+audit. Only `Lean already. Ship.` is PONYTAIL PASS. A finding or diff change
+returns to Sol review. Commit only after consecutive Sol and Ponytail PASS
+results, then verify HEAD and a clean worktree.
 
 ## Architectural rule
 The wallpaper display is a Web Wallpaper. Rendering belongs to the web frontend. Rust is used for pure logic through WASM and for the optional Tauri configurator backend.
 
 The optional public Spotify proxy is a separate TypeScript Cloudflare Worker. It may own Spotify HTTP calls, OAuth PKCE, encrypted token persistence, and proxy API routes. It must not become required for browser mock mode, direct legacy mode, or the loopback Rust backend.
 
-The Rust/WASM core must not own Spotify HTTP calls, DOM mutation, Canvas/WebGL drawing, or Wallpaper Engine API registration. It may validate settings, compute layout, generate themes, normalize visualizer data, and compute animation helper values.
+The Rust/WASM core must not own Spotify HTTP calls, DOM mutation, Canvas/WebGL drawing, Wallpaper Engine API registration, settings, or layout. TypeScript owns settings and layout authority. Rust/WASM is limited to typed-array visual normalization and readability calculations.
 
 ## Required implementation order
-For the active system-wide refactor, follow
-`docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`.
-It owns the refactor phase sequence and review/commit boundaries.
-
-The 2026-07-27 design and its Phase 0 plan are historical evidence. They are
-read for context but do not override the active structure-first authority.
-
 `docs/03-implementation-phases.md` preserves the product-construction order.
 Use it when adding product capability, and do not implement advanced effects
 before the MVP foundations are in place.
+
+The 2026-07-27 and 2026-08-04 system-wide refactor designs and plans are
+historical evidence. They may explain prior work but do not override current
+entry and domain specifications.
 
 Minimum order:
 

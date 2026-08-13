@@ -23,7 +23,8 @@ Create a highly customizable Wallpaper Engine Web Wallpaper that reacts to Spoti
 ## Primary technical direction
 
 Use Svelte + TypeScript + Vite for the Web Wallpaper frontend.
-Use Rust/WASM for pure visual and settings logic.
+Use TypeScript as the settings and layout authority.
+Use Rust/WASM only for typed-array visual normalization and readability logic.
 Use Tauri for the optional configurator app.
 Use a monorepo structure.
 

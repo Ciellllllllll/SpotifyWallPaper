@@ -1,14 +1,14 @@
 # Quality Gates
 
-## Active refactor gate
+## Review gate
 
-For the active 2026-08-04 structure-first refactor, the exact order is Luna
-targeted verification, one read-only Sol/medium review covering Code,
-Architecture, SpecGuard, and Security when the Phase requires it, fixes and
-re-review until explicit `PASS`, then Ponytail final audit on the same diff.
-`Lean already. Ship.` is the only accepted `PONYTAIL PASS`. A Ponytail finding
-or changed diff returns to Sol review. Phase commits are made only after both
-passes are consecutive and the worktree is clean; push is prohibited.
+For code-changing work, use the Ponytail baseline and review policy in
+`AGENTS.md`. The exact order is targeted verification, a read-only Sol review
+covering Code, Architecture, SpecGuard, and Security when required, fixes and
+re-review until explicit `PASS`, then the Ponytail full audit on the same
+diff. `Lean already. Ship.` is the only accepted `PONYTAIL PASS`. A Ponytail
+finding or changed diff returns to Sol review. Commit only after both passes
+are consecutive, then verify the committed HEAD and a clean worktree.
 
 ## Required for every phase
 

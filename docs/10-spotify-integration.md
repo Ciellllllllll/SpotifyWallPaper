@@ -4,8 +4,8 @@
 
 This domain handles Spotify OAuth, token refresh, API polling, normalized playback state, playback operations, and Spotify error handling.
 
-During the active structure-first refactor, these concerns cross a provider
-boundary. Mock, direct, and backend are explicit `PlaybackProvider` kinds with
+These concerns cross a provider boundary. Mock, direct, and backend are
+explicit `PlaybackProvider` kinds with
 one polling/control contract. Provider selection distinguishes `mock`,
 `ready`, and `invalid`; configuration errors are not network errors. The
 runtime owns lifecycle and scheduling, while providers own their transport and

@@ -39,6 +39,10 @@ Each report must include exactly these fields:
 - Verification commands
 - Next recommended task
 
+Do not add report fields for Ponytail. Record the plan's frozen marketplace
+source, snapshot revision, exact version, verification time, hooks, mode, and
+audit result under `Review outcome`.
+
 ## Documentation rule
 
 If implementation behavior changes, docs must be updated in the same phase. Do

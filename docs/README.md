@@ -42,7 +42,7 @@ This directory splits the project specification into small files so Codex and Su
   `/terms`.
 - `release-notes-public-backend-beta.md`: public backend beta status and
   release blockers.
-- `release-notes-v0.0.1.md`: current milestone release notes, known gaps, and verification commands.
+- `release-notes-v0.0.1.md`: historical milestone release evidence.
 
 `post-v0.0.1-stabilization.md` is the current stabilization specification. The
 same-named file under `phase-reports/` is historical execution evidence.
@@ -60,12 +60,12 @@ same-named file under `phase-reports/` is historical execution evidence.
 ## Designs and implementation plans
 
 - `superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`:
-  active structure-first authority for the repository-wide refactor.
+  historical evidence for the completed structure-first refactor.
 - `superpowers/specs/2026-07-27-system-wide-refactoring-design.md`: historical
   evidence for the earlier reviewed design.
-- `superpowers/plans/README.md`: current and executed-plan index.
-- `superpowers/plans/2026-08-04-system-wide-refactor-ponytail.md`: active
-  Ponytail-gated Phase 0B–9 execution plan.
+- `superpowers/plans/README.md`: operational plan-history index.
+- `superpowers/plans/2026-08-04-system-wide-refactor-ponytail.md`: historical
+  Ponytail-gated Phase 0B–9 execution evidence.
 - `superpowers/plans/2026-07-27-system-wide-refactor-phase-0-repository-specification-truth.md`:
   historical Phase 0 repository-authority execution evidence.
 - `superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md`: executed

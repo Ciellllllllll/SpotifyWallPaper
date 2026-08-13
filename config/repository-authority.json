@@ -68,30 +68,22 @@
         "docs/privacy.md",
         "docs/qa-checklist.md",
         "docs/release-notes-public-backend-beta.md",
-        "docs/release-notes-v0.0.1.md",
         "docs/user-guide.md"
-      ]
-    },
-    {
-      "name": "approved-designs",
-      "classification": "normative",
-      "paths": [
-        "docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md"
       ]
     },
     {
       "name": "historical-designs",
       "classification": "historical-evidence",
       "paths": [
-        "docs/superpowers/specs/2026-07-27-system-wide-refactoring-design.md"
+        "docs/superpowers/specs/2026-07-27-system-wide-refactoring-design.md",
+        "docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md"
       ]
     },
     {
-      "name": "current-plans",
-      "classification": "implementation-plan",
+      "name": "plan-index",
+      "classification": "operational",
       "paths": [
-        "docs/superpowers/plans/README.md",
-        "docs/superpowers/plans/2026-08-04-system-wide-refactor-ponytail.md"
+        "docs/superpowers/plans/README.md"
       ]
     },
     {
@@ -99,7 +91,15 @@
       "classification": "historical-evidence",
       "paths": [
         "docs/superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md",
-        "docs/superpowers/plans/2026-07-27-system-wide-refactor-phase-0-repository-specification-truth.md"
+        "docs/superpowers/plans/2026-07-27-system-wide-refactor-phase-0-repository-specification-truth.md",
+        "docs/superpowers/plans/2026-08-04-system-wide-refactor-ponytail.md"
+      ]
+    },
+    {
+      "name": "historical-release-notes",
+      "classification": "historical-evidence",
+      "paths": [
+        "docs/release-notes-v0.0.1.md"
       ]
     },
     {
