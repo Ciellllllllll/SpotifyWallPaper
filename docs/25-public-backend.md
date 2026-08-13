@@ -4,11 +4,11 @@
 
 The public backend is an optional TypeScript Cloudflare Worker using D1. It exists so a Wallpaper Engine Workshop build can poll Spotify without receiving Spotify Access or Refresh Tokens.
 
-The active structure-first refactor does not redesign this Worker's OAuth, D1,
-encryption, refresh, or deletion state machines. It only requires the Worker
-to conform at its provider boundary to the versioned provider-v1 fixtures when
-that Phase is reached. Invocation logs remain disabled, and the Worker remains
-optional for browser mock, direct legacy, and loopback operation.
+The current architecture keeps this Worker's OAuth, D1, encryption, refresh,
+and deletion state machines separate from wallpaper rendering. The Worker
+conforms at its provider boundary to the versioned provider-v1 fixtures.
+Invocation logs remain disabled, and the Worker remains optional for browser
+mock, direct legacy, and loopback operation.
 
 The loopback Rust backend remains the local-development backend. Direct browser-side refresh and `swpt1.` remain legacy-compatible. Browser mock mode remains available without any backend.
 

@@ -1,9 +1,8 @@
 # Repository Structure
 
-## Active structure-first refactor
+## Current boundaries
 
-The 2026-08-04 structure-first authority is the current cross-cutting design.
-The only new workspace permitted by that design is `packages/wallpaper-view`.
+`packages/wallpaper-view` is the shared presentation workspace.
 `packages/shared-types` remains dependency-free and owns shared DTOs, while
 runtime owns lifecycle and the view owns presentation. The runtime must never
 import the view; apps must not use relative imports across app boundaries.
@@ -26,7 +25,7 @@ import the view; apps must not use relative imports across app boundaries.
   Optional public Spotify proxy. TypeScript Cloudflare Worker owning OAuth PKCE, encrypted D1 credentials, access-token refresh, playback/control proxying, reauthorization, and account deletion.
 
 - `crates/visual-core/`
-  Rust pure logic crate. The Phase 8 boundary exposes only measured visual
+  Rust pure logic crate. The current boundary exposes only measured visual
   normalization/readability algorithms through typed arrays. Settings,
   layout, and safe-area semantics remain TypeScript-owned.
 
@@ -92,8 +91,8 @@ Settings must be validated before UI use.
 Wallpaper Engine API access must be isolated behind an adapter.
 Browser mock mode must use the same display model as real Spotify mode.
 
-The baseline Rust/settings responsibilities remain characterization inputs until
-their owning Phase changes the domain documents in the same reviewed diff.
+Old Rust settings/layout characterization is historical evidence, not runtime
+authority.
 
 New Markdown under `docs/` must be tracked and classified in the authority
 policy. New ignored output must declare an owner, producer, representative

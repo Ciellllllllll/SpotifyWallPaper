@@ -5,11 +5,9 @@ phase attempted, changed, or measured; their prose is not current normative
 behavior and does not necessarily enumerate the exact commit diff that first
 tracked the report.
 
-Use `AGENTS.md`, `docs/01-project-goals-and-non-goals.md`, the current domain
-specifications (`docs/10` through `docs/25`), and the active
-`docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`
-for current behavior. Older system-wide designs and reports remain historical
-evidence.
+Use `AGENTS.md`, `docs/01-project-goals-and-non-goals.md`, and the current
+domain specifications (`docs/10` through `docs/25`) for current behavior.
+System-wide designs, plans, and reports remain historical evidence.
 
 ## Product construction and stabilization history
 
@@ -40,7 +38,7 @@ current v1 scope.
 
 - `cloudflare-worker-public-backend.md`
 
-## Active refactor evidence
+## System-wide refactor evidence
 
 - `system-wide-refactor-phase-0-repository-specification-truth.md`
 

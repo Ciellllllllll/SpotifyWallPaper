@@ -2,18 +2,16 @@
 
 ## Authority order
 
-For the active cross-cutting refactor, the normative approved design is
-`docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`.
-The 2026-07-27 design and its execution plan are historical evidence and may
-explain prior commits but cannot override the current structure-first plan.
+The 2026-07-27 and 2026-08-04 system-wide refactor designs and plans are
+historical evidence. They may explain prior commits but cannot override
+current entry or domain specifications.
 
 Current normative behavior is determined in this order:
 
 1. `AGENTS.md` and the mandatory entry documents.
 2. Current domain specifications under `docs/`.
-3. Approved designs for active cross-cutting work.
-4. Current implementation plans for execution detail.
-5. Tracked code, tests, and machine-readable contracts.
+3. Current operational procedures and task-specific reviewed plans.
+4. Tracked code, tests, and machine-readable contracts.
 
 Historical phase reports and executed plans are evidence of prior work. They
 do not override current specifications and need not describe the exact diff of
@@ -53,8 +51,8 @@ path was not declared in advance; its target is never traversed.
 Exactly 26 recovered historical documents are listed in the policy and have
 exact `-text` entries in `.gitattributes`. Those entries preserve their
 original worktree bytes through Git clean filters. The exception is
-file-specific: it does not apply to `docs/00-codex-entrypoint.md`, current
-plans/reports, all Markdown, or a directory wildcard.
+file-specific: it does not apply to `docs/00-codex-entrypoint.md`, plan/report
+indexes, all Markdown, or a directory wildcard.
 
 Two recovered reports retain historical CRLF bytes. Their exact path entries
 also disable Git's trailing-space diagnostic so `git diff --check` does not
@@ -194,7 +192,7 @@ Authority migrations must:
 - reject deletion, rename, copy, type, mode, or extra-path drift;
 - compare protected recovered bytes and static local path/type/size metadata;
 - run repository authority, baseline gates, and mock preview, then have the
-  single read-only Sol reviewer cover quality, Security when applicable, and
+  read-only Sol reviewer cover quality, Security when applicable, and
   SpecGuard as separate perspectives;
 - commit only the exact reviewed branch/parent/tree tuple.
 

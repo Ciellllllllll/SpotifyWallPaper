@@ -18,17 +18,16 @@ procedure.
 6. Select the domain docs for the current task.
 7. For architecture or cross-cutting work, also read
    `docs/02-repository-structure.md`, `docs/03-implementation-phases.md`,
-   `docs/30-subagent-matrix.md`, and the approved system-wide refactor design.
+   and `docs/30-subagent-matrix.md`.
 8. For public-backend work, also read `docs/25-public-backend.md`.
-9. For the active system-wide refactor, read
-   `docs/superpowers/specs/2026-08-04-system-wide-refactoring-structure-first.md`
-   and `docs/superpowers/plans/2026-08-04-system-wide-refactor-ponytail.md`.
+9. For code-changing work, resolve and freeze the Ponytail baseline and use
+   the review sequence defined by `AGENTS.md`.
 
 ## Current phase selection
 
 Inspect the current branch, tracked specifications, phase reports, and tests
-before choosing work. The active 2026-08-04 structure-first authority owns the
-refactor sequence. The 2026-07-27 design is historical evidence.
+before choosing work. The 2026-07-27 and 2026-08-04 system-wide refactor
+designs and plans are historical evidence.
 `docs/03-implementation-phases.md` remains the normative product-capability
 construction order for new capability work.
 

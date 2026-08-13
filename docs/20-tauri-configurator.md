@@ -4,8 +4,8 @@
 
 The configurator is optional. The wallpaper must not require it at runtime.
 
-During the structure-first refactor, Configurator preferences use the same
-Settings v2 authority and `packages/wallpaper-view` renderer as Wallpaper.
+Configurator preferences use the same Settings v2 authority and
+`packages/wallpaper-view` renderer as Wallpaper.
 Preview is network-free and control intents never reach Spotify. Native auth
 and credential handling remain a separate Rust boundary; ordinary WebView
 state exposes only presence/status or fixed error codes, never raw secrets.

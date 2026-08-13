@@ -1,6 +1,6 @@
 # Player UI and Clock
 
-The structure-first runtime owns progress interpolation, clock scheduling,
+The wallpaper runtime owns progress interpolation, clock scheduling,
 playback history, and control intent. The shared view only renders the
 secret-free ViewModel. `album-only` is an explicit preference and does not
 silently mutate saved layout; long titles, paused playback, missing items, and
