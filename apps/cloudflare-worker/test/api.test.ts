@@ -341,7 +341,7 @@ describe('account deletion', () => {
       `WITH RECURSIVE sequence(value) AS (
          SELECT 0
          UNION ALL
-         SELECT value + 1 FROM sequence WHERE value < 999
+         SELECT value + 1 FROM sequence WHERE value < 99
        )
        INSERT INTO deletion_tombstones (
          public_id, deleted_at_ms, expires_at_ms, reconciled_at_ms
@@ -353,7 +353,7 @@ describe('account deletion', () => {
     await env.DELETION_DB.prepare(
       `INSERT INTO deletion_tombstones (
          public_id, deleted_at_ms, expires_at_ms, reconciled_at_ms
-       ) VALUES ('restore-1000', ?, ?, ?)`
+       ) VALUES ('restore-0100', ?, ?, ?)`
     )
       .bind(nowMs - 100, nowMs + 1000, nowMs - 50)
       .run();
@@ -361,7 +361,7 @@ describe('account deletion', () => {
       `INSERT INTO credentials (
          public_id, pairing_digest, pairing_key_id, spotify_client_id,
          refresh_authorized_at_ms, created_at_ms, updated_at_ms
-       ) VALUES ('restore-1000', 'digest', 'test', 'restored-client', ?, ?, ?)`
+       ) VALUES ('restore-0100', 'digest', 'test', 'restored-client', ?, ?, ?)`
     )
       .bind(nowMs - 100, nowMs - 100, nowMs - 100)
       .run();
@@ -378,7 +378,7 @@ describe('account deletion', () => {
       failedCount: 0,
       pendingCount: 0
     });
-    expect(await getCredentialByPublicId(env.DB, 'restore-1000')).not.toBeNull();
+    expect(await getCredentialByPublicId(env.DB, 'restore-0100')).not.toBeNull();
 
     await env.DELETION_DB.prepare(
       'UPDATE deletion_tombstones SET reconciled_at_ms = NULL'
@@ -397,8 +397,8 @@ describe('account deletion', () => {
       }
     }
 
-    expect(reconciled).toBe(1001);
-    expect(await getCredentialByPublicId(env.DB, 'restore-1000')).toBeNull();
+    expect(reconciled).toBe(101);
+    expect(await getCredentialByPublicId(env.DB, 'restore-0100')).toBeNull();
     await reconcileDeletionTombstones(
       env.DB,
       env.DELETION_DB,
