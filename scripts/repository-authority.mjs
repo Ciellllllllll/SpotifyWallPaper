@@ -1103,6 +1103,26 @@ export async function queryWindowsReparsePoint(
       },
     );
     let settled = false;
+    let timeout;
+    const settle = (complete, killChild = false) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeout !== undefined) {
+        clearTimeout(timeout);
+      }
+      if (killChild) {
+        try {
+          child.kill();
+        } catch {
+          // The fixed inspection error remains authoritative.
+        }
+      }
+      complete();
+    };
+    const rejectInspection = () =>
+      reject(new TypeError('Reparse-point inspection failed.'));
     const diagnosticChunks = [];
     let diagnosticBytes = 0;
     const captureDiagnostic = (chunk) => {
@@ -1114,42 +1134,29 @@ export async function queryWindowsReparsePoint(
         : Buffer.from(String(chunk), 'utf8');
       diagnosticBytes += buffer.length;
       if (diagnosticBytes > 4_096) {
-        settled = true;
-        child.kill();
-        reject(new TypeError('Reparse-point inspection failed.'));
+        settle(rejectInspection, true);
         return;
       }
       diagnosticChunks.push(buffer);
     };
     child.stdout?.on('data', captureDiagnostic);
     child.stderr?.on('data', captureDiagnostic);
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        child.kill();
-        reject(new TypeError('Reparse-point inspection failed.'));
-      }
+    timeout = setTimeout(() => {
+      settle(rejectInspection, true);
     }, timeoutMs);
-    timeout.unref();
     child.once('error', () => {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timeout);
-        reject(new TypeError('Reparse-point inspection failed.'));
-      }
+      settle(rejectInspection);
     });
     child.once('close', (exitCode, signal) => {
       if (settled) {
         return;
       }
-      settled = true;
-      clearTimeout(timeout);
       if (signal !== null || (exitCode !== 0 && exitCode !== 1)) {
-        reject(new TypeError('Reparse-point inspection failed.'));
+        settle(rejectInspection);
         return;
       }
       if (exitCode === 0) {
-        resolve(true);
+        settle(() => resolve(true));
         return;
       }
       const diagnostic = Buffer.concat(diagnosticChunks).toString(
@@ -1160,10 +1167,10 @@ export async function queryWindowsReparsePoint(
           .split(/\r?\n/u)
           .find((line) => line.trim().length > 0) ?? '';
       if (!/^[^\d\r\n]*4390:/u.test(firstDiagnosticLine)) {
-        reject(new TypeError('Reparse-point inspection failed.'));
+        settle(rejectInspection);
         return;
       }
-      resolve(false);
+      settle(() => resolve(false));
     });
   });
 }
