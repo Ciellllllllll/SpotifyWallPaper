@@ -58,6 +58,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Build shared types for clean-clone consumers
+        run: npm run build:shared-types
+
       - name: Test Cloudflare Worker
         run: npm run test -w @spotify-wallpaper/cloudflare-worker
 
