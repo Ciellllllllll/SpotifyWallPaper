@@ -4,7 +4,7 @@
 
 All customization is represented by a versioned settings object. Settings must be safe to paste into Wallpaper Engine properties and safe to edit through the configurator.
 
-## Structure-first v2 authority
+## Settings v2 authority
 
 Settings v2 is the single preference authority for Wallpaper and Configurator.
 Its default provider is `mock` and its default display mode is `album-only`.

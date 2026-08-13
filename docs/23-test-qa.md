@@ -1,17 +1,17 @@
 # Test and QA
 
-## Structure-first regression gates
+## Regression gates
 
-Every refactor Phase starts from characterization or a red contract test and
-ends with targeted verification, Sol/medium review, SpecGuard (and Security
-where applicable), then same-diff Ponytail audit. Browser mock startup must
-remain credential-free without Spotify, Tauri, Worker, or WASM. Phase 1 freezes
-fixed-time visual fixtures at 1920×1080 and 3440×1440 for both display modes;
+Every code-changing phase starts from characterization or a red contract test
+and ends with targeted verification, Sol/medium review, SpecGuard (and
+Security where applicable), then same-diff Ponytail audit. Browser mock startup must
+remain credential-free without Spotify, Tauri, Worker, or WASM. Fixed-time
+visual fixtures cover 1920×1080 and 3440×1440 for both display modes;
 the accepted maximum visual diff ratio is 0.002.
 
 ## Unit tests
 
-Rust/WASM core (current Phase 8 boundary):
+Rust/WASM core (current boundary):
 
 - visualizer normalization and typed-array safety
 - readability calculation

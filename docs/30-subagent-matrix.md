@@ -1,13 +1,12 @@
 # SubAgent Matrix
 
-## Active structure-first reviewer assignment
+## Review roles
 
-The role perspectives below remain useful review checklists, but the active
-2026-08-04 refactor uses one dedicated read-only `gpt-5.6-sol` / medium Sol
-reviewer for all of them. Luna/MAX implements and fixes findings. No other
-model or implementation SubAgent is used; Security is added as a perspective
-for credential, provider, Worker, and Tauri phases rather than as a second
-implementation path.
+Review roles are read-only: they inspect the requested scope but do not edit
+files or run Git operations. The current task or reviewed plan assigns
+implementation ownership and any required model or reasoning level. Completed
+plans do not reserve an agent. Security remains an independent perspective for
+credential, provider, Worker, and Tauri work.
 
 ## SpecGuard Agent
 

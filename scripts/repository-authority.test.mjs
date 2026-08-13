@@ -487,7 +487,7 @@ test('queries Windows reparse attributes without emitting command output', async
   });
 });
 
-test('pins the reparse query executable and fails a hung query closed', async (t) => {
+test('pins the reparse query executable and validates fixed diagnostics', async (t) => {
   if (process.platform !== 'win32') {
     t.skip('Windows reparse attributes are host-specific.');
     return;
@@ -621,24 +621,143 @@ test('pins the reparse query executable and fails a hung query closed', async (t
   );
   assert.equal(untrustedSpawned, false);
 
-  let killed = false;
-  const hungChild = new EventEmitter();
-  hungChild.kill = () => {
-    killed = true;
+});
+
+test('rejects oversized reparse diagnostics without a live timeout', async (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('Windows reparse attributes are host-specific.');
+    return;
+  }
+  const expectedExecutable = 'C:\\Windows\\System32\\fsutil.exe';
+  const baselineTimeouts = process
+    .getActiveResourcesInfo()
+    .filter((resource) => resource === 'Timeout').length;
+  let killCount = 0;
+  const oversizedChild = new EventEmitter();
+  oversizedChild.kill = () => {
+    killCount += 1;
     return true;
   };
+  oversizedChild.stdout = new EventEmitter();
+  oversizedChild.stderr = new EventEmitter();
+
   await assert.rejects(
     queryWindowsReparsePoint('C:\\safe\\path', {
       resolveExecutable: async () => expectedExecutable,
-      spawnProcess: () => hungChild,
-      timeoutMs: 1,
+      spawnProcess: () => {
+        queueMicrotask(() => {
+          oversizedChild.stderr.emit('data', Buffer.alloc(4_097, 0x61));
+          oversizedChild.emit('error', new Error('late error'));
+          oversizedChild.emit('close', null, 'SIGTERM');
+        });
+        return oversizedChild;
+      },
+      timeoutMs: 5_000,
     }),
     {
       name: 'TypeError',
       message: 'Reparse-point inspection failed.',
     },
   );
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(killCount, 1);
+  assert.equal(
+    process
+      .getActiveResourcesInfo()
+      .filter((resource) => resource === 'Timeout').length,
+    baselineTimeouts,
+  );
+});
+
+test('clears the reparse timeout when the child errors first', async (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('Windows reparse attributes are host-specific.');
+    return;
+  }
+  const expectedExecutable = 'C:\\Windows\\System32\\fsutil.exe';
+  const baselineTimeouts = process
+    .getActiveResourcesInfo()
+    .filter((resource) => resource === 'Timeout').length;
+  let killCount = 0;
+  const failedChild = new EventEmitter();
+  failedChild.kill = () => {
+    killCount += 1;
+    return true;
+  };
+  failedChild.stdout = new EventEmitter();
+  failedChild.stderr = new EventEmitter();
+
+  await assert.rejects(
+    queryWindowsReparsePoint('C:\\safe\\path', {
+      resolveExecutable: async () => expectedExecutable,
+      spawnProcess: () => {
+        queueMicrotask(() => {
+          failedChild.emit('error', new Error('spawn failed'));
+          failedChild.stderr.emit('data', Buffer.alloc(4_097, 0x61));
+          failedChild.emit('close', 1, null);
+        });
+        return failedChild;
+      },
+      timeoutMs: 5_000,
+    }),
+    {
+      name: 'TypeError',
+      message: 'Reparse-point inspection failed.',
+    },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(killCount, 0);
+  assert.equal(
+    process
+      .getActiveResourcesInfo()
+      .filter((resource) => resource === 'Timeout').length,
+    baselineTimeouts,
+  );
+});
+
+test('fails a hung reparse query closed', async (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('Windows reparse attributes are host-specific.');
+    return;
+  }
+  const expectedExecutable = 'C:\\Windows\\System32\\fsutil.exe';
+  const baselineTimeouts = process
+    .getActiveResourcesInfo()
+    .filter((resource) => resource === 'Timeout').length;
+  let killed = false;
+  const hungChild = new EventEmitter();
+  hungChild.kill = () => {
+    killed = true;
+    return true;
+  };
+  const hungQuery = queryWindowsReparsePoint('C:\\safe\\path', {
+    resolveExecutable: async () => expectedExecutable,
+    spawnProcess: () => hungChild,
+    timeoutMs: 100,
+  });
+  await Promise.resolve();
+  try {
+    assert.equal(
+      process
+        .getActiveResourcesInfo()
+        .filter((resource) => resource === 'Timeout').length,
+      baselineTimeouts + 1,
+    );
+  } finally {
+    await assert.rejects(hungQuery, {
+      name: 'TypeError',
+      message: 'Reparse-point inspection failed.',
+    });
+  }
   assert.equal(killed, true);
+  assert.equal(
+    process
+      .getActiveResourcesInfo()
+      .filter((resource) => resource === 'Timeout').length,
+    baselineTimeouts,
+  );
 });
 
 describe('recursive Gitignore semantics', () => {
