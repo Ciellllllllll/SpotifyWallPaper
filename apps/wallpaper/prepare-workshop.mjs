@@ -1,11 +1,18 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const projectPath = resolve(process.argv[2] ?? 'dist/project.json');
+const metadataPath = resolve(
+  process.argv[3] ?? fileURLToPath(new URL('workshop-metadata.json', import.meta.url))
+);
 
 try {
   const officialOrigin = requireOfficialHttpsOrigin(
     process.env.VITE_SPOTIFY_BACKEND_ORIGIN
+  );
+  const workshopId = requireWorkshopId(
+    JSON.parse(await readFile(metadataPath, 'utf8'))
   );
   const project = JSON.parse(await readFile(projectPath, 'utf8'));
   const properties = project?.general?.properties;
@@ -32,6 +39,11 @@ try {
   refreshToken.value = '';
   pairingToken.value = '';
   settingsJson.value = '';
+  if (workshopId === null) {
+    delete project.workshopid;
+  } else {
+    project.workshopid = workshopId;
+  }
   await writeFile(projectPath, `${JSON.stringify(project, null, 2)}\n`, 'utf8');
 } catch {
   console.error('Workshop project preparation failed.');
@@ -56,4 +68,18 @@ function requireOfficialHttpsOrigin(value) {
     throw new Error('Official backend must be an HTTPS origin.');
   }
   return url.origin;
+}
+
+/** @param {unknown} value */
+function requireWorkshopId(value) {
+  const workshopId = value && typeof value === 'object' && !Array.isArray(value)
+    ? /** @type {{ workshopid?: unknown }} */ (value).workshopid
+    : undefined;
+  if (workshopId === null) {
+    return null;
+  }
+  if (typeof workshopId !== 'string' || !/^[1-9][0-9]*$/.test(workshopId)) {
+    throw new Error('Workshop ID must be null or a positive decimal string.');
+  }
+  return workshopId;
 }

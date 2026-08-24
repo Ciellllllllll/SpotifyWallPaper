@@ -21,6 +21,7 @@ type WallpaperProperty = {
 };
 
 type WallpaperProject = {
+  workshopid?: unknown;
   general?: {
     supportsaudioprocessing?: unknown;
     properties?: Record<string, WallpaperProperty>;
@@ -58,8 +59,10 @@ describe('Wallpaper Engine project.json', () => {
   });
 
   it('keeps the source project safe for direct and mock development', () => {
-    const properties = loadProjectJson().general?.properties ?? {};
+    const project = loadProjectJson();
+    const properties = project.general?.properties ?? {};
 
+    expect(project.workshopid).toBeUndefined();
     expect(properties.spotify_playback_provider?.value).toBe('direct');
     expect(properties.spotify_backend_url?.value).toBe('');
     expect(properties.spotify_pairing_token?.value).toBe('');
@@ -122,6 +125,91 @@ describe('Wallpaper Engine project.json', () => {
     });
   });
 
+  it('injects the tracked Workshop ID only into the release project', () => {
+    withTemporaryProject((projectPath, metadataPath) => {
+      writeFileSync(metadataPath, JSON.stringify({ workshopid: '12345678901234567890' }), 'utf8');
+
+      const result = runWorkshopPreparation(
+        projectPath,
+        'https://api.wallpaper.example',
+        metadataPath
+      );
+      const prepared = JSON.parse(readFileSync(projectPath, 'utf8')) as WallpaperProject;
+
+      expect(result.status).toBe(0);
+      expect(prepared.workshopid).toBe('12345678901234567890');
+    });
+  });
+
+  it('removes a stale Workshop ID when tracked metadata is null', () => {
+    withTemporaryProject((projectPath, metadataPath) => {
+      const project = JSON.parse(readFileSync(projectPath, 'utf8')) as WallpaperProject;
+      project.workshopid = '987654321';
+      writeFileSync(projectPath, JSON.stringify(project), 'utf8');
+
+      const result = runWorkshopPreparation(
+        projectPath,
+        'https://api.wallpaper.example',
+        metadataPath
+      );
+      const prepared = JSON.parse(readFileSync(projectPath, 'utf8')) as WallpaperProject;
+
+      expect(result.status).toBe(0);
+      expect(prepared.workshopid).toBeUndefined();
+    });
+  });
+
+  it.each([
+    '',
+    '0',
+    '0123',
+    '-1',
+    '1.5',
+    123,
+    true,
+    {}
+  ])('rejects an invalid tracked Workshop ID: %j', (workshopid) => {
+    withTemporaryProject((projectPath, metadataPath) => {
+      writeFileSync(metadataPath, JSON.stringify({ workshopid }), 'utf8');
+
+      const result = runWorkshopPreparation(
+        projectPath,
+        'https://api.wallpaper.example',
+        metadataPath
+      );
+
+      expect(result.status).not.toBe(0);
+      expect(
+        JSON.parse(readFileSync(projectPath, 'utf8')).general.properties
+          .spotify_playback_provider.value
+      ).toBe('direct');
+    });
+  });
+
+  it('does not copy unknown metadata fields into the release project', () => {
+    withTemporaryProject((projectPath, metadataPath) => {
+      const metadataCanary = 'metadata-refresh-canary-2cc347';
+      writeFileSync(
+        metadataPath,
+        JSON.stringify({
+          workshopid: '123456789',
+          spotify_refresh_token: metadataCanary
+        }),
+        'utf8'
+      );
+
+      const result = runWorkshopPreparation(
+        projectPath,
+        'https://api.wallpaper.example',
+        metadataPath
+      );
+      const preparedText = readFileSync(projectPath, 'utf8');
+
+      expect(result.status).toBe(0);
+      expect(preparedText).not.toContain(metadataCanary);
+    });
+  });
+
   it.each([
     undefined,
     '',
@@ -159,16 +247,20 @@ describe('Wallpaper Engine project.json', () => {
   });
 });
 
-const withTemporaryProject = (run: (projectPath: string) => void): void => {
+const withTemporaryProject = (
+  run: (projectPath: string, metadataPath: string) => void
+): void => {
   const directory = mkdtempSync(resolve(tmpdir(), 'spotify-wallpaper-project-'));
   const projectPath = resolve(directory, 'project.json');
+  const metadataPath = resolve(directory, 'workshop-metadata.json');
   try {
     writeFileSync(
       projectPath,
       JSON.stringify(loadProjectJson()),
       'utf8'
     );
-    run(projectPath);
+    writeFileSync(metadataPath, JSON.stringify({ workshopid: null }), 'utf8');
+    run(projectPath, metadataPath);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -176,7 +268,8 @@ const withTemporaryProject = (run: (projectPath: string) => void): void => {
 
 const runWorkshopPreparation = (
   projectPath: string,
-  origin: string | undefined
+  origin: string | undefined,
+  metadataPath?: string
 ) => {
   const testDir = fileURLToPath(new URL('.', import.meta.url));
   const scriptPath = resolve(testDir, '../../prepare-workshop.mjs');
@@ -186,8 +279,12 @@ const runWorkshopPreparation = (
   } else {
     environment.VITE_SPOTIFY_BACKEND_ORIGIN = origin;
   }
-  return spawnSync(process.execPath, [scriptPath, projectPath], {
+  return spawnSync(
+    process.execPath,
+    [scriptPath, projectPath, ...(metadataPath ? [metadataPath] : [])],
+    {
     encoding: 'utf8',
     env: environment
-  });
+    }
+  );
 };

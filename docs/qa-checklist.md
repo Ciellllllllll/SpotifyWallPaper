@@ -5,6 +5,7 @@ Use this checklist before release or when changing settings, Spotify, Wallpaper 
 ## Automated Gates
 
 - `npm run test --workspaces --if-present`
+- `npm run test:wallpaper-link`
 - `npm run check`
 - `npm run build`
 - `cargo check --workspace`
@@ -27,9 +28,20 @@ Resource-intensive commands should run through `h5i capture run`.
 
 ## Wallpaper Engine
 
-- Build with `npm run build`.
-- Import `apps/wallpaper/dist` as a Web Wallpaper.
+- Build and link with `npm run wallpaper:dev-build`.
+- Confirm the first run creates `projects/myprojects/spotify-wallpaper-dev` as
+  a junction to `apps/wallpaper/dist`.
+- Confirm a second run succeeds without replacing the junction.
+- Rebuild and reload the existing Wallpaper Engine project without importing
+  another copy.
+- Confirm an existing file, directory, symlink, or different junction is not
+  deleted or replaced.
 - Confirm `project.json` is present in `apps/wallpaper/dist`.
+- Confirm normal builds contain no `workshopid`.
+- Confirm Workshop metadata `null` omits `workshopid`, a positive decimal
+  string is injected only by the Workshop build, and invalid values fail.
+- Confirm Workshop preparation never copies credential or unknown metadata
+  fields into `dist/project.json`.
 - Confirm `project.json` uses only Wallpaper Engine supported user property types: `color`, `slider`, `bool`, `combo`, `textinput`, `file`, or `directory`.
 - Confirm user properties apply:
   - `spotify_client_id`
@@ -47,7 +59,14 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm `spotify_pairing_token` accepts a dummy `swpb1.` value without exposing it in debug, warnings, or errors.
 - Treat `play-in-window` or CLI `applyProperties` checks as diagnostics only; RC-2 pass/fail requires Wallpaper Engine UI editing and applying the wallpaper to an actual display.
 - Confirm browser fallback still works after Wallpaper Engine changes.
-- Post-v0.0.1 Codex status: not executed in this environment because Wallpaper Engine is not available. Must be completed on a Windows machine with Wallpaper Engine installed.
+- Current update-flow status: automated junction tests use isolated temporary
+  folders. Record the real registry detection, first link, idempotent second
+  link, and rebuild/reload results below before acceptance.
+- 2026-08-25 local result: registry detection, first Junction creation,
+  second-run idempotency, target path, `index.html`, and `project.json` passed.
+  UI reload confirmation stopped because an older manual import exposed an
+  existing credential-bearing property; revoke and reissue that credential,
+  then repeat the reload check without capturing property text.
 - Required real-machine result fields:
   - property application result for every property above
   - `settings_json` malformed JSON fallback result
@@ -126,6 +145,11 @@ Resource-intensive commands should run through `h5i capture run`.
 - Update the phase report with docs read, tests run, risks, and next task.
 
 ## Spotify Distribution Gates
+
+An initial owner-only Private Workshop item may be used only for
+credential-free mock verification. Real Spotify authorization, third-party
+access, Limited beta, and general publication remain prohibited until the
+applicable gates below are complete and the action is separately approved.
 
 Confirm the legacy auth workflow has no Pages write/deploy capability and any
 historical Pages deployment is disabled.
