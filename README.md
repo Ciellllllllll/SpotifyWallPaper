@@ -412,14 +412,33 @@ CI runs independent web, visual-core Rust, Tauri, and loopback jobs. The web job
 consumer tests/builds, runs the browser characterization suite, and audits the complete dependency tree. The Cloudflare
 Worker test toolchain is pinned independently in its workspace, including the fixed `undici` override in the lockfile.
 
-For Wallpaper Engine import, build the project and select `apps/wallpaper/dist` as the Web Wallpaper folder. The build
-copies `apps/wallpaper/public/project.json` into the distribution folder.
+For Wallpaper Engine development, run `npm run wallpaper:dev-build`. The first
+run creates `projects/myprojects/spotify-wallpaper-dev` as a Windows junction
+to `apps/wallpaper/dist`; later runs reuse the same junction. Select that
+project once in Wallpaper Engine, then use build plus reload instead of
+importing another copy. The command never deletes or replaces an existing
+project folder, including older manual imports such as `index1`.
+
+Workshop releases remain separate from development builds. The normal build
+never contains `workshopid`. `npm run build:workshop -w
+@spotify-wallpaper/wallpaper` reads `apps/wallpaper/workshop-metadata.json` and
+injects its non-null ID only into the Workshop artifact. After an owner-only,
+credential-free Private mock publication, copy only the generated decimal ID
+into that metadata file as a quoted string. Future **Submit Update** operations
+on the same project update the existing Workshop item; Steam distributes the
+update to subscribers, sometimes with a short delay.
+
+Do not invite third parties, connect real Spotify accounts, start a Limited
+beta, or publish generally until the Spotify distribution gates below are
+complete and the action is separately approved. This repository does not use
+a remote latest-version loader, custom updater, SteamCMD auto-publishing, or a
+mandatory Tauri updater.
 
 Wallpaper Engine manual QA before release candidate:
 
 | Check | Expected result |
 | --- | --- |
-| Import `apps/wallpaper/dist` as a Web Wallpaper | Wallpaper starts without Tauri, Spotify, or Rainmeter. |
+| Run `npm run wallpaper:dev-build`, select `spotify-wallpaper-dev` once, then reload after another build | The same project shows the new build without another import and starts without Tauri, Spotify, or Rainmeter. |
 | `settings_json` | Entered as single-line JSON; valid JSON applies settings; empty or malformed JSON falls back safely and reports a debug warning. |
 | `spotify_playback_provider` | Select `Backend Proxy` for the public beta, or `Direct` only for legacy compatibility and developer testing. |
 | `spotify_backend_url` | For a Workshop build, retain the exact release-configured production origin. Arbitrary HTTPS origins are rejected before a Pairing Token is sent. |

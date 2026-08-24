@@ -129,18 +129,46 @@ location.reload();
 Never put Spotify tokens in browser settings, URLs, screenshots, logs, Rainmeter output, or committed files. Direct
 credentials are supplied only through the dedicated Wallpaper Engine properties.
 
-## Wallpaper Engine Import
+## Wallpaper Engine Development and Updates
 
-1. Build the web wallpaper:
+1. Build the web wallpaper and create its development link:
 
-   ```sh
-   npm run build
+   ```powershell
+   npm run wallpaper:dev-build
    ```
 
-2. In Wallpaper Engine, create or update a Web Wallpaper.
-3. Select `apps/wallpaper/dist` as the output folder.
-4. Confirm `project.json` is present in that folder.
-5. Configure user properties as needed.
+2. In Wallpaper Engine, select the `spotify-wallpaper-dev` project under
+   `projects\myprojects` once.
+3. After later source changes, run `npm run wallpaper:dev-build` again and
+   reload the existing wallpaper. Do not import another copy.
+4. Configure user properties as needed.
+
+The link command reads Wallpaper Engine's install path from the current-user
+registry. To use a non-standard location, set
+`WALLPAPER_ENGINE_PROJECTS_DIR` to the absolute path of the `myprojects`
+folder. The command does not delete or overwrite an existing destination, and
+it leaves older manual imports such as `index1` untouched.
+
+### Workshop updates
+
+Normal development builds never contain a Workshop ID. Workshop builds read
+`apps/wallpaper/workshop-metadata.json` instead:
+
+```powershell
+$env:VITE_SPOTIFY_BACKEND_ORIGIN='https://your-approved-origin.example'
+npm run build:workshop -w @spotify-wallpaper/wallpaper
+```
+
+For the first owner-only Private test, use no Spotify credentials and verify
+mock behavior only. After Wallpaper Engine creates the Workshop item, copy
+only its decimal ID into `workshop-metadata.json` as a quoted string. Run the
+Workshop build again before future **Submit Update** operations. Steam updates
+the same subscribed item, although delivery may be slightly delayed.
+
+Private publication itself is not automated. Do not connect a real Spotify
+account, invite another user, begin a Limited beta, or publish generally until
+the existing Spotify distribution gates are complete and the action is
+separately approved.
 
 Supported user property keys:
 

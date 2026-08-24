@@ -132,7 +132,8 @@
         "docs/phase-reports/phase-12-final-qa-docs.md",
         "docs/phase-reports/post-v0.0.1-stabilization.md",
         "docs/phase-reports/rc-2-wallpaper-engine-property-types.md",
-        "docs/phase-reports/system-wide-refactor-phase-0-repository-specification-truth.md"
+        "docs/phase-reports/system-wide-refactor-phase-0-repository-specification-truth.md",
+        "docs/phase-reports/wallpaper-engine-update-flow.md"
       ]
     }
   ],

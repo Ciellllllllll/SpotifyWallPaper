@@ -43,4 +43,22 @@ Fallback modes:
 
 ## Output
 
-The wallpaper build must produce files suitable for Wallpaper Engine import. The docs must explain which output folder to select.
+The wallpaper build must produce files suitable for Wallpaper Engine. On
+Windows, development uses one safe directory junction from
+`projects/myprojects/spotify-wallpaper-dev` to `apps/wallpaper/dist`. The link
+command may create a missing junction or accept the same junction again, but
+must never delete, replace, or redirect an existing file, directory, symlink,
+or different junction. After the first selection in Wallpaper Engine,
+developers build and reload instead of importing another copy.
+
+Normal development output must not contain a Workshop ID. Workshop identity
+belongs to `apps/wallpaper/workshop-metadata.json` and is injected only by the
+Workshop preparation step. The tracked value is either `null` or a positive
+decimal string without leading zeroes. Invalid metadata must fail the Workshop
+build before writing a prepared project.
+
+The first Workshop publication is owner-only Private, credential-free, and
+mock-only. Later **Submit Update** operations use the same ID so Steam can
+distribute updates to subscribers. Spotify-connected testing, third-party
+access, Limited beta, and general publication remain blocked by the release
+gates and require separate approval.
