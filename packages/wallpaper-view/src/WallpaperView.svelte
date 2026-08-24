@@ -258,7 +258,7 @@
   {/if}
 
   {#if showDebug && settings.debug.enabled}
-    <aside class="layout-item debug-panel" style={layoutStyle(settings.layout.items.debug)} aria-label="Debug overlay">
+    <aside class="layout-item debug-panel" style={`${layoutStyle(settings.layout.items.debug)}; height: auto`} aria-label="Debug overlay">
       <div>Mode: {model.playbackMode}</div>
       <div>Spotify credential: {model.credentialConfigured ? 'configured' : 'not configured'}</div>
       <div>Spotify status: {model.spotifyStatusText}</div>
