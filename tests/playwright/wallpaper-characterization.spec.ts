@@ -57,6 +57,30 @@ async function disableMotionAndCaret(page: Page) {
   });
 }
 
+test.describe('debug overlay', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  test('grows its frame to contain rendered text', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        debug: { enabled: true },
+        layout: { items: { debug: { height: 24 } } }
+      }));
+    });
+    await page.goto('/');
+
+    const panel = page.getByRole('complementary', { name: 'Debug overlay' });
+    await expect(panel).toBeVisible();
+    const { clientHeight, scrollHeight } = await panel.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight
+    }));
+
+    expect(clientHeight).toBeGreaterThanOrEqual(scrollHeight);
+  });
+});
+
 for (const viewport of viewports) {
   test.describe(`wallpaper ${viewport.name}`, () => {
     test.use({ viewport });

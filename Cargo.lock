@@ -1240,7 +1240,6 @@ dependencies = [
  "base64",
  "chrono",
  "hkdf",
- "http",
  "rand 0.8.6",
  "reqwest",
  "rusqlite",
