@@ -130,14 +130,6 @@ impl BackendDatabase {
         Ok(())
     }
 
-    pub fn pairing_is_configured(&self) -> Result<bool, DbError> {
-        let conn = self.conn.lock().map_err(|_| DbError::Lock)?;
-        let exists: Option<i64> = conn
-            .query_row("SELECT id FROM pairing WHERE id = 1", [], |row| row.get(0))
-            .optional()?;
-        Ok(exists.is_some())
-    }
-
     pub fn verify_pairing_token(
         &self,
         pairing_token: &str,
@@ -245,12 +237,6 @@ impl BackendDatabase {
             access_token,
             access_token_expires_at_ms: row.access_token_expires_at_ms,
         }))
-    }
-
-    pub fn clear_tokens(&self) -> Result<(), DbError> {
-        let conn = self.conn.lock().map_err(|_| DbError::Lock)?;
-        conn.execute("DELETE FROM credentials WHERE id = 1", [])?;
-        Ok(())
     }
 
     fn migrate(&self) -> Result<(), DbError> {

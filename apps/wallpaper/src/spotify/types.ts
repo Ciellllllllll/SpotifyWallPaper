@@ -24,21 +24,6 @@ export type SpotifyResult<T> =
       error: SpotifyPlaybackError;
     };
 
-export interface SpotifyImage {
-  url?: unknown;
-  height?: unknown;
-  width?: unknown;
-}
-
-export interface SpotifyDevice {
-  id?: unknown;
-  name?: unknown;
-  type?: unknown;
-  is_active?: unknown;
-  is_restricted?: unknown;
-  volume_percent?: unknown;
-}
-
 export interface SpotifyPlaybackResponse {
   item?: unknown;
   progress_ms?: unknown;
