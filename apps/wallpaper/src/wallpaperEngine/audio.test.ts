@@ -14,6 +14,21 @@ describe('Wallpaper Engine audio adapter', () => {
     expect(frame.timestampMs).toBe(1000);
   });
 
+  it('folds Wallpaper Engine stereo channels into 64 averaged frequency bins', () => {
+    const samples = Array<number>(128).fill(0);
+    samples[0] = 0.2;
+    samples[64] = 0.6;
+    samples[63] = 2;
+    samples[127] = Number.NaN;
+
+    const frame = normalizeAudioFrame(samples, 'wallpaper-engine', 1000);
+
+    expect(frame.samples).toHaveLength(64);
+    expect(frame.samples[0]).toBeCloseTo(0.4);
+    expect(frame.samples[63]).toBeCloseTo(1);
+    expect(frame.peak).toBeCloseTo(1);
+  });
+
   it('generates browser mock audio frames', () => {
     const frame = createMockAudioFrame(1000);
 

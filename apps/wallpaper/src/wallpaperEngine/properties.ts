@@ -7,9 +7,19 @@ import {
   type WallpaperPreferencesPatch
 } from '@spotify-wallpaper/shared-types';
 import { loadSettings } from '../settings/loadSettings';
-import { isWallpaperEngineSpotifyToken, parseWallpaperEngineSpotifyToken } from '../spotify/wallpaperEngineToken';
+import { parseWallpaperEngineSpotifyToken } from '../spotify/wallpaperEngineToken';
+import { configuredOfficialBackendOrigin } from '../spotify/providers/backendProvider';
 import type { CredentialInput } from '../settings/credentialBoundary';
 import type { CredentialUpdate, ProviderHint, WallpaperEngineProperties, WallpaperPropertyResult } from './types';
+
+const backendPairingTokenPattern = /^swpb1\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/;
+const spotifyPropertyKeys = [
+  'spotify_client_id',
+  'spotify_refresh_token',
+  'spotify_playback_provider',
+  'spotify_backend_url',
+  'spotify_pairing_token'
+] as const;
 
 export const parseWallpaperProperties = (
   properties: WallpaperEngineProperties,
@@ -41,6 +51,10 @@ export const parseWallpaperProperties = (
   const seekbarStyle = stringProperty(properties, 'seekbar_style');
   const visualizerEnabled = booleanProperty(properties, 'visualizer_enabled');
   const visualizerMode = stringProperty(properties, 'visualizer_mode');
+  const visualizerIntensity = numberProperty(properties, 'visualizer_intensity');
+  const visualizerSensitivity = numberProperty(properties, 'visualizer_sensitivity');
+  const visualizerSmoothing = numberProperty(properties, 'visualizer_smoothing');
+  const visualizerDecay = numberProperty(properties, 'visualizer_decay');
   const transitionsEnabled = booleanProperty(properties, 'transitions_enabled');
   const transitionPreset = stringProperty(properties, 'transition_preset');
   const clockEnabled = booleanProperty(properties, 'clock_enabled');
@@ -76,23 +90,47 @@ export const parseWallpaperProperties = (
     }
   }
 
+  const trimmedToken = refreshToken?.trim();
   const bundledToken = refreshToken !== undefined ? parseWallpaperEngineSpotifyToken(refreshToken) : null;
-  const directCredential = bundledToken
-    ? { kind: 'replace', value: { kind: 'direct', ...bundledToken } } as CredentialUpdate
-    : refreshToken !== undefined && isWallpaperEngineSpotifyToken(refreshToken)
-      ? { kind: 'clear' } as CredentialUpdate
-      : clientId !== undefined || refreshToken !== undefined
-        ? clientId && refreshToken
-          ? { kind: 'replace', value: { kind: 'direct', clientId, refreshToken } } as CredentialUpdate
-          : { kind: 'clear' } as CredentialUpdate
-        : null;
+  const unifiedBackendToken = trimmedToken && isBackendPairingToken(trimmedToken) ? trimmedToken : null;
+  let unifiedCredential: CredentialUpdate | null = null;
+  if (refreshToken !== undefined && trimmedToken === '') {
+    delete patch.spotify;
+    unifiedCredential = { kind: 'clear' };
+  } else if (bundledToken) {
+    patch.spotify = { provider: 'direct' };
+    unifiedCredential = { kind: 'replace', value: { kind: 'direct', ...bundledToken } };
+  } else if (unifiedBackendToken) {
+    const backendOrigin = configuredOfficialBackendOrigin();
+    patch.spotify = {
+      ...patch.spotify,
+      provider: 'backend',
+      backendOrigin: backendOrigin ?? ''
+    };
+    unifiedCredential = { kind: 'replace', value: { kind: 'backend', pairingToken: unifiedBackendToken } };
+    if (!backendOrigin && warning === null) warning = 'Spotify backend is unavailable in this build.';
+  } else if (trimmedToken?.startsWith('swpt1.') || trimmedToken?.startsWith('swpb1.')) {
+    delete patch.spotify;
+    unifiedCredential = { kind: 'retain' };
+    if (warning === null) warning = 'Spotify Token format is invalid.';
+  }
+
+  const directCredential = unifiedCredential === null && (clientId !== undefined || refreshToken !== undefined)
+    ? clientId && refreshToken
+      ? { kind: 'replace', value: { kind: 'direct', clientId, refreshToken } } as CredentialUpdate
+      : refreshToken
+        ? { kind: 'retain' } as CredentialUpdate
+        : { kind: 'clear' } as CredentialUpdate
+    : null;
   const backendCredential = pairingToken !== undefined
     ? pairingToken.length > 0
       ? { kind: 'replace', value: { kind: 'backend', pairingToken } } as CredentialUpdate
       : { kind: 'clear' } as CredentialUpdate
     : null;
   const selectedProvider = patch.spotify?.provider ?? settingsReplacement?.spotify.provider ?? providerHint;
-  if (selectedProvider === 'mock') {
+  if (unifiedCredential !== null) {
+    credential = unifiedCredential;
+  } else if (selectedProvider === 'mock') {
     if (directCredential || backendCredential) {
       credential = { kind: 'clear' };
     }
@@ -164,6 +202,21 @@ export const parseWallpaperProperties = (
     patch.visualizer = { ...patch.visualizer, mode: visualizerMode };
   }
 
+  if (
+    visualizerIntensity !== undefined ||
+    visualizerSensitivity !== undefined ||
+    visualizerSmoothing !== undefined ||
+    visualizerDecay !== undefined
+  ) {
+    patch.visualizer = {
+      ...patch.visualizer,
+      ...(visualizerIntensity !== undefined ? { intensity: visualizerIntensity } : {}),
+      ...(visualizerSensitivity !== undefined ? { sensitivity: visualizerSensitivity } : {}),
+      ...(visualizerSmoothing !== undefined ? { smoothing: visualizerSmoothing } : {}),
+      ...(visualizerDecay !== undefined ? { decay: visualizerDecay } : {})
+    };
+  }
+
   if (transitionsEnabled !== undefined) {
     patch.transitions = { ...patch.transitions, enabled: transitionsEnabled };
   }
@@ -213,14 +266,24 @@ export const registerWallpaperPropertyListener = (
   currentSettings?: () => WallpaperPreferences
 ): void => {
   let snapshot: WallpaperEngineProperties = {};
+  let safetyGateOpen = true;
   target.wallpaperPropertyListener = {
     applyUserProperties: (properties) => {
       snapshot = { ...snapshot, ...properties };
-      const result = parseWallpaperProperties(snapshot, providerHint?.());
+      const effectiveProperties = { ...snapshot };
+      if (!Object.prototype.hasOwnProperty.call(properties, 'settings_json')) {
+        delete effectiveProperties.settings_json;
+      }
+      if (!spotifyPropertyKeys.some((key) => Object.prototype.hasOwnProperty.call(properties, key))) {
+        for (const key of spotifyPropertyKeys) delete effectiveProperties[key];
+      }
+      const result = parseWallpaperProperties(effectiveProperties, providerHint?.());
+      safetyGateOpen = safetyGateOpen && result.safetyGateOpen;
+      const safeResult = { ...result, safetyGateOpen };
       onProperties(currentSettings ? {
-        ...result,
+        ...safeResult,
         settings: applyWallpaperPreferencesPatch(result.settingsReplacement ?? currentSettings(), result.patch)
-      } : result);
+      } : safeResult);
     }
   };
 };
@@ -233,4 +296,25 @@ const stringProperty = (properties: WallpaperEngineProperties, key: string): str
 const booleanProperty = (properties: WallpaperEngineProperties, key: string): boolean | undefined => {
   const value = properties[key]?.value;
   return typeof value === 'boolean' ? value : undefined;
+};
+
+const numberProperty = (properties: WallpaperEngineProperties, key: string): number | undefined => {
+  const value = properties[key]?.value;
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+};
+
+const isBackendPairingToken = (value: string): boolean => {
+  const match = backendPairingTokenPattern.exec(value);
+  return match !== null && isCanonicalBase64Url(match[1], 16) && isCanonicalBase64Url(match[2], 32);
+};
+
+const isCanonicalBase64Url = (value: string, expectedByteLength: number): boolean => {
+  try {
+    const base64 = value.replaceAll('-', '+').replaceAll('_', '/');
+    const binary = atob(base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '='));
+    return binary.length === expectedByteLength &&
+      btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '') === value;
+  } catch {
+    return false;
+  }
 };

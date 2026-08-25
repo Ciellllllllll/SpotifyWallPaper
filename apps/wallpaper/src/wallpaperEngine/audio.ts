@@ -9,7 +9,11 @@ export const normalizeAudioFrame = (
   source: VisualizerSource,
   timestampMs = Date.now()
 ): VisualizerFrame => {
-  const samples = input ? Array.from(input, clampSample) : [];
+  const isWallpaperEngineStereo = source === 'wallpaper-engine' && input?.length === 128;
+  const normalized = input ? Array.from(input, isWallpaperEngineStereo ? safeSample : clampSample) : [];
+  const samples = isWallpaperEngineStereo
+    ? normalized.slice(0, 64).map((left, index) => (left + normalized[index + 64]) / 2)
+    : normalized;
   const safeSamples = samples.length > 0 ? samples : [0];
   const third = Math.max(1, Math.floor(safeSamples.length / 3));
 
@@ -53,11 +57,15 @@ export const startAudioBridge = (
 };
 
 const clampSample = (value: number): number => {
+  return Math.min(1, safeSample(value));
+};
+
+const safeSample = (value: number): number => {
   if (!Number.isFinite(value)) {
     return 0;
   }
 
-  return Math.min(1, Math.max(0, value));
+  return Math.max(0, value);
 };
 
 const average = (samples: number[]): number => {

@@ -17,14 +17,23 @@ export const parseWallpaperEngineSpotifyToken = (value: string): WallpaperEngine
 
   const encoded = trimmed.slice(WALLPAPER_ENGINE_TOKEN_PREFIX.length);
   try {
-    const json = new TextDecoder().decode(base64UrlDecode(encoded));
+    const decoded = base64UrlDecode(encoded);
+    if (base64UrlEncode(decoded) !== encoded) {
+      return null;
+    }
+    const json = new TextDecoder('utf-8', { fatal: true }).decode(decoded);
     const payload: unknown = JSON.parse(json);
     if (!payload || typeof payload !== 'object') {
       return null;
     }
 
     const record = payload as Record<string, unknown>;
-    if (record.v !== 1 || typeof record.clientId !== 'string' || typeof record.refreshToken !== 'string') {
+    if (
+      Object.keys(record).length !== 3 ||
+      record.v !== 1 ||
+      typeof record.clientId !== 'string' ||
+      typeof record.refreshToken !== 'string'
+    ) {
       return null;
     }
 
@@ -45,4 +54,10 @@ const base64UrlDecode = (value: string): Uint8Array => {
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
   const binary = atob(padded);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+};
+
+const base64UrlEncode = (value: Uint8Array): string => {
+  let binary = '';
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 };

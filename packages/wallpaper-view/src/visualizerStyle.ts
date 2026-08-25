@@ -3,7 +3,6 @@ import type { WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/sh
 export interface EffectiveVisualizerConfig {
   barCount: number;
   glowStrength: number;
-  rotationSpeed: number;
   sampleStep: number;
 }
 
@@ -16,7 +15,6 @@ export const effectiveVisualizerConfig = (settings: WallpaperPreferences): Effec
   return {
     barCount: Math.max(8, Math.min(maxBars, Math.round(requestedBars))),
     glowStrength: Math.max(0, Math.min(1, settings.visualizer.glowStrength * glowScale)),
-    rotationSpeed: settings.performance.mode === 'low-power' ? settings.visualizer.rotationSpeed * 0.35 : settings.visualizer.rotationSpeed,
     sampleStep
   };
 };
@@ -35,10 +33,7 @@ export const visualizerStyleVariables = (
   '--visualizer-line-width': `${settings.lineWidth}px`,
   '--visualizer-glow': `${config.glowStrength}`,
   '--visualizer-gap': `${Math.max(1, 6 - settings.gap / 20)}px`,
-  '--visualizer-radius': `${Math.max(0.6, Math.min(2.2, settings.radius))}`,
-  '--visualizer-rotation-duration': `${Math.max(1, 8 / Math.max(0.02, Math.abs(config.rotationSpeed)))}s`,
-  '--visualizer-rotation-direction': config.rotationSpeed < 0 ? 'reverse' : 'normal',
-  '--visualizer-animation-play-state': config.rotationSpeed === 0 ? 'paused' : 'running'
+  '--visualizer-radius': `${Math.max(0.6, Math.min(2.2, settings.radius))}`
 });
 
 export const visualizerRingRadius = (radius: number): number => Math.max(44, Math.min(96, 78 * radius));

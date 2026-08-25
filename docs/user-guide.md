@@ -56,8 +56,9 @@ domain release gate is complete. Use this flow:
    Spotify Client ID, and choose Authorize Spotify.
 4. Log in to Spotify and approve the requested scopes.
 5. Copy the `swpb1.` Pairing Token shown after success. The page displays it only once.
-6. In Wallpaper Engine, select `Backend Proxy`, retain the release-provided backend origin, and paste the Pairing Token
-   into Spotify Backend Pairing Token / `spotify_pairing_token`.
+6. In Wallpaper Engine, paste the Pairing Token into the single Spotify Token
+   field. Its `swpb1.` prefix selects the release-configured backend
+   automatically.
 
 The Pairing Token is a bearer credential and remains valid until account deletion or revocation. Never share it, send it
 to maintainers, or put it in a URL, screenshot, recording, log, issue, browser storage, or committed file.
@@ -170,25 +171,48 @@ account, invite another user, begin a Limited beta, or publish generally until
 the existing Spotify distribution gates are complete and the action is
 separately approved.
 
-Supported user property keys:
+Visible user property keys:
 
-- `spotify_client_id`
 - `spotify_refresh_token`
-- `spotify_playback_provider`
-- `spotify_backend_url`
-- `spotify_pairing_token`
-- `settings_json`
-- `selected_preset`
 - `visualizer_enabled`
+- `visualizer_mode`
+- `visualizer_intensity`
+- `visualizer_sensitivity`
+- `visualizer_smoothing`
+- `visualizer_decay`
+- `clock_enabled`
+- `clock_hour12`
+- `clock_show_date`
 - `performance_mode`
 - `debug_enabled`
 
-For the public beta, select `Backend Proxy`, retain the release-configured `spotify_backend_url`, and paste the `swpb1.`
-Pairing Token into `spotify_pairing_token`. The release build rejects arbitrary HTTPS backend origins before sending the
-credential. Direct mode accepts a `swpt1.` bundle through the dedicated `spotify_refresh_token` property; raw Refresh
-Tokens and any credential fields in `settings_json` are ignored. Paste `settings_json` as single-line, secret-free v2 JSON.
+The `spotify_refresh_token` key is displayed as Spotify Token for saved-value
+compatibility. Paste `swpb1.` for the public backend or `swpt1.` for direct
+mode; the prefix selects the provider automatically. The release build rejects
+arbitrary HTTPS origins before sending a credential. Clearing the field
+disconnects Spotify, and malformed prefixed input does not replace the active
+credential. Legacy hidden properties remain readable for existing installs,
+but Settings JSON and the separate provider, backend URL, Client ID, and
+Pairing Token controls are no longer shown.
 
 If Wallpaper Engine APIs are absent, the same build still works in a browser using mock settings and mock playback.
+
+### Visualizer tuning
+
+When Visualizer Enabled is on, Wallpaper Engine shows four live sliders. Each
+slider accepts two decimal places in 0.01 steps:
+
+- Visualizer Intensity changes the final height or radius of the effect.
+- Visualizer Sensitivity raises quiet input before it is treated as silence.
+- Visualizer Smoothing trades immediate movement for steadier movement; move
+  it toward 0 for the quickest response.
+- Visualizer Decay Speed controls how quickly the effect falls after a sound;
+  higher values produce a shorter tail.
+
+Changes apply without reloading. Start by lowering Smoothing, then raise
+Sensitivity for quiet sources, and use Intensity only for the final visual
+size. Album Ring, Radial Bars, and Waveform Line remain centered on the album
+and do not rotate.
 
 ## Rust/WASM Visual Core
 
@@ -287,11 +311,11 @@ A minimal Rainmeter reader sample is available at `examples/rainmeter/SpotifyWal
 ## Troubleshooting
 
 - Browser opens but no Spotify data appears: this is expected without Spotify settings; mock playback should still render.
-- Wallpaper Engine properties do not apply: confirm the property key names and verify `settings_json` is single-line valid JSON.
+- Wallpaper Engine properties do not apply: reload the existing development wallpaper after rebuilding and confirm the visible property key names.
 - Spotify controls fail: passive display works without Premium, but some playback operations can be denied by Spotify or by restricted devices.
 - Public backend reports `unauthorized`: reauthorize from the same official `/setup` page with the existing Pairing Token. If the backend account was deleted, complete a new setup instead.
 - Public backend setup fails: confirm the Spotify app has the exact production callback URI and that its owner meets Spotify Development Mode Premium and user-limit requirements.
 - Lyrics/LRC settings are not available in this milestone. Remove legacy `lyrics` fields from pasted settings JSON if they appear in old samples.
-- Visualizer is idle: Wallpaper Engine audio data may be unavailable; browser preview uses mock or idle audio paths.
+- Visualizer is idle: Wallpaper Engine audio data may be unavailable; browser preview uses mock or idle audio paths. In Wallpaper Engine, confirm Visualizer Enabled, lower Smoothing, and raise Sensitivity gradually.
 - Rainmeter write fails: confirm the configurator is running in the Tauri shell, not only the browser preview, and verify the output path is writable.
 - Settings break the layout: clear `spotify-wallpaper-settings` from local storage or import a known-good sample from `examples/settings/`.

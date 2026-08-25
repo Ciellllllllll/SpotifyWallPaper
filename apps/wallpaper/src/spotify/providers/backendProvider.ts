@@ -181,7 +181,7 @@ export const isTrustedPublicBackendOrigin = (value: string): boolean => {
   return normalized.ok && normalized.value.startsWith('https://');
 };
 
-const configuredOfficialBackendOrigin = (): string | null => {
+export const configuredOfficialBackendOrigin = (): string | null => {
   const value = import.meta.env.VITE_SPOTIFY_BACKEND_ORIGIN;
   if (!value) return null;
   try {

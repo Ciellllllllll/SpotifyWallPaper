@@ -10,18 +10,25 @@ The display target is a Wallpaper Engine Web Wallpaper. The same app must also o
 
 ## User properties
 
-Support receiving at least:
+The native property panel exposes only:
 
-- Spotify Client ID
-- Spotify Refresh Token
-- settings JSON
-- selected preset
-- visualizer enabled
+- one Spotify Token field
+- visualizer enabled and mode
+- visualizer intensity, sensitivity, smoothing, and decay speed
+- clock enabled, 12-hour display, and date display
 - performance mode
 - debug enabled
-- Spotify playback provider
-- Spotify backend URL
-- Spotify backend Pairing Token
+
+The Spotify Token field auto-detects `swpt1.` as direct mode and an exact
+`swpb1.` Pairing Token as public-backend mode. A release-configured official
+HTTPS backend origin is used automatically for `swpb1.`. A build without that
+origin reports a fixed non-secret configuration warning. Empty input clears
+the active credential, while malformed prefixed input is ignored instead of
+overwriting a valid process-memory credential.
+
+Legacy Client ID, provider, backend URL, Pairing Token, settings JSON, preset,
+and display property keys remain accepted by the adapter for existing
+installations, but they are not shown in the current native property panel.
 
 Property parsing must be isolated behind an adapter.
 
@@ -33,7 +40,18 @@ When Wallpaper Engine APIs are absent, use mock settings, mock playback, and moc
 
 ## Audio listener
 
-Use Wallpaper Engine audio data if available. Normalize it before visualizer use.
+Use Wallpaper Engine audio data if available. Its fixed 128-value spectrum is
+two 64-bin channels: left values first, then right values. Average matching
+left/right bins into one 64-bin spectrum before visualizer normalization.
+Forward every listener callback without timer throttling. Rust/WASM, or its
+TypeScript fallback, remains the sole authority for clamping, noise gating,
+smoothing, and decay.
+
+The native Wallpaper Engine property panel exposes 0.01-step fractional sliders for
+intensity (0–2), sensitivity (0–3), smoothing (0–0.95), and decay speed
+(0–1). They are shown only while the visualizer is enabled and apply without
+reloading the wallpaper. Invalid or non-finite property values are ignored and
+the shared settings repair boundary remains authoritative.
 
 Fallback modes:
 

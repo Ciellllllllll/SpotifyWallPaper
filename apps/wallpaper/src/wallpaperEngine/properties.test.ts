@@ -1,14 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyWallpaperPreferencesPatch } from '@spotify-wallpaper/shared-types';
 import { defaultSettings } from '../settings/defaultSettings';
 import { parseWallpaperProperties, registerWallpaperPropertyListener } from './properties';
 
 const encodeWallpaperEngineToken = (clientId: string, refreshToken: string): string => {
   const json = JSON.stringify({ v: 1, clientId, refreshToken });
+  return encodeWallpaperEngineTokenBytes(new TextEncoder().encode(json));
+};
+
+const encodeWallpaperEngineTokenBytes = (bytes: Uint8Array): string => {
   let binary = '';
-  for (const byte of new TextEncoder().encode(json)) binary += String.fromCharCode(byte);
+  for (const byte of bytes) binary += String.fromCharCode(byte);
   return `swpt1.${btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')}`;
 };
+
+const backendPairingToken = `swpb1.${'A'.repeat(22)}.${'A'.repeat(43)}`;
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe('Wallpaper Engine property adapter', () => {
   it('parses preferences separately from backend credential input', () => {
@@ -63,15 +71,139 @@ describe('Wallpaper Engine property adapter', () => {
     });
 
     expect(result.credential).toEqual({ kind: 'replace', value: { kind: 'direct', clientId: 'bundled-client-id', refreshToken: 'bundled-refresh-token' } });
-    expect(result.patch.spotify).toBeUndefined();
+    expect(result.patch.spotify).toEqual({ provider: 'direct' });
   });
 
-  it('fails closed for malformed or cleared credential properties', () => {
-    expect(parseWallpaperProperties({
+  it('auto-detects an swpb1 token and uses the release-configured backend', () => {
+    vi.stubEnv('VITE_SPOTIFY_BACKEND_ORIGIN', 'https://api.wallpaper.example');
+
+    const result = parseWallpaperProperties({
+      spotify_refresh_token: { value: backendPairingToken }
+    }, 'direct');
+
+    expect(result.patch.spotify).toEqual({
+      provider: 'backend',
+      backendOrigin: 'https://api.wallpaper.example'
+    });
+    expect(result.credential).toEqual({
+      kind: 'replace',
+      value: { kind: 'backend', pairingToken: backendPairingToken }
+    });
+    expect(JSON.stringify(result.patch)).not.toContain(backendPairingToken);
+    expect(result.warning).toBeNull();
+  });
+
+  it('selects direct mode from swpt1 even when the previous provider was backend', () => {
+    const result = parseWallpaperProperties({
+      spotify_refresh_token: { value: encodeWallpaperEngineToken('bundled-client-id', 'bundled-refresh-token') }
+    }, 'backend');
+
+    expect(result.patch.spotify).toEqual({ provider: 'direct' });
+    expect(result.credential).toEqual({
+      kind: 'replace',
+      value: { kind: 'direct', clientId: 'bundled-client-id', refreshToken: 'bundled-refresh-token' }
+    });
+  });
+
+  it('keeps swpb1 selected but reports a safe warning when this build has no backend origin', () => {
+    const result = parseWallpaperProperties({
+      spotify_refresh_token: { value: backendPairingToken },
+      spotify_backend_url: { value: 'http://127.0.0.1:49320/' }
+    });
+
+    expect(result.patch.spotify).toEqual({ provider: 'backend', backendOrigin: '' });
+    expect(result.credential).toEqual({
+      kind: 'replace',
+      value: { kind: 'backend', pairingToken: backendPairingToken }
+    });
+    expect(result.warning).toBe('Spotify backend is unavailable in this build.');
+    expect(result.warning).not.toContain(backendPairingToken);
+    const merged = applyWallpaperPreferencesPatch({
+      ...defaultSettings,
+      spotify: { ...defaultSettings.spotify, provider: 'backend', backendOrigin: 'http://127.0.0.1:49320/' }
+    }, result.patch);
+    expect(merged.spotify.backendOrigin).toBeUndefined();
+  });
+
+  it('ignores malformed unified tokens and clears credentials only for an empty field', () => {
+    const malformed = parseWallpaperProperties({
       spotify_client_id: { value: 'client-id' },
       spotify_refresh_token: { value: 'swpt1.not-valid-base64' }
-    }).credential).toEqual({ kind: 'clear' });
+    });
+    expect(malformed.credential).toEqual({ kind: 'retain' });
+    expect(malformed.patch.spotify).toBeUndefined();
+    expect(malformed.warning).toBe('Spotify Token format is invalid.');
+    expect(malformed.warning).not.toContain('swpt1.not-valid-base64');
+    expect(parseWallpaperProperties({ spotify_refresh_token: { value: '' } }).credential).toEqual({ kind: 'clear' });
     expect(parseWallpaperProperties({ spotify_pairing_token: { value: '' } }).credential).toEqual({ kind: 'clear' });
+  });
+
+  it('rejects a non-canonical swpb1 token without replacing credentials', () => {
+    const nonCanonicalToken = `swpb1.${'A'.repeat(22)}.${'B'.repeat(43)}`;
+    const result = parseWallpaperProperties({
+      spotify_refresh_token: { value: nonCanonicalToken }
+    });
+
+    expect(result.credential).toEqual({ kind: 'retain' });
+    expect(result.patch.spotify).toBeUndefined();
+    expect(result.warning).toBe('Spotify Token format is invalid.');
+    expect(result.warning).not.toContain(nonCanonicalToken);
+  });
+
+  it('retains the current credential when swpt1 contains malformed UTF-8', () => {
+    const bytes = new TextEncoder().encode(JSON.stringify({ v: 1, clientId: 'client-id', refreshToken: 'refresh-token' }));
+    const clientValueStart = bytes.indexOf('c'.charCodeAt(0), bytes.indexOf('c'.charCodeAt(0)) + 1);
+    bytes[clientValueStart] = 0x80;
+    const malformedToken = encodeWallpaperEngineTokenBytes(bytes);
+
+    const result = parseWallpaperProperties({ spotify_refresh_token: { value: malformedToken } });
+
+    expect(result.credential).toEqual({ kind: 'retain' });
+    expect(result.patch.spotify).toBeUndefined();
+    expect(result.warning).toBe('Spotify Token format is invalid.');
+    expect(result.warning).not.toContain(malformedToken);
+  });
+
+  it('does not revive hidden provider settings after an invalid unified token update', () => {
+    vi.stubEnv('VITE_SPOTIFY_BACKEND_ORIGIN', 'https://api.wallpaper.example');
+    const results: Array<ReturnType<typeof parseWallpaperProperties> & { settings?: typeof defaultSettings }> = [];
+    let currentSettings = defaultSettings;
+    const target = {} as Window;
+    registerWallpaperPropertyListener(
+      (result) => {
+        results.push(result);
+        currentSettings = result.settings ?? currentSettings;
+      },
+      target,
+      () => currentSettings.spotify.provider,
+      () => currentSettings
+    );
+
+    target.wallpaperPropertyListener?.applyUserProperties?.({
+      settings_json: {
+        value: JSON.stringify({
+          schemaVersion: 2,
+          spotify: { provider: 'direct', backendOrigin: 'http://127.0.0.1:49320/' }
+        })
+      },
+      spotify_playback_provider: { value: 'direct' },
+      spotify_backend_url: { value: 'http://127.0.0.1:49320/' },
+      spotify_refresh_token: { value: backendPairingToken }
+    });
+    target.wallpaperPropertyListener?.applyUserProperties?.({
+      spotify_refresh_token: { value: 'swpb1.invalid' }
+    });
+
+    expect(results[0].settings?.spotify).toMatchObject({
+      provider: 'backend',
+      backendOrigin: 'https://api.wallpaper.example'
+    });
+    expect(results[1].credential).toEqual({ kind: 'retain' });
+    expect(results[1].patch.spotify).toBeUndefined();
+    expect(results[1].settings?.spotify).toMatchObject({
+      provider: 'backend',
+      backendOrigin: 'https://api.wallpaper.example'
+    });
   });
 
   it('keeps credentials outside the v2 preference patch', () => {
@@ -80,6 +212,32 @@ describe('Wallpaper Engine property adapter', () => {
     expect(merged.debug.enabled).toBe(true);
     expect(merged.spotify.provider).toBe('mock');
     expect(JSON.stringify(merged)).not.toMatch(/clientId|refreshToken|pairingToken|hasRefreshToken/i);
+  });
+
+  it('parses finite visualizer slider values, including zero, in one partial patch', () => {
+    const result = parseWallpaperProperties({
+      visualizer_intensity: { value: 0 },
+      visualizer_sensitivity: { value: 1.75 },
+      visualizer_smoothing: { value: 0.2 },
+      visualizer_decay: { value: 0.8 }
+    });
+
+    expect(result.patch.visualizer).toEqual({
+      intensity: 0,
+      sensitivity: 1.75,
+      smoothing: 0.2,
+      decay: 0.8
+    });
+  });
+
+  it('ignores non-finite and non-numeric visualizer slider values', () => {
+    const result = parseWallpaperProperties({
+      visualizer_intensity: { value: Number.NaN },
+      visualizer_sensitivity: { value: Number.POSITIVE_INFINITY },
+      visualizer_smoothing: { value: '0.2' }
+    });
+
+    expect(result.patch.visualizer).toBeUndefined();
   });
 
   it('accumulates partial Wallpaper Engine callbacks into a complete snapshot', () => {
@@ -95,6 +253,37 @@ describe('Wallpaper Engine property adapter', () => {
     expect(results).toHaveLength(2);
     expect(results[1].patch.spotify).toMatchObject({ provider: 'backend', backendOrigin: 'http://127.0.0.1:49320/' });
     expect(results[1].credential).toEqual({ kind: 'replace', value: { kind: 'backend', pairingToken: 'pairing-token' } });
+  });
+
+  it('does not reapply hidden Spotify properties during an unrelated callback', () => {
+    const results: Array<ReturnType<typeof parseWallpaperProperties> & { settings?: typeof defaultSettings }> = [];
+    let currentSettings = defaultSettings;
+    const target = {} as Window;
+    registerWallpaperPropertyListener(
+      (result) => {
+        results.push(result);
+        currentSettings = result.settings ?? currentSettings;
+      },
+      target,
+      () => currentSettings.spotify.provider,
+      () => currentSettings
+    );
+
+    target.wallpaperPropertyListener?.applyUserProperties?.({
+      spotify_playback_provider: { value: 'direct' },
+      spotify_backend_url: { value: 'http://127.0.0.1:49320/' }
+    });
+    currentSettings = {
+      ...currentSettings,
+      spotify: { ...currentSettings.spotify, provider: 'backend', backendOrigin: 'https://api.wallpaper.example' }
+    };
+    target.wallpaperPropertyListener?.applyUserProperties?.({ debug_enabled: { value: true } });
+
+    expect(results[1].patch.spotify).toBeUndefined();
+    expect(results[1].settings?.spotify).toMatchObject({
+      provider: 'backend',
+      backendOrigin: 'https://api.wallpaper.example'
+    });
   });
 
   it('closes the safety gate for future settings and keeps it closed for later callbacks', () => {

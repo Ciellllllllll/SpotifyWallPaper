@@ -81,6 +81,51 @@ test.describe('debug overlay', () => {
   });
 });
 
+test.describe('visualizer positioning', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  for (const performanceMode of ['standard', 'low-power'] as const) {
+    for (const visualizerMode of ['album-ring', 'radial-bars', 'waveform-line'] as const) {
+      test(`keeps ${visualizerMode} centered without rotation in ${performanceMode}`, async ({ page }) => {
+        await page.addInitScript(({ performanceMode, visualizerMode }) => {
+          localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+            schemaVersion: 2,
+            performance: { mode: performanceMode },
+            visualizer: { mode: visualizerMode, rotationSpeed: 0.8 },
+            layout: { items: { albumArt: { rotation: 45 } } }
+          }));
+        }, { performanceMode, visualizerMode });
+        await freezeBrowserState(page);
+        await page.goto('/');
+
+        const visualizer = page.locator('.visualizer');
+        await expect(visualizer).toBeVisible();
+        expect(await visualizer.evaluate((element) => getComputedStyle(element).animationName)).toBe('none');
+        expect(await visualizer.evaluate((element) => getComputedStyle(element).rotate)).toBe('none');
+        expect(await visualizer.evaluate((element) => {
+          const matrix = new DOMMatrix(getComputedStyle(element).transform);
+          return Math.abs(matrix.b) <= 0.000001 && Math.abs(matrix.c) <= 0.000001;
+        })).toBe(true);
+
+        const albumBox = await page.locator('.album-art').boundingBox();
+        const visualizerBox = await visualizer.boundingBox();
+        expect(albumBox).not.toBeNull();
+        expect(visualizerBox).not.toBeNull();
+        const centerDeltaX = Math.abs(
+          ((visualizerBox?.x ?? 0) + (visualizerBox?.width ?? 0) / 2) -
+          ((albumBox?.x ?? 0) + (albumBox?.width ?? 0) / 2)
+        );
+        const centerDeltaY = Math.abs(
+          ((visualizerBox?.y ?? 0) + (visualizerBox?.height ?? 0) / 2) -
+          ((albumBox?.y ?? 0) + (albumBox?.height ?? 0) / 2)
+        );
+        expect(centerDeltaX).toBeLessThanOrEqual(0.01);
+        expect(centerDeltaY).toBeLessThanOrEqual(0.01);
+      });
+    }
+  }
+});
+
 for (const viewport of viewports) {
   test.describe(`wallpaper ${viewport.name}`, () => {
     test.use({ viewport });
