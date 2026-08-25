@@ -337,17 +337,6 @@ export async function markCredentialReauthorizationRequired(
   return result.meta.changes === 1;
 }
 
-export async function deleteCredential(
-  db: D1Database,
-  publicId: string
-): Promise<boolean> {
-  const result = await db
-    .prepare('DELETE FROM credentials WHERE public_id = ?')
-    .bind(publicId)
-    .run();
-  return result.meta.changes === 1;
-}
-
 export async function acquireRefreshLease(
   db: D1Database,
   publicId: string,

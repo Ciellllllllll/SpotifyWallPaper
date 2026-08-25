@@ -196,6 +196,92 @@ describe('WallpaperRuntime', () => {
     runtime.dispose();
   });
 
+  it('publishes every accepted audio frame while retaining unscaled normalization state', () => {
+    const runtime = createWallpaperRuntime({
+      ...defaultSettings,
+      visualizer: {
+        ...defaultSettings.visualizer,
+        intensity: 0.5,
+        sensitivity: 1,
+        smoothing: 0,
+        decay: 1,
+        noiseGate: 0,
+        bassWeight: 1,
+        midWeight: 1,
+        trebleWeight: 1
+      }
+    });
+    let emissions = 0;
+    const unsubscribe = runtime.subscribe(() => {
+      emissions += 1;
+    });
+    const before = emissions;
+
+    runtime.acceptAudioFrame({
+      source: 'wallpaper-engine',
+      samples: [0.5],
+      bass: 0.5,
+      mid: 0.5,
+      treble: 0.5,
+      peak: 0.5,
+      timestampMs: 1000
+    });
+
+    const snapshot = runtimeSnapshot(runtime);
+    expect(emissions).toBe(before + 1);
+    expect(snapshot.previousVisualizerFrame?.samples).toEqual([0.5]);
+    expect(snapshot.visualizerFrame?.samples).toEqual([0.25]);
+    unsubscribe();
+    runtime.dispose();
+  });
+
+  it('advances decay for every silent Wallpaper Engine callback', () => {
+    const runtime = createWallpaperRuntime({
+      ...defaultSettings,
+      visualizer: {
+        ...defaultSettings.visualizer,
+        intensity: 1,
+        sensitivity: 1,
+        smoothing: 0,
+        decay: 0.2,
+        noiseGate: 0.1,
+        bassWeight: 1,
+        midWeight: 1,
+        trebleWeight: 1
+      }
+    });
+    let emissions = 0;
+    const unsubscribe = runtime.subscribe(() => {
+      emissions += 1;
+    });
+
+    runtime.acceptAudioFrame({
+      source: 'wallpaper-engine',
+      samples: [0.5],
+      bass: 0.5,
+      mid: 0.5,
+      treble: 0.5,
+      peak: 0.5,
+      timestampMs: 1000
+    });
+    runtime.acceptAudioFrame({
+      source: 'wallpaper-engine',
+      samples: [0],
+      bass: 0,
+      mid: 0,
+      treble: 0,
+      peak: 0,
+      timestampMs: 1033
+    });
+
+    const snapshot = runtimeSnapshot(runtime);
+    expect(emissions).toBe(3);
+    expect(snapshot.previousVisualizerFrame?.samples[0]).toBeCloseTo(0.4, 5);
+    expect(snapshot.visualizerFrame?.samples[0]).toBeCloseTo(0.4, 5);
+    unsubscribe();
+    runtime.dispose();
+  });
+
   it('ignores a stale poll completion after provider reconfiguration', async () => {
     const firstPoll = deferred<ProviderResult<NormalizedPlayback>>();
     const secondPoll = deferred<ProviderResult<NormalizedPlayback>>();
@@ -242,6 +328,49 @@ describe('WallpaperRuntime', () => {
     runtime.dispose();
   });
 
+  it('does not re-extract an album theme for unrelated settings changes', async () => {
+    const extractTheme = vi.fn(async () => themeFixture);
+    const runtime = createWallpaperRuntime(defaultSettings, { extractTheme });
+
+    runtime.applyConfiguration(defaultSettings, { kind: 'retain' }, true);
+    runtime.applyConfiguration({
+      ...defaultSettings,
+      clock: { ...defaultSettings.clock, showSeconds: !defaultSettings.clock.showSeconds }
+    }, { kind: 'retain' }, true);
+
+    expect(extractTheme).toHaveBeenCalledTimes(1);
+    runtime.dispose();
+  });
+
+  it('does not re-extract an album theme when polling returns the same artwork', async () => {
+    const extractTheme = vi.fn(async () => themeFixture);
+    const provider = controlledProvider(
+      { ok: true, value: { ...mockPlayback, id: 'another-track-from-the-same-album' } },
+      { ok: true, value: undefined }
+    );
+    const settings = {
+      ...settingsForProvider('direct'),
+      clock: { ...defaultSettings.clock, enabled: false },
+      visualizer: { ...defaultSettings.visualizer, enabled: false }
+    };
+    const runtime = createWallpaperRuntime(settings, {
+      extractTheme,
+      selectProvider: () => ({ kind: 'ready', provider })
+    });
+
+    runtime.applyConfiguration(
+      settings,
+      { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+      true
+    );
+    runtime.start();
+    await flushAsync();
+
+    expect(provider.poll).toHaveBeenCalledTimes(1);
+    expect(extractTheme).toHaveBeenCalledTimes(1);
+    runtime.dispose();
+  });
+
   it('keeps only the newest async album theme result', async () => {
     const themeRequests: Array<ReturnType<typeof deferred<WallpaperTheme>>> = [];
     const runtime = createWallpaperRuntime(defaultSettings, {
@@ -259,8 +388,9 @@ describe('WallpaperRuntime', () => {
     runtime.applyConfiguration(defaultSettings, { kind: 'retain' }, true);
     runtime.applyConfiguration({
       ...defaultSettings,
-      clock: { ...defaultSettings.clock, showSeconds: !defaultSettings.clock.showSeconds }
+      theme: { ...defaultSettings.theme, mode: 'fallback' }
     }, { kind: 'retain' }, true);
+    runtime.applyConfiguration(defaultSettings, { kind: 'retain' }, true);
     expect(themeRequests.length).toBe(2);
     const olderTheme = { ...themeFixture, source: 'extracted' as const };
     const newerTheme = { ...themeFixture, readableTextColor: '#000000' };

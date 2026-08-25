@@ -8,37 +8,18 @@ const metadataPath = resolve(
 );
 
 try {
-  const officialOrigin = requireOfficialHttpsOrigin(
-    process.env.VITE_SPOTIFY_BACKEND_ORIGIN
-  );
+  requireOfficialHttpsOrigin(process.env.VITE_SPOTIFY_BACKEND_ORIGIN);
   const workshopId = requireWorkshopId(
     JSON.parse(await readFile(metadataPath, 'utf8'))
   );
   const project = JSON.parse(await readFile(projectPath, 'utf8'));
   const properties = project?.general?.properties;
-  const provider = properties?.spotify_playback_provider;
-  const backendUrl = properties?.spotify_backend_url;
-  const clientId = properties?.spotify_client_id;
-  const refreshToken = properties?.spotify_refresh_token;
-  const pairingToken = properties?.spotify_pairing_token;
-  const settingsJson = properties?.settings_json;
-  if (
-    provider?.type !== 'combo' ||
-    backendUrl?.type !== 'textinput' ||
-    clientId?.type !== 'textinput' ||
-    refreshToken?.type !== 'textinput' ||
-    pairingToken?.type !== 'textinput' ||
-    settingsJson?.type !== 'textinput'
-  ) {
-    throw new Error('Wallpaper project is missing required backend properties.');
+  const spotifyToken = properties?.spotify_refresh_token;
+  if (spotifyToken?.type !== 'textinput') {
+    throw new Error('Wallpaper project is missing the Spotify Token property.');
   }
 
-  provider.value = 'backend';
-  backendUrl.value = officialOrigin;
-  clientId.value = '';
-  refreshToken.value = '';
-  pairingToken.value = '';
-  settingsJson.value = '';
+  spotifyToken.value = '';
   if (workshopId === null) {
     delete project.workshopid;
   } else {

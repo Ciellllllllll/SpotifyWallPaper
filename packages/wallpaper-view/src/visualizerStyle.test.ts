@@ -18,7 +18,7 @@ describe('wallpaper view visualizer presentation contract', () => {
       source: 'fallback' as const
     };
     const config = effectiveVisualizerConfig(defaultWallpaperPreferences());
-    const customConfig = { ...config, glowStrength: 0.9, rotationSpeed: -0.4 };
+    const customConfig = { ...config, glowStrength: 0.9 };
     const variables = visualizerStyleVariables(
       { ...settings, colorMode: 'accent', lineWidth: 9, radius: 1.7, gap: 34, rotationSpeed: -0.4, glowStrength: 0.9 },
       theme,
@@ -28,12 +28,12 @@ describe('wallpaper view visualizer presentation contract', () => {
     expect(variables['--visualizer-color']).toBe('#aabbcc');
     expect(variables['--visualizer-line-width']).toBe('9px');
     expect(variables['--visualizer-radius']).toBe('1.7');
-    expect(variables['--visualizer-rotation-direction']).toBe('reverse');
     expect(variables['--visualizer-glow']).toBe('0.9');
+    expect(Object.keys(variables)).not.toContain('--visualizer-rotation-duration');
+    expect(Object.keys(variables)).not.toContain('--visualizer-rotation-direction');
+    expect(Object.keys(variables)).not.toContain('--visualizer-animation-play-state');
     expect(visualizerRingRadius(1.7)).toBe(96);
-    expect(visualizerStyleVariables({ ...settings, rotationSpeed: 0 }, theme, { ...config, rotationSpeed: 0 })['--visualizer-animation-play-state']).toBe('paused');
-    expect(visualizerStyleVariables({ ...settings, rotationSpeed: 0.2 }, theme, { ...config, rotationSpeed: 0.2 })['--visualizer-animation-play-state']).toBe('running');
-    expect(config).toEqual({ barCount: 56, glowStrength: 0.62, rotationSpeed: 0.16, sampleStep: 1 });
+    expect(config).toEqual({ barCount: 56, glowStrength: 0.62, sampleStep: 1 });
   });
 
   it('reduces presentation work in low-power mode', () => {
@@ -46,7 +46,6 @@ describe('wallpaper view visualizer presentation contract', () => {
 
     expect(config.barCount).toBe(24);
     expect(config.glowStrength).toBe(0.45);
-    expect(config.rotationSpeed).toBeCloseTo(0.14, 10);
     expect(config.sampleStep).toBe(2);
   });
 

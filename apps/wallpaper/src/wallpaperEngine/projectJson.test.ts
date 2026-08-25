@@ -16,8 +16,15 @@ const supportedPropertyTypes = new Set([
 ]);
 
 type WallpaperProperty = {
+  text?: unknown;
   type?: unknown;
   value?: unknown;
+  min?: unknown;
+  max?: unknown;
+  fraction?: unknown;
+  precision?: unknown;
+  step?: unknown;
+  condition?: unknown;
 };
 
 type WallpaperProject = {
@@ -47,15 +54,28 @@ describe('Wallpaper Engine project.json', () => {
     }
   });
 
-  it('defines credential and settings fields as textinput properties', () => {
+  it('exposes only the approved Wallpaper Engine controls', () => {
     const properties = loadProjectJson().general?.properties ?? {};
 
-    expect(properties.spotify_client_id?.type).toBe('textinput');
-    expect(properties.spotify_refresh_token?.type).toBe('textinput');
-    expect(properties.spotify_playback_provider?.type).toBe('combo');
-    expect(properties.spotify_backend_url?.type).toBe('textinput');
-    expect(properties.spotify_pairing_token?.type).toBe('textinput');
-    expect(properties.settings_json?.type).toBe('textinput');
+    expect(Object.keys(properties)).toEqual([
+      'spotify_refresh_token',
+      'visualizer_enabled',
+      'visualizer_mode',
+      'visualizer_intensity',
+      'visualizer_sensitivity',
+      'visualizer_smoothing',
+      'visualizer_decay',
+      'clock_enabled',
+      'clock_hour12',
+      'clock_show_date',
+      'performance_mode',
+      'debug_enabled'
+    ]);
+    expect(properties.spotify_refresh_token).toMatchObject({
+      text: 'Spotify Token',
+      type: 'textinput',
+      value: ''
+    });
   });
 
   it('keeps the source project safe for direct and mock development', () => {
@@ -63,12 +83,10 @@ describe('Wallpaper Engine project.json', () => {
     const properties = project.general?.properties ?? {};
 
     expect(project.workshopid).toBeUndefined();
-    expect(properties.spotify_playback_provider?.value).toBe('direct');
-    expect(properties.spotify_backend_url?.value).toBe('');
-    expect(properties.spotify_pairing_token?.value).toBe('');
+    expect(properties.spotify_refresh_token?.value).toBe('');
   });
 
-  it('prepares a release project with the exact official backend origin', () => {
+  it('prepares a release project only with an exact official backend origin', () => {
     withTemporaryProject((projectPath) => {
       const result = runWorkshopPreparation(
         projectPath,
@@ -78,11 +96,10 @@ describe('Wallpaper Engine project.json', () => {
         JSON.parse(readFileSync(projectPath, 'utf8')).general?.properties ?? {};
 
       expect(result.status).toBe(0);
-      expect(properties.spotify_playback_provider?.value).toBe('backend');
-      expect(properties.spotify_backend_url?.value).toBe(
-        'https://api.wallpaper.example'
-      );
-      expect(properties.spotify_pairing_token?.value).toBe('');
+      expect(properties.spotify_refresh_token?.value).toBe('');
+      expect(properties.spotify_playback_provider).toBeUndefined();
+      expect(properties.spotify_backend_url).toBeUndefined();
+      expect(properties.spotify_pairing_token).toBeUndefined();
     });
   });
 
@@ -90,20 +107,8 @@ describe('Wallpaper Engine project.json', () => {
     withTemporaryProject((projectPath) => {
       const project = JSON.parse(readFileSync(projectPath, 'utf8')) as WallpaperProject;
       const properties = project.general?.properties ?? {};
-      const secrets = {
-        clientId: 'client-id-canary-8db9e3',
-        refreshToken: 'arbitrary-refresh-canary-4f6a2c',
-        pairingToken: 'arbitrary-pairing-canary-b83d17',
-        settingsJson: 'settings-secret-canary-1de75a'
-      };
-      properties.spotify_client_id.value = secrets.clientId;
-      properties.spotify_refresh_token.value = secrets.refreshToken;
-      properties.spotify_pairing_token.value = secrets.pairingToken;
-      properties.settings_json.value = JSON.stringify({
-        nested: {
-          credential: secrets.settingsJson
-        }
-      });
+      const tokenCanary = 'spotify-token-canary-4f6a2c';
+      properties.spotify_refresh_token.value = tokenCanary;
       writeFileSync(projectPath, JSON.stringify(project), 'utf8');
 
       const result = runWorkshopPreparation(
@@ -115,13 +120,8 @@ describe('Wallpaper Engine project.json', () => {
       const preparedProperties = prepared.general?.properties ?? {};
 
       expect(result.status).toBe(0);
-      expect(preparedProperties.spotify_client_id?.value).toBe('');
       expect(preparedProperties.spotify_refresh_token?.value).toBe('');
-      expect(preparedProperties.spotify_pairing_token?.value).toBe('');
-      expect(preparedProperties.settings_json?.value).toBe('');
-      for (const secret of Object.values(secrets)) {
-        expect(preparedText).not.toContain(secret);
-      }
+      expect(preparedText).not.toContain(tokenCanary);
     });
   });
 
@@ -179,10 +179,7 @@ describe('Wallpaper Engine project.json', () => {
       );
 
       expect(result.status).not.toBe(0);
-      expect(
-        JSON.parse(readFileSync(projectPath, 'utf8')).general.properties
-          .spotify_playback_provider.value
-      ).toBe('direct');
+      expect(JSON.parse(readFileSync(projectPath, 'utf8')).general.properties.spotify_refresh_token.value).toBe('');
     });
   });
 
@@ -228,10 +225,7 @@ describe('Wallpaper Engine project.json', () => {
       const result = runWorkshopPreparation(projectPath, origin);
 
       expect(result.status).not.toBe(0);
-      expect(
-        JSON.parse(readFileSync(projectPath, 'utf8')).general.properties
-          .spotify_playback_provider.value
-      ).toBe('direct');
+      expect(JSON.parse(readFileSync(projectPath, 'utf8')).general.properties.spotify_refresh_token.value).toBe('');
     });
   });
 
@@ -244,6 +238,30 @@ describe('Wallpaper Engine project.json', () => {
 
   it('enables Wallpaper Engine audio processing for the visualizer', () => {
     expect(loadProjectJson().general?.supportsaudioprocessing).toBe(true);
+  });
+
+  it('exposes live visualizer tuning as conditional fractional sliders', () => {
+    const properties = loadProjectJson().general?.properties ?? {};
+    const expected = {
+      visualizer_intensity: ['Visualizer Intensity', 0.72, 0, 2],
+      visualizer_sensitivity: ['Visualizer Sensitivity', 1, 0, 3],
+      visualizer_smoothing: ['Visualizer Smoothing', 0.35, 0, 0.95],
+      visualizer_decay: ['Visualizer Decay Speed', 0.22, 0, 1]
+    } as const;
+
+    for (const [key, [text, value, min, max]] of Object.entries(expected)) {
+      expect(properties[key]).toMatchObject({
+        text,
+        type: 'slider',
+        value,
+        min,
+        max,
+        fraction: true,
+        precision: 2,
+        step: 0.01,
+        condition: 'visualizer_enabled.value == true'
+      });
+    }
   });
 });
 

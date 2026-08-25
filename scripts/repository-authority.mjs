@@ -2195,31 +2195,6 @@ export async function loadRepositoryAuthorityPolicy(
 }
 
 /**
- * @param {string} repositoryRoot
- * @returns {Promise<Finding[]>}
- */
-export async function runRepositoryAuthorityCheck(repositoryRoot) {
-  let policy;
-  try {
-    policy = await loadRepositoryAuthorityPolicy(repositoryRoot);
-  } catch {
-    return [
-      {
-        check: 'policy',
-        code: 'POLICY_READ_FAILED',
-        path: 'config/repository-authority.json',
-      },
-    ];
-  }
-  const policyFindings = validateRepositoryAuthorityPolicy(policy);
-  if (policyFindings.length > 0) {
-    return policyFindings;
-  }
-  const snapshot = await collectRepositorySnapshot(repositoryRoot, policy);
-  return evaluateRepositoryAuthority(policy, snapshot);
-}
-
-/**
  * @param {Finding[]} findings
  * @returns {string}
  */

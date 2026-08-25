@@ -7,17 +7,16 @@ export const shapeVisualizerFrame = (
   previous: VisualizerFrame | null,
   settings: WallpaperPreferences['visualizer']
 ): VisualizerFrame => {
-  const safeSamples = frame.samples.length > 0 ? frame.samples : [0];
-  const weightedSamples = safeSamples.map((sample, index) => {
-    const normalized = normalizeSample(sample, settings);
-    return normalized * bandWeight(index, safeSamples.length, settings);
-  });
+  const weightedSamples = prepareSamples(frame.samples, settings);
   const normalized =
     normalizeSamplesWithCore({ ...frame, samples: weightedSamples }, previous, settings) ??
     normalizeSamplesFallback(weightedSamples, previous?.samples ?? [], settings);
 
-  return frameFromSamples(normalized.samples.map(clamp01), frame.source, frame.timestampMs);
+  return frameFromSamples(normalized.samples, frame.source, frame.timestampMs);
 };
+
+export const applyVisualizerIntensity = (frame: VisualizerFrame, intensity: number): VisualizerFrame =>
+  frameFromSamples(frame.samples.map((sample) => sample * intensity), frame.source, frame.timestampMs);
 
 export const idleVisualizerFrame = (timestampMs: number, settings: WallpaperPreferences['visualizer']): VisualizerFrame => {
   const phase = timestampMs / 1200;
@@ -29,22 +28,27 @@ export const idleVisualizerFrame = (timestampMs: number, settings: WallpaperPref
   return frameFromSamples(samples, 'idle', timestampMs);
 };
 
-export const shouldIgnoreSilentWallpaperFrame = (
+export const isSilentWallpaperFrame = (
   frame: VisualizerFrame,
   settings: WallpaperPreferences['visualizer']
-): boolean => frame.source === 'wallpaper-engine' && frame.peak <= settings.noiseGate;
-
-const normalizeSample = (sample: number, settings: WallpaperPreferences['visualizer']): number => {
-  if (!Number.isFinite(sample)) {
-    return 0;
+): boolean => {
+  if (frame.source !== 'wallpaper-engine') {
+    return false;
   }
 
-  const clamped = Math.min(settings.clampMax, Math.max(0, sample));
-  if (clamped < settings.noiseGate) {
-    return 0;
-  }
+  const clampMax = Math.max(0.0001, settings.clampMax);
+  const noiseGate = Math.min(clampMax, Math.max(0, settings.noiseGate));
+  return prepareSamples(frame.samples, settings).every(
+    (sample) => sample === 0 || Math.min(clampMax, sample) < noiseGate
+  );
+};
 
-  return clamp01((clamped / settings.clampMax) * settings.sensitivity * settings.intensity);
+const prepareSamples = (samples: number[], settings: WallpaperPreferences['visualizer']): number[] => {
+  const safeSamples = samples.length > 0 ? samples : [0];
+  return safeSamples.map((sample, index) => {
+    const safeSample = Number.isFinite(sample) ? Math.max(0, sample) : 0;
+    return safeSample * settings.sensitivity * bandWeight(index, safeSamples.length, settings);
+  });
 };
 
 const bandWeight = (index: number, length: number, settings: WallpaperPreferences['visualizer']): number => {
@@ -79,5 +83,3 @@ const average = (samples: number[]): number => {
 
   return samples.reduce((sum, sample) => sum + sample, 0) / samples.length;
 };
-
-const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));

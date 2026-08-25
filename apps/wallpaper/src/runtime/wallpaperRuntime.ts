@@ -22,7 +22,7 @@ import { selectPlaybackProvider } from '../spotify/providers/factory';
 import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from '../theme/colors';
 import { extractAlbumTheme } from '../theme/extractAlbumTheme';
 import { createTransitionState, type TrackTransitionState } from '../transitions/model';
-import { idleVisualizerFrame, shapeVisualizerFrame, shouldIgnoreSilentWallpaperFrame } from '../visualizer/model';
+import { applyVisualizerIntensity, idleVisualizerFrame, isSilentWallpaperFrame, shapeVisualizerFrame } from '../visualizer/model';
 import { startAudioBridge } from '../wallpaperEngine/audio';
 import type { CredentialUpdate } from '../wallpaperEngine/types';
 
@@ -98,6 +98,7 @@ export const createWallpaperRuntime = (
   let disposed = false;
   let safetyGateOpen = true;
   let activeProviderKey = '';
+  let activeThemeKey = '';
   let lastAudioFrameAtMs = 0;
 
   let snapshot: WallpaperRuntimeSnapshot = {
@@ -184,8 +185,15 @@ export const createWallpaperRuntime = (
   const updateTheme = (playback: NormalizedPlayback) => {
     const imageUrl = playback.albumImageUrl;
     const seed = playback.id ?? playback.albumName ?? playback.title;
-    const generation = ++themeGeneration;
     const customColor = snapshot.settings.theme.customPrimaryColor ? hexToRgb(snapshot.settings.theme.customPrimaryColor) : null;
+    const themeKey = snapshot.settings.theme.mode === 'custom' && customColor
+      ? JSON.stringify(['custom', customColor.r, customColor.g, customColor.b])
+      : snapshot.settings.theme.mode === 'fallback'
+        ? JSON.stringify(['fallback', seed])
+        : JSON.stringify(['album', imageUrl || seed]);
+    if (themeKey === activeThemeKey) return;
+    activeThemeKey = themeKey;
+    const generation = ++themeGeneration;
     if (snapshot.settings.theme.mode === 'custom' && customColor) {
       snapshot = { ...snapshot, theme: themeFromPrimary(customColor, 'fallback') };
       emit();
@@ -373,10 +381,12 @@ export const createWallpaperRuntime = (
       emit();
     },
     acceptAudioFrame(frame) {
-      if (disposed || !snapshot.settings.visualizer.enabled || shouldIgnoreSilentWallpaperFrame(frame, snapshot.settings.visualizer)) return;
-      const shaped = shapeVisualizerFrame(frame, snapshot.previousVisualizerFrame, snapshot.settings.visualizer);
-      snapshot = { ...snapshot, previousVisualizerFrame: shaped, visualizerFrame: shaped };
-      lastAudioFrameAtMs = Date.now();
+      if (disposed || !snapshot.settings.visualizer.enabled) return;
+      const isSilent = isSilentWallpaperFrame(frame, snapshot.settings.visualizer);
+      const normalized = shapeVisualizerFrame(frame, snapshot.previousVisualizerFrame, snapshot.settings.visualizer);
+      const shaped = applyVisualizerIntensity(normalized, snapshot.settings.visualizer.intensity);
+      snapshot = { ...snapshot, previousVisualizerFrame: normalized, visualizerFrame: shaped };
+      if (!isSilent) lastAudioFrameAtMs = Date.now();
       emit();
     },
     async execute(command) {

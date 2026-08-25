@@ -61,7 +61,7 @@
 
   const dispatch = (intent: WallpaperViewIntent) => onIntent(intent);
 
-  const layoutStyle = (item: LayoutItem): string => {
+  const layoutStyle = (item: LayoutItem, rotation = item.rotation): string => {
     const positionX = layoutPosition(item.x, item.unit);
     const positionY = layoutPosition(item.y, item.unit);
     const left = item.responsive === 'clamp-safe-area'
@@ -78,7 +78,7 @@
       `height: ${item.height}px`,
       `opacity: ${item.opacity}`,
       `z-index: ${item.zIndex}`,
-      `transform: translate(${translate}) scale(${item.scale}) rotate(${item.rotation}deg)`,
+      `transform: translate(${translate}) scale(${item.scale}) rotate(${rotation}deg)`,
       'transform-origin: center'
     ].join('; ');
   };
@@ -141,7 +141,7 @@
   {/if}
 
   {#if settings.visualizer.enabled}
-    <div class="visualizer" aria-hidden="true" style={`${layoutStyle(activeAlbumItem)}; ${visualizerVariables}`}>
+    <div class="visualizer" aria-hidden="true" style={`${layoutStyle(activeAlbumItem, 0)}; ${visualizerVariables}`}>
       {#if settings.visualizer.mode === 'waveform-line'}
         <svg class="waveform" viewBox="0 0 100 40" preserveAspectRatio="none"><polyline points={visualizerSamples.map((sample, index, samples) => `${(index / Math.max(1, samples.length - 1)) * 100},${20 - Math.max(-18, Math.min(18, sample * 20))}`).join(' ')} /></svg>
       {:else if settings.visualizer.mode === 'album-ring'}
@@ -313,7 +313,7 @@
   .clock strong { font-size: clamp(1.2rem, 3cqw, 2.2rem); font-variant-numeric: tabular-nums; }
   .clock span { color: var(--theme-muted); }
   .debug-panel { display: grid; gap: 4px; padding: 10px; color: var(--theme-muted); background: rgb(0 0 0 / 35%); border-radius: 8px; font: .72rem/1.35 ui-monospace, monospace; }
-  .visualizer { position: absolute; pointer-events: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; opacity: .7; overflow: visible; color: var(--visualizer-color); filter: drop-shadow(0 0 calc(14px * var(--visualizer-glow)) var(--visualizer-color)); animation: visualizer-rotate var(--visualizer-rotation-duration) linear infinite; animation-direction: var(--visualizer-rotation-direction); animation-play-state: var(--visualizer-animation-play-state); }
+  .visualizer { position: absolute; pointer-events: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; opacity: .7; overflow: visible; color: var(--visualizer-color); filter: drop-shadow(0 0 calc(14px * var(--visualizer-glow)) var(--visualizer-color)); }
   .visualizer span { position: absolute; width: var(--visualizer-gap); height: calc(20% + var(--bar) * 30% * var(--visualizer-radius)); background: var(--visualizer-color); transform: rotate(var(--angle)) translateY(calc(-110% * var(--visualizer-radius))); transform-origin: center bottom; box-shadow: 0 0 calc(12px * var(--visualizer-glow)) var(--visualizer-color); }
   .visualizer-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
   .ring-base, .ring-active { fill: none; stroke: var(--visualizer-color); stroke-linecap: round; stroke-width: var(--visualizer-line-width); }
@@ -329,7 +329,6 @@
   .transition-copy strong { font-size: clamp(1.4rem, 4cqw, 3.4rem); }
   .transition-copy span { color: var(--theme-muted); }
   @keyframes album-spin { to { rotate: 360deg; } }
-  @keyframes visualizer-rotate { to { rotate: 360deg; } }
   @keyframes transition-fade-out { from { opacity: 1; } to { opacity: 0; } }
   .transition-slide-left { animation-name: transition-slide-left; }
   .transition-zoom-in { animation-name: transition-zoom-in; }
@@ -337,5 +336,5 @@
   @keyframes transition-slide-left { to { opacity: 0; transform: translateX(-54px); } }
   @keyframes transition-zoom-in { to { opacity: 0; transform: scale(1.08); } }
   @keyframes transition-blur-fade { to { filter: blur(12px); opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .album-spinning, .visualizer { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .album-spinning { animation: none; } }
 </style>
