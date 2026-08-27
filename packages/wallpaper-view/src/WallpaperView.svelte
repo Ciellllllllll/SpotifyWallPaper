@@ -259,7 +259,7 @@
 
   {#if settings.seekbar.visible && settings.seekbar.style === 'line' && activeSeekbarItem.enabled}
     <section class="layout-item seekbar-panel" style={layoutStyle(activeSeekbarItem)} class:seekbar-panel-hidden={showAlbumDetails} aria-hidden={showAlbumDetails} role="group" aria-label="Playback progress">
-      <input class="seekbar-input" type="range" min="0" max="100" value={progressPercent} disabled={!model.canControlPlayback || playback.durationMs <= 0} aria-label="Seek playback position" on:input={seekFromInput} />
+      <input class="seekbar-input" type="range" min="0" max="100" value={progressPercent} disabled={showAlbumDetails || !model.canControlPlayback || playback.durationMs <= 0} aria-label="Seek playback position" on:input={seekFromInput} />
       <div class="seekbar" aria-hidden="true"><div class="seekbar-fill" style={`width: ${progressPercent}%`}></div></div>
       <div class="time-row"><span>{formatTime(displayedProgressMs)}</span><span>{formatTime(playback.durationMs)}</span></div>
     </section>

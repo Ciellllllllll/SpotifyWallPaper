@@ -87,6 +87,13 @@
       ]
     },
     {
+      "name": "active-plans",
+      "classification": "implementation-plan",
+      "paths": [
+        "docs/superpowers/plans/2026-08-27-visualizer-position-display-animation.md"
+      ]
+    },
+    {
       "name": "historical-plans",
       "classification": "historical-evidence",
       "paths": [
@@ -468,6 +475,14 @@
       "classification": "local-tool-state",
       "owner": "local agent tooling",
       "producer": "local Claude instructions",
+      "sourceInputs": []
+    },
+    {
+      "ignorePattern": "/.worktrees/",
+      "probePath": ".worktrees/.repository-authority-probe",
+      "classification": "local-tool-state",
+      "owner": "repository operator",
+      "producer": "git worktree add",
       "sourceInputs": []
     }
   ],

@@ -56,7 +56,9 @@ the shared settings repair boundary remains authoritative.
 The visualizer position is selected independently from its mode. `around-album`
 centers the visualizer on the album art and uses the circular album geometry;
 `bottom-up` anchors it to the lower edge of the viewport and grows radial bars
-upward. Invalid position values are repaired to `around-album`.
+upward. Invalid position notifications from Wallpaper Engine are ignored so the
+existing position is retained. Missing or invalid values while restoring shared
+settings are repaired to `around-album`.
 
 Fallback modes:
 

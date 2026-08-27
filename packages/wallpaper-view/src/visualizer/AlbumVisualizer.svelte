@@ -7,30 +7,40 @@
   export let peak: number;
   export let style: string;
 
+  const circularBaseRadius = 55;
+
   $: safeSamples = Array.isArray(samples)
     ? samples.map((sample) => Number.isFinite(sample) ? Math.max(0, sample) : 0)
     : [];
   $: peakLevel = Number.isFinite(peak) ? Math.min(1, Math.max(0, peak)) : 0;
-  $: radialBarStarts = polarSamplePoints(safeSamples.map(() => 0), {
-    centerX: 50,
-    centerY: 50,
-    radius: 47,
-    amplitude: 0
-  });
-  $: radialBarEnds = polarSamplePoints(safeSamples, {
-    centerX: 50,
-    centerY: 50,
-    radius: 47,
-    amplitude: 18
-  });
-  $: waveformPoints = polarSamplePoints(safeSamples, {
-    centerX: 50,
-    centerY: 50,
-    radius: 47,
-    amplitude: 13
-  });
+  $: radialBarStarts = mode === 'radial-bars'
+    ? polarSamplePoints(safeSamples.map(() => 0), {
+        centerX: 50,
+        centerY: 50,
+        radius: circularBaseRadius,
+        amplitude: 0
+      })
+    : [];
+  $: radialBarEnds = mode === 'radial-bars'
+    ? polarSamplePoints(safeSamples, {
+        centerX: 50,
+        centerY: 50,
+        radius: circularBaseRadius,
+        amplitude: 18
+      })
+    : [];
+  $: waveformPoints = mode === 'waveform-line'
+    ? polarSamplePoints(safeSamples, {
+        centerX: 50,
+        centerY: 50,
+        radius: circularBaseRadius,
+        amplitude: 13
+      })
+    : [];
   $: waveformSvgPoints = waveformPoints.map(({ x, y }) => `${x},${y}`).join(' ');
-  $: ringDash = `${Math.max(0.08, peakLevel)} ${Math.max(0, 1 - peakLevel)}`;
+  $: ringDash = mode === 'album-ring'
+    ? `${Math.max(0.08, peakLevel)} ${Math.max(0, 1 - peakLevel)}`
+    : '0 1';
 </script>
 
 <div class="visualizer visualizer-album" aria-hidden="true" style={style}>
@@ -43,12 +53,12 @@
     {:else if mode === 'waveform-line'}
       <polygon class="circular-waveform" points={waveformSvgPoints} />
     {:else}
-      <circle class="ring-base" cx="50" cy="50" r="47" pathLength="1" />
+      <circle class="ring-base" cx="50" cy="50" r={circularBaseRadius} pathLength="1" />
       <circle
         class="ring-active"
         cx="50"
         cy="50"
-        r="47"
+        r={circularBaseRadius}
         pathLength="1"
         stroke-dasharray={ringDash}
         style={`opacity: ${0.3 + peakLevel * 0.7}; stroke-width: calc(var(--visualizer-line-width, 2px) + ${peakLevel * 4}px)`}

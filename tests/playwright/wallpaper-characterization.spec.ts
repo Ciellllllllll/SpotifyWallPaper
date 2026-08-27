@@ -173,6 +173,35 @@ test.describe('display mode animations', () => {
 
   test('enables track text enter and album frame layout transitions', async ({ page }) => {
     await page.addInitScript(() => {
+      const browserState = globalThis as typeof globalThis & {
+        __wallpaperAnimationStarts?: string[];
+        __wallpaperTransitionRuns?: string[];
+        __wallpaperElementIdentity?: {
+          albumFrame: Element | null;
+          albumVisualizer: Element | null;
+          seekbarPanel: Element | null;
+        };
+      };
+      browserState.__wallpaperAnimationStarts = [];
+      browserState.__wallpaperTransitionRuns = [];
+      document.addEventListener('animationstart', (event) => {
+        browserState.__wallpaperAnimationStarts?.push(event.animationName);
+      });
+      document.addEventListener('transitionrun', (event) => {
+        const target = event.target;
+        if (target instanceof Element) {
+          const targetName = target.matches('.album-frame')
+            ? 'album-frame'
+            : target.matches('.visualizer-album')
+              ? 'visualizer-album'
+              : target.matches('.seekbar-panel')
+                ? 'seekbar-panel'
+                : null;
+          if (targetName) browserState.__wallpaperTransitionRuns?.push(`${targetName}:${event.propertyName}`);
+        }
+      });
+    });
+    await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
         schemaVersion: 2,
         transitions: { enabled: false, reduceMotion: false }
@@ -188,6 +217,21 @@ test.describe('display mode animations', () => {
     await expect(albumVisualizer).toBeVisible();
     await expect(seekbarPanel).toBeVisible();
     await expect(page.getByRole('group', { name: 'Track details' })).toHaveCount(0);
+    await page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & {
+        __wallpaperElementIdentity?: {
+          albumFrame: Element | null;
+          albumVisualizer: Element | null;
+          seekbarPanel: Element | null;
+        };
+      };
+      browserState.__wallpaperElementIdentity = {
+        albumFrame: document.querySelector('.album-frame'),
+        albumVisualizer: document.querySelector('.visualizer-album'),
+        seekbarPanel: document.querySelector('.seekbar-panel')
+      };
+    });
+    expect(await albumFrame.evaluate((element) => getComputedStyle(element).animationName)).toMatch(/album-enter$/);
     const albumOnlySeekbarStyle = await seekbarPanel.evaluate((element) => ({
       top: element.style.top,
       width: element.style.width,
@@ -201,6 +245,46 @@ test.describe('display mode animations', () => {
       transitionDuration: getComputedStyle(element).transitionDuration.split(',').map((value) => value.trim())
     }));
     await page.getByRole('button', { name: 'Show album details' }).click();
+    await expect.poll(async () => page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & {
+        __wallpaperAnimationStarts?: string[];
+        __wallpaperTransitionRuns?: string[];
+      };
+      const animationStarts = browserState.__wallpaperAnimationStarts ?? [];
+      const transitionRuns = browserState.__wallpaperTransitionRuns ?? [];
+      return animationStarts.some((name) => /album-enter$/.test(name))
+        && animationStarts.some((name) => /text-enter$/.test(name))
+        && transitionRuns.some((name) => name.startsWith('album-frame:'))
+        && transitionRuns.some((name) => name.startsWith('visualizer-album:'))
+        && transitionRuns.some((name) => name.startsWith('seekbar-panel:'));
+    })).toBe(true);
+
+    const motionEvents = await page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & {
+        __wallpaperAnimationStarts?: string[];
+        __wallpaperTransitionRuns?: string[];
+        __wallpaperElementIdentity?: {
+          albumFrame: Element | null;
+          albumVisualizer: Element | null;
+          seekbarPanel: Element | null;
+        };
+      };
+      return {
+        animationStarts: browserState.__wallpaperAnimationStarts ?? [],
+        transitionRuns: browserState.__wallpaperTransitionRuns ?? [],
+        sameAlbumFrame: browserState.__wallpaperElementIdentity?.albumFrame === document.querySelector('.album-frame'),
+        sameAlbumVisualizer: browserState.__wallpaperElementIdentity?.albumVisualizer === document.querySelector('.visualizer-album'),
+        sameSeekbarPanel: browserState.__wallpaperElementIdentity?.seekbarPanel === document.querySelector('.seekbar-panel')
+      };
+    });
+    expect(motionEvents.animationStarts.some((name) => /album-enter$/.test(name))).toBe(true);
+    expect(motionEvents.animationStarts.some((name) => /text-enter$/.test(name))).toBe(true);
+    expect(motionEvents.transitionRuns.some((name) => name.startsWith('album-frame:'))).toBe(true);
+    expect(motionEvents.transitionRuns.some((name) => name.startsWith('visualizer-album:'))).toBe(true);
+    expect(motionEvents.transitionRuns.some((name) => name.startsWith('seekbar-panel:'))).toBe(true);
+    expect(motionEvents.sameAlbumFrame).toBe(true);
+    expect(motionEvents.sameAlbumVisualizer).toBe(true);
+    expect(motionEvents.sameSeekbarPanel).toBe(true);
 
     const trackPanel = page.locator('.track-panel');
     await expect(trackPanel).toBeVisible();
@@ -210,6 +294,7 @@ test.describe('display mode animations', () => {
       top: element.style.top,
       width: element.style.width
     }));
+    await expect(seekbarPanel.locator('.seekbar-input')).toBeDisabled();
     expect(detailsSeekbarStyle.top).not.toBe(albumOnlySeekbarStyle.top);
     expect(detailsSeekbarStyle.width).not.toBe(albumOnlySeekbarStyle.width);
     expect(albumOnlySeekbarStyle.transitionProperty).toEqual(expect.arrayContaining(['left', 'top', 'width', 'height', 'transform']));
@@ -232,7 +317,22 @@ test.describe('display mode animations', () => {
     expect(albumFrameMotion.properties).toContain('transform');
     expect(albumFrameMotion.durations.some((duration) => duration !== '0s')).toBe(true);
 
+    await page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & { __wallpaperTransitionRuns?: string[] };
+      browserState.__wallpaperTransitionRuns = [];
+    });
     await page.getByRole('button', { name: 'Show album only' }).click();
+    await expect.poll(async () => page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & { __wallpaperTransitionRuns?: string[] };
+      return browserState.__wallpaperTransitionRuns?.length ?? 0;
+    })).toBeGreaterThan(0);
+    const reverseTransitionRuns = await page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & { __wallpaperTransitionRuns?: string[] };
+      return browserState.__wallpaperTransitionRuns ?? [];
+    });
+    expect(reverseTransitionRuns.some((name) => name.startsWith('album-frame:'))).toBe(true);
+    expect(reverseTransitionRuns.some((name) => name.startsWith('visualizer-album:'))).toBe(true);
+    expect(reverseTransitionRuns.some((name) => name.startsWith('seekbar-panel:'))).toBe(true);
     await expect(seekbarPanel).toBeVisible();
     expect(await seekbarPanel.evaluate((element) => element.style.top)).toBe(albumOnlySeekbarStyle.top);
     expect(await albumVisualizer.evaluate((element) => element.style.top)).toBe(albumOnlyVisualizerStyle.top);
@@ -248,11 +348,13 @@ test.describe('display mode animations', () => {
     await freezeBrowserState(page);
     await page.goto('/');
     const albumFrame = page.locator('.album-frame');
+    const albumVisualizer = page.locator('.visualizer-album');
+    const seekbarPanel = page.locator('.seekbar-panel');
     await page.getByRole('button', { name: 'Show album details' }).click();
     const trackPanel = page.locator('.track-panel');
     await expect(trackPanel).toBeVisible();
 
-    for (const element of [albumFrame, trackPanel]) {
+    for (const element of [albumFrame, trackPanel, albumVisualizer, seekbarPanel]) {
       const motion = await element.evaluate((node) => {
         const style = getComputedStyle(node);
         return {
@@ -278,11 +380,13 @@ test.describe('display mode animations', () => {
     await freezeBrowserState(page);
     await page.goto('/');
     const albumFrame = page.locator('.album-frame');
+    const albumVisualizer = page.locator('.visualizer-album');
+    const seekbarPanel = page.locator('.seekbar-panel');
     await page.getByRole('button', { name: 'Show album details' }).click();
     const trackPanel = page.locator('.track-panel');
     await expect(trackPanel).toBeVisible();
 
-    for (const element of [albumFrame, trackPanel]) {
+    for (const element of [albumFrame, trackPanel, albumVisualizer, seekbarPanel]) {
       const motion = await element.evaluate((node) => {
         const style = getComputedStyle(node);
         return {

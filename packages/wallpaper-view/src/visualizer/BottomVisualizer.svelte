@@ -11,18 +11,22 @@
     ? samples.map((sample) => Number.isFinite(sample) ? Math.max(0, sample) : 0)
     : [];
   $: peakLevel = Number.isFinite(peak) ? Math.min(1, Math.max(0, peak)) : 0;
-  $: sampleCount = Math.max(1, safeSamples.length);
-  $: gapFactor = Math.max(0.2, Math.min(1, 1 - Math.max(0, gap) / 40));
-  $: barWidth = Math.max(0.6, Math.min(8, (90 / sampleCount) * 0.72 * gapFactor));
-  $: waveformPoints = safeSamples
-    .map((sample, index) => {
-      const x = 5 + (index / Math.max(1, sampleCount - 1)) * 90;
-      const y = 39 - Math.min(1, sample) * 25;
-      return `${x},${y}`;
-    })
-    .join(' ');
-  $: activeBandWidth = peakLevel * 90;
-  $: activeBandHeight = 2 + peakLevel * 10;
+  $: sampleCount = mode === 'radial-bars' ? Math.max(1, safeSamples.length) : 1;
+  $: gapFactor = mode === 'radial-bars' ? Math.max(0.2, Math.min(1, 1 - Math.max(0, gap) / 40)) : 1;
+  $: barWidth = mode === 'radial-bars'
+    ? Math.max(0.6, Math.min(8, (90 / sampleCount) * 0.72 * gapFactor))
+    : 0;
+  $: waveformPoints = mode === 'waveform-line'
+    ? safeSamples
+        .map((sample, index) => {
+          const x = 5 + (index / Math.max(1, safeSamples.length - 1)) * 90;
+          const y = 39 - Math.min(1, sample) * 25;
+          return `${x},${y}`;
+        })
+        .join(' ')
+    : '';
+  $: activeBandWidth = mode === 'album-ring' ? peakLevel * 90 : 0;
+  $: activeBandHeight = mode === 'album-ring' ? 2 + peakLevel * 10 : 0;
 </script>
 
 <div class="visualizer visualizer-bottom" aria-hidden="true" style={style}>

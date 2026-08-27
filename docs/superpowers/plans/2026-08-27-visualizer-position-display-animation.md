@@ -27,3 +27,13 @@
 - 契約 worktree 完了後、描画コンポーネント worktree と QA・文書 worktree を並列で進める。
 - コンポーネント完成後、表示統合 worktree で親コンポーネントへ統合する。
 - 統合用 worktree で全ブランチを統合し、全体検証を行う。
+
+## Ponytail baseline
+
+- 公式 marketplace source: `https://github.com/DietrichGebert/ponytail.git`
+- snapshot / installed revision: `2ed6c52c9d7e5e56942508591085fd45dea277d3`
+- exact version: `4.9.0`
+- verification time: `2026-08-27T10:32:01.3867682+09:00`
+- standard enabled hooks: `SessionStart`、`SubagentStart`、`UserPromptSubmit`
+- mode: `full`
+- audit result: `Lean already. Ship.`

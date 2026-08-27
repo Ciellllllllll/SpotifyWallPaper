@@ -449,7 +449,7 @@ Wallpaper Engine manual QA before release candidate:
 | `spotify_client_id` | Legacy direct mode only. Optional for `swpt1.` tokens. Empty and dummy values can be entered without logging the value. |
 | `spotify_refresh_token` | Legacy direct mode only. Accepts a `swpt1.` bundle or raw Refresh Token for manual testing. Never expose a real value in screenshots or logs. |
 | `visualizer_enabled` | Enables/disables visualizer rendering and clears visualizer state when disabled. |
-| `visualizer_position` | Selects `around-album` or `bottom-up`; invalid values are repaired to `around-album`. |
+| `visualizer_position` | Selects `around-album` or `bottom-up`; invalid Wallpaper Engine notifications keep the previous value, while invalid restored shared settings use `around-album`. |
 | `performance_mode` | Accepts `low-power`, `standard`, and `high-effect`; invalid values keep safe defaults. |
 | `debug_enabled` | Toggles the debug panel without exposing token values. |
 | Wallpaper Engine audio listener | Real data uses `wallpaper-engine`; unavailable data falls back to mock or idle visualizer state. |
