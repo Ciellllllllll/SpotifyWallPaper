@@ -251,8 +251,8 @@
     </section>
   {/if}
 
-  {#if !showAlbumDetails && settings.seekbar.visible && settings.seekbar.style === 'line' && activeSeekbarItem.enabled}
-    <section class="layout-item seekbar-panel" style={layoutStyle(activeSeekbarItem)} role="group" aria-label="Playback progress">
+  {#if settings.seekbar.visible && settings.seekbar.style === 'line' && activeSeekbarItem.enabled}
+    <section class="layout-item seekbar-panel" style={layoutStyle(activeSeekbarItem)} class:seekbar-panel-hidden={showAlbumDetails} aria-hidden={showAlbumDetails} role="group" aria-label="Playback progress">
       <input class="seekbar-input" type="range" min="0" max="100" value={progressPercent} disabled={!model.canControlPlayback || playback.durationMs <= 0} aria-label="Seek playback position" on:input={seekFromInput} />
       <div class="seekbar" aria-hidden="true"><div class="seekbar-fill" style={`width: ${progressPercent}%`}></div></div>
       <div class="time-row"><span>{formatTime(displayedProgressMs)}</span><span>{formatTime(playback.durationMs)}</span></div>
@@ -320,7 +320,8 @@
   .volume-control input { min-width: 0; flex: 1; accent-color: var(--theme-accent); }
   .detail-hover-seekbar { position: relative; min-width: 180px; flex: 1; }
   .seekbar-panel { display: grid; gap: 6px; padding: 8px 12px; color: var(--theme-text); opacity: 1; transition: left 560ms var(--ease-out-circ), top 560ms var(--ease-out-circ), width 560ms var(--ease-out-circ), height 560ms var(--ease-out-circ), transform 560ms var(--ease-out-circ), opacity 320ms ease; }
-  .album-details-mode .seekbar-panel { opacity: 0; pointer-events: none; }
+  .album-details-mode .seekbar-panel,
+  .seekbar-panel-hidden { opacity: 0; pointer-events: none; }
   .seekbar-input { position: absolute; inset: -10px 0 auto; z-index: 1; width: 100%; height: 24px; cursor: pointer; opacity: 0; }
   .seekbar { width: 100%; height: 5px; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 16%); }
   .seekbar-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--theme-primary), var(--theme-accent)); }
@@ -348,6 +349,7 @@
   @keyframes transition-slide-left { to { opacity: 0; transform: translateX(-54px); } }
   @keyframes transition-zoom-in { to { opacity: 0; transform: scale(1.08); } }
   @keyframes transition-blur-fade { to { filter: blur(12px); opacity: 0; } }
+  .reduce-motion .album-spinning,
   .reduce-motion .album-frame,
   .reduce-motion .track-panel { animation: none; }
   .reduce-motion .album-frame,

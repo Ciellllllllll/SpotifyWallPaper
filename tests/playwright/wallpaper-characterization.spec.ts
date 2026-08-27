@@ -182,13 +182,30 @@ test.describe('display mode animations', () => {
     await page.goto('/');
 
     const albumFrame = page.locator('.album-frame');
+    const seekbarPanel = page.locator('.seekbar-panel');
     await expect(albumFrame).toBeVisible();
+    await expect(seekbarPanel).toBeVisible();
     await expect(page.getByRole('group', { name: 'Track details' })).toHaveCount(0);
+    const albumOnlySeekbarStyle = await seekbarPanel.evaluate((element) => ({
+      top: element.style.top,
+      width: element.style.width,
+      transitionProperty: getComputedStyle(element).transitionProperty.split(',').map((value) => value.trim()),
+      transitionDuration: getComputedStyle(element).transitionDuration.split(',').map((value) => value.trim())
+    }));
     await page.getByRole('button', { name: 'Show album details' }).click();
 
     const trackPanel = page.locator('.track-panel');
     await expect(trackPanel).toBeVisible();
     expect(await trackPanel.evaluate((element) => getComputedStyle(element).animationName)).toMatch(/text-enter$/);
+    await expect(seekbarPanel).toHaveAttribute('aria-hidden', 'true');
+    const detailsSeekbarStyle = await seekbarPanel.evaluate((element) => ({
+      top: element.style.top,
+      width: element.style.width
+    }));
+    expect(detailsSeekbarStyle.top).not.toBe(albumOnlySeekbarStyle.top);
+    expect(detailsSeekbarStyle.width).not.toBe(albumOnlySeekbarStyle.width);
+    expect(albumOnlySeekbarStyle.transitionProperty).toEqual(expect.arrayContaining(['left', 'top', 'width', 'height', 'transform']));
+    expect(albumOnlySeekbarStyle.transitionDuration.some((duration) => duration !== '0s')).toBe(true);
     const albumFrameMotion = await albumFrame.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
