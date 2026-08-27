@@ -324,8 +324,11 @@ test.describe('display mode animations', () => {
     await page.getByRole('button', { name: 'Show album only' }).click();
     await expect.poll(async () => page.evaluate(() => {
       const browserState = globalThis as typeof globalThis & { __wallpaperTransitionRuns?: string[] };
-      return browserState.__wallpaperTransitionRuns?.length ?? 0;
-    })).toBeGreaterThan(0);
+      const transitionRuns = browserState.__wallpaperTransitionRuns ?? [];
+      return transitionRuns.some((name) => name.startsWith('album-frame:'))
+        && transitionRuns.some((name) => name.startsWith('visualizer-album:'))
+        && transitionRuns.some((name) => name.startsWith('seekbar-panel:'));
+    })).toBe(true);
     const reverseTransitionRuns = await page.evaluate(() => {
       const browserState = globalThis as typeof globalThis & { __wallpaperTransitionRuns?: string[] };
       return browserState.__wallpaperTransitionRuns ?? [];
