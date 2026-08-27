@@ -230,6 +230,13 @@ describe('Wallpaper Engine property adapter', () => {
     });
   });
 
+  it('parses the visualizer position property and ignores unsupported values', () => {
+    expect(parseWallpaperProperties({ visualizer_position: { value: 'bottom-up' } }).patch.visualizer).toEqual({
+      position: 'bottom-up'
+    });
+    expect(parseWallpaperProperties({ visualizer_position: { value: 'sideways' } }).patch.visualizer).toBeUndefined();
+  });
+
   it('ignores non-finite and non-numeric visualizer slider values', () => {
     const result = parseWallpaperProperties({
       visualizer_intensity: { value: Number.NaN },

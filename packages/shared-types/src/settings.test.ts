@@ -71,6 +71,7 @@ describe('WallpaperPreferences v2', () => {
     });
     expect(preferences.spotify).not.toHaveProperty('clientId');
     expect(preferences.player.displayMode).toBe('album-only');
+    expect(preferences.visualizer.position).toBe('around-album');
     expect(preferences.layout.preset).toBe(defaultLayoutPreset);
   });
 
@@ -170,7 +171,7 @@ describe('WallpaperPreferences v2', () => {
       spotify: { provider: 'mock', pollIntervalPlayingMs: 1, pollIntervalPausedMs: 99_999 },
       player: { displayMode: 'album-details', visible: true },
       background: { opacity: 2, blurPx: -10 },
-      visualizer: { intensity: 4, barCount: 500 },
+      visualizer: { intensity: 4, barCount: 500, position: 'bottom-up' },
       transitions: { durationMs: 10_000 },
       lyrics: { enabled: true },
       clientId: 'secret-client-id',
@@ -184,7 +185,7 @@ describe('WallpaperPreferences v2', () => {
     });
     expect(repaired.preferences.player.displayMode).toBe('album-details');
     expect(repaired.preferences.background).toMatchObject({ opacity: 1, blurPx: 0 });
-    expect(repaired.preferences.visualizer).toMatchObject({ intensity: 2, barCount: 160 });
+    expect(repaired.preferences.visualizer).toMatchObject({ intensity: 2, barCount: 160, position: 'bottom-up' });
     expect(repaired.preferences.transitions.durationMs).toBe(5000);
     expect(JSON.stringify(repaired.preferences)).not.toMatch(forbiddenKeys);
 
@@ -194,6 +195,13 @@ describe('WallpaperPreferences v2', () => {
     expect(() => serializeWallpaperPreferences({ schemaVersion: 99 })).toThrow(
       'Only supported v2 preferences can be serialized.'
     );
+  });
+
+  it('repairs missing and invalid visualizer positions to the safe album default', () => {
+    expect(repairWallpaperPreferences({}).preferences.visualizer.position).toBe('around-album');
+    expect(
+      repairWallpaperPreferences({ visualizer: { position: 'not-a-position' } }).preferences.visualizer.position
+    ).toBe('around-album');
   });
 
   it('does not report a valid v2 object as repaired only because key order differs', () => {

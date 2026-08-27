@@ -24,6 +24,15 @@
           { "label": "Waveform Line", "value": "waveform-line" }
         ]
       },
+      "visualizer_position": {
+        "text": "Visualizer Position",
+        "type": "combo",
+        "value": "around-album",
+        "options": [
+          { "label": "Around Album", "value": "around-album" },
+          { "label": "Bottom Up", "value": "bottom-up" }
+        ]
+      },
       "visualizer_intensity": {
         "text": "Visualizer Intensity",
         "type": "slider",

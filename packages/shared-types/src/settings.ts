@@ -12,6 +12,7 @@ import type {
 
 export type TransitionPreset = 'fade' | 'crossfade' | 'slide-left' | 'zoom-in' | 'blur-fade';
 export type TransitionEasing = 'linear' | 'ease' | 'ease-out' | 'ease-in-out';
+export type VisualizerPosition = 'around-album' | 'bottom-up';
 
 export interface WallpaperPreferenceSections {
   layout: {
@@ -44,6 +45,7 @@ export interface WallpaperPreferenceSections {
   visualizer: {
     enabled: boolean;
     mode: 'album-ring' | 'radial-bars' | 'waveform-line';
+    position: VisualizerPosition;
     intensity: number;
     sensitivity: number;
     smoothing: number;
@@ -311,6 +313,7 @@ const defaultWallpaperPreferencesValue: WallpaperPreferences = {
   visualizer: {
     enabled: true,
     mode: 'album-ring',
+    position: 'around-album',
     intensity: 0.72,
     sensitivity: 1,
     smoothing: 0.35,
@@ -433,6 +436,7 @@ export const repairWallpaperPreferences = (input: unknown): RepairedWallpaperPre
     visualizer: {
       enabled: booleanOr(sourceVisualizer?.enabled, true),
       mode: oneOf(sourceVisualizer?.mode, ['album-ring', 'radial-bars', 'waveform-line'] as const, 'album-ring'),
+      position: oneOf(sourceVisualizer?.position, ['around-album', 'bottom-up'] as const, 'around-album'),
       intensity: numberInRange(sourceVisualizer?.intensity, 0, 2, 0.72),
       sensitivity: numberInRange(sourceVisualizer?.sensitivity, 0, 3, 1),
       smoothing: numberInRange(sourceVisualizer?.smoothing, 0, 1, 0.35),
