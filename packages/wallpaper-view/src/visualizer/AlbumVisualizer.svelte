@@ -14,20 +14,20 @@
   $: radialBarStarts = polarSamplePoints(safeSamples.map(() => 0), {
     centerX: 50,
     centerY: 50,
-    radius: 36,
+    radius: 47,
     amplitude: 0
   });
   $: radialBarEnds = polarSamplePoints(safeSamples, {
     centerX: 50,
     centerY: 50,
-    radius: 36,
+    radius: 47,
     amplitude: 18
   });
   $: waveformPoints = polarSamplePoints(safeSamples, {
     centerX: 50,
     centerY: 50,
-    radius: 35,
-    amplitude: 14
+    radius: 47,
+    amplitude: 13
   });
   $: waveformSvgPoints = waveformPoints.map(({ x, y }) => `${x},${y}`).join(' ');
   $: ringDash = `${Math.max(0.08, peakLevel)} ${Math.max(0, 1 - peakLevel)}`;
@@ -43,12 +43,12 @@
     {:else if mode === 'waveform-line'}
       <polygon class="circular-waveform" points={waveformSvgPoints} />
     {:else}
-      <circle class="ring-base" cx="50" cy="50" r="36" pathLength="1" />
+      <circle class="ring-base" cx="50" cy="50" r="47" pathLength="1" />
       <circle
         class="ring-active"
         cx="50"
         cy="50"
-        r="36"
+        r="47"
         pathLength="1"
         stroke-dasharray={ringDash}
         style={`opacity: ${0.3 + peakLevel * 0.7}; stroke-width: calc(var(--visualizer-line-width, 2px) + ${peakLevel * 4}px)`}
@@ -59,6 +59,7 @@
 
 <style>
   .visualizer { position: absolute; display: grid; width: 100%; height: 100%; place-items: center; overflow: visible; pointer-events: none; color: var(--visualizer-color, #ffffff); opacity: .78; filter: drop-shadow(0 0 calc(12px * var(--visualizer-glow, 0)) var(--visualizer-color, #ffffff)); }
+  .visualizer-album { border-radius: 50%; }
   .visualizer-canvas { width: 100%; height: 100%; overflow: visible; transform: scale(var(--visualizer-radius, 1)); transform-origin: center; }
   .ring-base, .ring-active { fill: none; stroke: var(--visualizer-color, #ffffff); stroke-linecap: round; }
   .ring-base { opacity: .2; stroke-width: var(--visualizer-line-width, 2px); }
