@@ -2271,6 +2271,21 @@ describe('repository snapshot collection', () => {
 });
 
 describe('repository authority CLI', () => {
+  test('declares project-local linked worktrees as local tool state', async () => {
+    const policy = await loadRepositoryAuthorityPolicy(process.cwd());
+    assert.deepEqual(
+      policy.ignoredArtifacts.find(({ ignorePattern }) => ignorePattern === '/.worktrees/'),
+      {
+        ignorePattern: '/.worktrees/',
+        probePath: '.worktrees/.repository-authority-probe',
+        classification: 'local-tool-state',
+        owner: 'repository operator',
+        producer: 'git worktree add',
+        sourceInputs: [],
+      },
+    );
+  });
+
   test('reports fixed PASS for the current repository authority', async () => {
     const stdout = [];
     const stderr = [];

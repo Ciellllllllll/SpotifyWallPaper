@@ -171,6 +171,11 @@ verify ignore semantics only and need not exist or be tracked. Content
 inspection of ignored output is not part of Phase 0; Phase 1 owns the
 reproducible credential-scan boundary.
 
+Project-local linked worktrees use `/.worktrees/` and are classified as
+operator-owned local tool state. Create them with `git worktree add`; they are
+separate checkouts and are not repository authority. Codex temporary worktrees
+remain governed by the repository entry instructions.
+
 ## Tracked generated source
 
 `apps/cloudflare-worker/worker-configuration.d.ts` is the sole tracked
