@@ -24,7 +24,7 @@
 
 ## Phase report template
 
-Each report must include exactly these fields:
+Each Phase report must include exactly these fields:
 
 - Phase name
 - Summary
@@ -42,6 +42,12 @@ Each report must include exactly these fields:
 Do not add report fields for Ponytail. Record the plan's frozen marketplace
 source, snapshot revision, exact version, verification time, hooks, mode, and
 audit result under `Review outcome`.
+
+Release and strict-gated non-Phase work use the same fields; use the work item
+name in `Phase name`. Small and normal tasks outside a Phase use the compact
+report described in `AGENTS.md` and `docs/04-quality-gates.md` instead of
+creating a Phase report. Any task assigned to a Phase uses the full Phase
+report.
 
 ## Documentation rule
 

@@ -12,16 +12,20 @@ procedure.
 
 1. Read `AGENTS.md`.
 2. Read `docs/README.md`.
-3. Read `docs/01-project-goals-and-non-goals.md`.
-4. Read `docs/04-quality-gates.md`.
-5. Read `docs/05-repository-authority.md`.
-6. Select the domain docs for the current task.
+3. Classify the work using the work classes defined in `AGENTS.md` and
+   `docs/04-quality-gates.md`.
+4. For a small isolated change, read only the touched domain document and the
+   relevant quality checks.
+5. For a normal change, also read `docs/01-project-goals-and-non-goals.md`,
+   `docs/04-quality-gates.md`, and `docs/05-repository-authority.md`.
+6. Strict-gated, documentation-authority, and repository-policy work reads
+   all entry documents and the touched domain documents.
 7. For architecture or cross-cutting work, also read
    `docs/02-repository-structure.md`, `docs/03-implementation-phases.md`,
    and `docs/30-subagent-matrix.md`.
 8. For public-backend work, also read `docs/25-public-backend.md`.
-9. For code-changing work, resolve and freeze the Ponytail baseline and use
-   the review sequence defined by `AGENTS.md`.
+9. For strict-gated work, resolve and freeze the Ponytail
+   baseline and use the review sequence defined by `AGENTS.md`.
 
 ## Current phase selection
 

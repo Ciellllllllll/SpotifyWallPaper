@@ -1,5 +1,25 @@
 # SubAgent Matrix
 
+## Dispatch policy
+
+This matrix makes role dispatch optional for small and normal tasks; it does
+not require a SubAgent for every task. The mandatory roles below apply when a
+strict, Phase, security, or architecture trigger is present.
+
+- Small isolated changes do not start a SubAgent by default.
+- Normal changes start one only when independent reasoning materially reduces
+  risk or the user requests it.
+- Strict-gated, security-sensitive, architecture, Phase, and release work must
+  assign the required roles below. Assign only the roles triggered by the
+  change; do not launch unrelated roles automatically.
+
+## Sol quality reviewer
+
+The Sol reviewer is the read-only quality reviewer for strict-gated work. It
+reviews the exact current diff against the task and relevant specifications.
+`PASS` means zero unresolved valid findings; any valid finding requires a fix
+and a new review of the changed diff.
+
 ## Review roles
 
 Review roles are read-only: they inspect the requested scope but do not edit
@@ -10,17 +30,21 @@ credential, provider, Worker, and Tauri work.
 
 ## SpecGuard Agent
 
-Reads all entry docs and every touched domain doc. Reviews all phase outputs. Blocks completion if hard rules are violated.
+Required for every Phase and strict-gated change. Reads all entry docs and
+every touched domain doc, reviews the phase or strict-gated output, and blocks
+completion if hard rules are violated.
 
 ## Architecture Agent
 
 Owns repository structure, app/crate/package boundaries, build flow, and dependency direction.
 
+Required for architecture or cross-cutting changes.
+
 Reads:
 
 - `02-repository-structure.md`
 - `03-implementation-phases.md`
-- all domain docs during initial planning
+- only the domain documents touched by the task during initial planning
 
 ## Spotify Agent
 
@@ -47,6 +71,10 @@ Reads:
 ## Security Reviewer
 
 Independently reviews secret surfaces, OAuth state/callback handling, cryptography, D1 persistence, Pairing Token verification, CORS, CSRF, redirects, rate limits, logging, reauthorization, deletion, and restore behavior. It does not implement the reviewed task.
+
+Required for strict-gated changes involving credentials, authentication,
+public backend, OAuth, cryptography, logging, redirects, or Tauri. A
+self-review cannot replace this independent perspective.
 
 ## Wallpaper Engine Agent
 
