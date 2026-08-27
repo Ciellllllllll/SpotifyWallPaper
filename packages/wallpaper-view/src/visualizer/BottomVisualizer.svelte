@@ -49,7 +49,7 @@
 
 <style>
   .visualizer { position: absolute; display: grid; width: 100%; height: 100%; place-items: center; overflow: visible; pointer-events: none; color: var(--visualizer-color, #ffffff); opacity: .78; filter: drop-shadow(0 0 calc(12px * var(--visualizer-glow, 0)) var(--visualizer-color, #ffffff)); }
-  .visualizer-canvas { width: 100%; height: 100%; overflow: visible; transform: scaleY(var(--visualizer-radius, 1)); transform-origin: center bottom; }
+  .visualizer-canvas { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; transform: scaleY(var(--visualizer-radius, 1)); transform-origin: center bottom; }
   .bottom-bar { fill: var(--visualizer-color, #ffffff); filter: drop-shadow(0 0 calc(8px * var(--visualizer-glow, 0)) var(--visualizer-color, #ffffff)); }
   .horizontal-waveform { fill: none; stroke: var(--visualizer-color, #ffffff); stroke-linecap: round; stroke-linejoin: round; stroke-width: var(--visualizer-line-width, 2px); }
   .peak-band-base { fill: var(--visualizer-color, #ffffff); fill-opacity: .22; }

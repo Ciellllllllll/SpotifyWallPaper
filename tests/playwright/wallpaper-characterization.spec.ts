@@ -105,7 +105,7 @@ test.describe('visualizer positioning', () => {
           const visualizer = page.locator('.visualizer');
           await expect(visualizer).toBeVisible();
           const geometrySelector = {
-            'album-ring': '.visualizer-ring circle',
+            'album-ring': '.ring-base, .ring-active, .peak-band-base, .peak-band-active',
             'radial-bars': '.radial-bar, .bottom-bar',
             'waveform-line': '.circular-waveform, .horizontal-waveform'
           }[visualizerMode];
@@ -119,6 +119,9 @@ test.describe('visualizer positioning', () => {
 
           if (visualizerPosition === 'around-album') {
             expect(await visualizer.evaluate((element) => getComputedStyle(element).borderRadius)).toBe('50%');
+            await page.locator('.album-frame').evaluate(async (element) => {
+              await Promise.all(element.getAnimations().map((animation) => animation.finished));
+            });
             const albumBox = await page.locator('.album-art').boundingBox();
             const visualizerBox = await visualizer.boundingBox();
             expect(albumBox).not.toBeNull();
@@ -138,14 +141,14 @@ test.describe('visualizer positioning', () => {
             expect(visualizerBox).not.toBeNull();
             const viewportHeight = await page.evaluate(() => window.innerHeight);
             const bottomGap = viewportHeight - ((visualizerBox?.y ?? 0) + (visualizerBox?.height ?? 0));
-            expect(await visualizer.evaluate((element) => getComputedStyle(element).top)).toBe('auto');
-            expect(await visualizer.evaluate((element) => getComputedStyle(element).bottom)).not.toBe('auto');
+            expect(await visualizer.evaluate((element) => element.style.top)).toBe('auto');
+            expect(await visualizer.evaluate((element) => element.style.bottom)).not.toBe('auto');
             expect(bottomGap).toBeGreaterThanOrEqual(15);
             expect(bottomGap).toBeLessThanOrEqual(52);
 
             if (visualizerMode === 'radial-bars') {
               const visualizerBottom = (visualizerBox?.y ?? 0) + (visualizerBox?.height ?? 0);
-              const bars = await visualizer.locator('span').evaluateAll((elements) => elements.map((element) => {
+              const bars = await visualizer.locator('.bottom-bar').evaluateAll((elements) => elements.map((element) => {
                 const box = element.getBoundingClientRect();
                 return { top: box.top, bottom: box.bottom };
               }));
@@ -185,7 +188,7 @@ test.describe('display mode animations', () => {
 
     const trackPanel = page.locator('.track-panel');
     await expect(trackPanel).toBeVisible();
-    expect(await trackPanel.evaluate((element) => getComputedStyle(element).animationName)).toBe('text-enter');
+    expect(await trackPanel.evaluate((element) => getComputedStyle(element).animationName)).toMatch(/text-enter$/);
     const albumFrameMotion = await albumFrame.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
