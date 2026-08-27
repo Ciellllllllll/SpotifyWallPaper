@@ -175,20 +175,28 @@ test.describe('display mode animations', () => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
         schemaVersion: 2,
-        transitions: { reduceMotion: false }
+        transitions: { enabled: false, reduceMotion: false }
       }));
     });
     await freezeBrowserState(page);
     await page.goto('/');
 
     const albumFrame = page.locator('.album-frame');
+    const albumVisualizer = page.locator('.visualizer-album');
     const seekbarPanel = page.locator('.seekbar-panel');
     await expect(albumFrame).toBeVisible();
+    await expect(albumVisualizer).toBeVisible();
     await expect(seekbarPanel).toBeVisible();
     await expect(page.getByRole('group', { name: 'Track details' })).toHaveCount(0);
     const albumOnlySeekbarStyle = await seekbarPanel.evaluate((element) => ({
       top: element.style.top,
       width: element.style.width,
+      transitionProperty: getComputedStyle(element).transitionProperty.split(',').map((value) => value.trim()),
+      transitionDuration: getComputedStyle(element).transitionDuration.split(',').map((value) => value.trim())
+    }));
+    const albumOnlyVisualizerStyle = await albumVisualizer.evaluate((element) => ({
+      top: element.style.top,
+      left: element.style.left,
       transitionProperty: getComputedStyle(element).transitionProperty.split(',').map((value) => value.trim()),
       transitionDuration: getComputedStyle(element).transitionDuration.split(',').map((value) => value.trim())
     }));
@@ -206,6 +214,14 @@ test.describe('display mode animations', () => {
     expect(detailsSeekbarStyle.width).not.toBe(albumOnlySeekbarStyle.width);
     expect(albumOnlySeekbarStyle.transitionProperty).toEqual(expect.arrayContaining(['left', 'top', 'width', 'height', 'transform']));
     expect(albumOnlySeekbarStyle.transitionDuration.some((duration) => duration !== '0s')).toBe(true);
+    const detailsVisualizerStyle = await albumVisualizer.evaluate((element) => ({
+      top: element.style.top,
+      left: element.style.left
+    }));
+    expect(detailsVisualizerStyle.top).not.toBe(albumOnlyVisualizerStyle.top);
+    expect(detailsVisualizerStyle.left).not.toBe(albumOnlyVisualizerStyle.left);
+    expect(albumOnlyVisualizerStyle.transitionProperty).toEqual(expect.arrayContaining(['left', 'top', 'width', 'height', 'transform']));
+    expect(albumOnlyVisualizerStyle.transitionDuration.some((duration) => duration !== '0s')).toBe(true);
     const albumFrameMotion = await albumFrame.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -215,6 +231,11 @@ test.describe('display mode animations', () => {
     });
     expect(albumFrameMotion.properties).toContain('transform');
     expect(albumFrameMotion.durations.some((duration) => duration !== '0s')).toBe(true);
+
+    await page.getByRole('button', { name: 'Show album only' }).click();
+    await expect(seekbarPanel).toBeVisible();
+    expect(await seekbarPanel.evaluate((element) => element.style.top)).toBe(albumOnlySeekbarStyle.top);
+    expect(await albumVisualizer.evaluate((element) => element.style.top)).toBe(albumOnlyVisualizerStyle.top);
   });
 
   test('stops track text enter and album frame transitions when reduced motion is enabled', async ({ page }) => {
@@ -222,6 +243,36 @@ test.describe('display mode animations', () => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
         schemaVersion: 2,
         transitions: { reduceMotion: true }
+      }));
+    });
+    await freezeBrowserState(page);
+    await page.goto('/');
+    const albumFrame = page.locator('.album-frame');
+    await page.getByRole('button', { name: 'Show album details' }).click();
+    const trackPanel = page.locator('.track-panel');
+    await expect(trackPanel).toBeVisible();
+
+    for (const element of [albumFrame, trackPanel]) {
+      const motion = await element.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return {
+          animationName: style.animationName,
+          animationDurations: style.animationDuration.split(',').map((value) => value.trim()),
+          transitionDurations: style.transitionDuration.split(',').map((value) => value.trim())
+        };
+      });
+      expect(motion.animationName).toBe('none');
+      expect(motion.animationDurations.every((duration) => duration === '0s')).toBe(true);
+      expect(motion.transitionDurations.every((duration) => duration === '0s')).toBe(true);
+    }
+  });
+
+  test('stops display mode animations when the user agent requests reduced motion', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        transitions: { enabled: false, reduceMotion: false }
       }));
     });
     await freezeBrowserState(page);

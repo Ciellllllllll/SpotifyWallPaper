@@ -48,9 +48,10 @@ Support:
 
 Switching between `album-only` and `album-details` animates the display
 components independently. The album frame uses its layout transition while the
-track panel enters with the `text-enter` animation. The same contracts apply in
-reverse when details are hidden, and the current and previous track state must
-remain safe while a track-change transition is active.
+track panel enters with the `text-enter` animation. The album frame and seekbar
+position transitions also run in reverse when details are hidden; the track
+panel is removed after details are hidden. The current and previous track state
+must remain safe while a track-change transition is active.
 
 ## Reduce motion
 

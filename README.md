@@ -288,7 +288,7 @@ Rust/TypeScript runtime boundary:
 Visualizer settings support the Phase 6 MVP modes: `album-ring`, `radial-bars`, and `waveform-line`. The `position` can
 be `around-album` for a circular visualizer centered on the album art or `bottom-up` for a bottom-anchored visualizer
 whose bars grow upward. Intensity and sensitivity directly affect the normalized audio output. Low-power performance mode
-reduces visualizer bar count, sample usage, glow, and idle rotation speed.
+reduces visualizer bar count, sample usage, and glow; the visualizer does not rotate as a whole.
 
 ```js
 localStorage.setItem(

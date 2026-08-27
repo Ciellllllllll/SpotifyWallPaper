@@ -66,8 +66,8 @@ presentation effect; current visualizer modes do not rotate as a whole.
 - `around-album` places the visualizer around the album art. The album frame is
   circular and the visualizer geometry shares the album-art center.
 - `bottom-up` anchors the visualizer to the lower edge of the viewport. Radial
-  bars grow upward from the bottom edge; the other modes use the same bottom
-  placement without changing their mode-specific geometry.
+  bars grow upward from the bottom edge, the waveform is stretched across the
+  bottom, and `album-ring` becomes a horizontal peak band.
 
 The safe default is `around-album`. Unsupported values are repaired at the
 settings boundary. Positioning and geometry remain web-view responsibilities;

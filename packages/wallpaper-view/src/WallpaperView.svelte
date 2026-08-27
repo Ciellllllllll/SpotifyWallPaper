@@ -10,6 +10,11 @@
 
   let detailHoverUiVisible = false;
 
+  const squareAlbumItem = (item: LayoutItem): LayoutItem => {
+    const size = Math.max(1, Math.min(item.width, item.height));
+    return item.width === size && item.height === size ? item : { ...item, width: size, height: size };
+  };
+
   $: settings = model.settings;
   $: playback = model.playback;
   $: showAlbumDetails = settings.player.displayMode === 'album-details';
@@ -21,9 +26,9 @@
       )
     : playback.progressMs;
   $: progressPercent = playback.durationMs > 0 ? Math.min(100, (displayedProgressMs / playback.durationMs) * 100) : 0;
-  $: activeAlbumItem = showAlbumDetails
+  $: activeAlbumItem = squareAlbumItem(showAlbumDetails
     ? settings.layout.items.albumArt
-    : { ...settings.layout.items.albumArt, x: 50, y: 48, anchor: 'center' as const, zIndex: 2 };
+    : { ...settings.layout.items.albumArt, x: 50, y: 48, anchor: 'center' as const, zIndex: 2 });
   $: activeSeekbarItem = showAlbumDetails
     ? settings.layout.items.seekbar
     : { ...settings.layout.items.seekbar, x: 50, y: 70.5, anchor: 'center' as const, width: Math.min(440, activeAlbumItem.width + 40), zIndex: 3 };
@@ -166,6 +171,7 @@
         mode={settings.visualizer.mode}
         samples={visualizerSamples}
         peak={model.visualizerFrame?.peak ?? 0}
+        gap={settings.visualizer.gap}
         style={`${bottomVisualizerStyle}; ${visualizerVariables}`}
       />
     {/if}

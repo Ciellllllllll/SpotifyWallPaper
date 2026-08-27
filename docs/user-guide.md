@@ -222,8 +222,8 @@ of the selected mode, and the visualizer does not rotate as a whole.
 The default `album-only` mode hides track details. Switching to
 `album-details` reveals the track panel with its text-entry animation while the
 album frame transitions to its details layout. Switching back reverses the
-change. Enable Reduce Motion when these display-mode animations and transitions
-should be stopped.
+album and seekbar position changes; the detail text is removed. Enable Reduce
+Motion when these display-mode animations and transitions should be stopped.
 
 ## Rust/WASM Visual Core
 

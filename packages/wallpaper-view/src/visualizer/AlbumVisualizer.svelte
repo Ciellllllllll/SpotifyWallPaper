@@ -58,12 +58,14 @@
 </div>
 
 <style>
-  .visualizer { position: absolute; display: grid; width: 100%; height: 100%; place-items: center; overflow: visible; pointer-events: none; color: var(--visualizer-color, #ffffff); opacity: .78; filter: drop-shadow(0 0 calc(12px * var(--visualizer-glow, 0)) var(--visualizer-color, #ffffff)); }
+  .visualizer { position: absolute; display: grid; width: 100%; height: 100%; place-items: center; overflow: visible; pointer-events: none; color: var(--visualizer-color, #ffffff); opacity: .78; filter: drop-shadow(0 0 calc(12px * var(--visualizer-glow, 0)) var(--visualizer-color, #ffffff)); transition: left 560ms var(--ease-out-circ, cubic-bezier(0, .55, .45, 1)), top 560ms var(--ease-out-circ, cubic-bezier(0, .55, .45, 1)), width 560ms var(--ease-out-circ, cubic-bezier(0, .55, .45, 1)), height 560ms var(--ease-out-circ, cubic-bezier(0, .55, .45, 1)), transform 560ms var(--ease-out-circ, cubic-bezier(0, .55, .45, 1)); }
   .visualizer-album { border-radius: 50%; }
-  .visualizer-canvas { width: 100%; height: 100%; overflow: visible; transform: scale(var(--visualizer-radius, 1)); transform-origin: center; }
+  .visualizer-canvas { width: 100%; height: 100%; overflow: visible; transform: scale(max(1, var(--visualizer-radius, 1))); transform-origin: center; }
   .ring-base, .ring-active { fill: none; stroke: var(--visualizer-color, #ffffff); stroke-linecap: round; }
   .ring-base { opacity: .2; stroke-width: var(--visualizer-line-width, 2px); }
   .ring-active { stroke-linecap: round; }
   .radial-bar { stroke: var(--visualizer-color, #ffffff); stroke-linecap: round; stroke-width: var(--visualizer-gap, 2px); }
   .circular-waveform { fill: var(--visualizer-color, #ffffff); fill-opacity: .12; stroke: var(--visualizer-color, #ffffff); stroke-linejoin: round; stroke-width: var(--visualizer-line-width, 2px); }
+  :global(.reduce-motion) .visualizer { transition: none; }
+  @media (prefers-reduced-motion: reduce) { .visualizer { transition: none; } }
 </style>
