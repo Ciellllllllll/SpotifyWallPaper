@@ -51,6 +51,7 @@ export const parseWallpaperProperties = (
   const seekbarStyle = stringProperty(properties, 'seekbar_style');
   const visualizerEnabled = booleanProperty(properties, 'visualizer_enabled');
   const visualizerMode = stringProperty(properties, 'visualizer_mode');
+  const visualizerPosition = stringProperty(properties, 'visualizer_position');
   const visualizerIntensity = numberProperty(properties, 'visualizer_intensity');
   const visualizerSensitivity = numberProperty(properties, 'visualizer_sensitivity');
   const visualizerSmoothing = numberProperty(properties, 'visualizer_smoothing');
@@ -200,6 +201,10 @@ export const parseWallpaperProperties = (
 
   if (visualizerMode === 'album-ring' || visualizerMode === 'radial-bars' || visualizerMode === 'waveform-line') {
     patch.visualizer = { ...patch.visualizer, mode: visualizerMode };
+  }
+
+  if (visualizerPosition === 'around-album' || visualizerPosition === 'bottom-up') {
+    patch.visualizer = { ...patch.visualizer, position: visualizerPosition };
   }
 
   if (

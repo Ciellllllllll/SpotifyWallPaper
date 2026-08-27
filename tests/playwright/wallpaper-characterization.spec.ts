@@ -83,47 +83,323 @@ test.describe('debug overlay', () => {
 
 test.describe('visualizer positioning', () => {
   test.use({ viewport: { width: 1920, height: 1080 } });
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+  });
 
   for (const performanceMode of ['standard', 'low-power'] as const) {
-    for (const visualizerMode of ['album-ring', 'radial-bars', 'waveform-line'] as const) {
-      test(`keeps ${visualizerMode} centered without rotation in ${performanceMode}`, async ({ page }) => {
-        await page.addInitScript(({ performanceMode, visualizerMode }) => {
-          localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-            schemaVersion: 2,
-            performance: { mode: performanceMode },
-            visualizer: { mode: visualizerMode, rotationSpeed: 0.8 },
-            layout: { items: { albumArt: { rotation: 45 } } }
-          }));
-        }, { performanceMode, visualizerMode });
-        await freezeBrowserState(page);
-        await page.goto('/');
+    for (const visualizerPosition of ['around-album', 'bottom-up'] as const) {
+      for (const visualizerMode of ['album-ring', 'radial-bars', 'waveform-line'] as const) {
+        test(`renders ${visualizerPosition} ${visualizerMode} in ${performanceMode}`, async ({ page }) => {
+          await page.addInitScript(({ performanceMode, visualizerMode, visualizerPosition }) => {
+            localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+              schemaVersion: 2,
+              performance: { mode: performanceMode },
+              visualizer: { mode: visualizerMode, position: visualizerPosition, rotationSpeed: 0.8 },
+              layout: { items: { albumArt: { rotation: 45 } } }
+            }));
+          }, { performanceMode, visualizerMode, visualizerPosition });
+          await freezeBrowserState(page);
+          await page.goto('/');
 
-        const visualizer = page.locator('.visualizer');
-        await expect(visualizer).toBeVisible();
-        expect(await visualizer.evaluate((element) => getComputedStyle(element).animationName)).toBe('none');
-        expect(await visualizer.evaluate((element) => getComputedStyle(element).rotate)).toBe('none');
-        expect(await visualizer.evaluate((element) => {
-          const matrix = new DOMMatrix(getComputedStyle(element).transform);
-          return Math.abs(matrix.b) <= 0.000001 && Math.abs(matrix.c) <= 0.000001;
-        })).toBe(true);
+          const visualizer = page.locator('.visualizer');
+          await expect(visualizer).toBeVisible();
+          const geometrySelector = {
+            'album-ring': '.ring-base, .ring-active, .peak-band-base, .peak-band-active',
+            'radial-bars': '.radial-bar, .bottom-bar',
+            'waveform-line': '.circular-waveform, .horizontal-waveform'
+          }[visualizerMode];
+          const geometry = visualizer.locator(geometrySelector);
+          expect(await geometry.count()).toBeGreaterThan(0);
+          expect(await visualizer.evaluate((element) => getComputedStyle(element).rotate)).toBe('none');
+          expect(await visualizer.evaluate((element) => {
+            const matrix = new DOMMatrix(getComputedStyle(element).transform);
+            return Math.abs(matrix.b) <= 0.000001 && Math.abs(matrix.c) <= 0.000001;
+          })).toBe(true);
 
-        const albumBox = await page.locator('.album-art').boundingBox();
-        const visualizerBox = await visualizer.boundingBox();
-        expect(albumBox).not.toBeNull();
-        expect(visualizerBox).not.toBeNull();
-        const centerDeltaX = Math.abs(
-          ((visualizerBox?.x ?? 0) + (visualizerBox?.width ?? 0) / 2) -
-          ((albumBox?.x ?? 0) + (albumBox?.width ?? 0) / 2)
-        );
-        const centerDeltaY = Math.abs(
-          ((visualizerBox?.y ?? 0) + (visualizerBox?.height ?? 0) / 2) -
-          ((albumBox?.y ?? 0) + (albumBox?.height ?? 0) / 2)
-        );
-        expect(centerDeltaX).toBeLessThanOrEqual(0.01);
-        expect(centerDeltaY).toBeLessThanOrEqual(0.01);
-      });
+          if (visualizerPosition === 'around-album') {
+            expect(await visualizer.evaluate((element) => getComputedStyle(element).borderRadius)).toBe('50%');
+            await page.locator('.album-frame').evaluate(async (element) => {
+              await Promise.all(element.getAnimations().map((animation) => animation.finished));
+            });
+            const albumBox = await page.locator('.album-art').boundingBox();
+            const visualizerBox = await visualizer.boundingBox();
+            expect(albumBox).not.toBeNull();
+            expect(visualizerBox).not.toBeNull();
+            const centerDeltaX = Math.abs(
+              ((visualizerBox?.x ?? 0) + (visualizerBox?.width ?? 0) / 2) -
+              ((albumBox?.x ?? 0) + (albumBox?.width ?? 0) / 2)
+            );
+            const centerDeltaY = Math.abs(
+              ((visualizerBox?.y ?? 0) + (visualizerBox?.height ?? 0) / 2) -
+              ((albumBox?.y ?? 0) + (albumBox?.height ?? 0) / 2)
+            );
+            expect(centerDeltaX).toBeLessThanOrEqual(0.01);
+            expect(centerDeltaY).toBeLessThanOrEqual(0.01);
+          } else {
+            const visualizerBox = await visualizer.boundingBox();
+            expect(visualizerBox).not.toBeNull();
+            const viewportHeight = await page.evaluate(() => window.innerHeight);
+            const bottomGap = viewportHeight - ((visualizerBox?.y ?? 0) + (visualizerBox?.height ?? 0));
+            expect(await visualizer.evaluate((element) => element.style.top)).toBe('auto');
+            expect(await visualizer.evaluate((element) => element.style.bottom)).not.toBe('auto');
+            expect(bottomGap).toBeGreaterThanOrEqual(15);
+            expect(bottomGap).toBeLessThanOrEqual(52);
+
+            if (visualizerMode === 'radial-bars') {
+              const visualizerBottom = (visualizerBox?.y ?? 0) + (visualizerBox?.height ?? 0);
+              const bars = await visualizer.locator('.bottom-bar').evaluateAll((elements) => elements.map((element) => {
+                const box = element.getBoundingClientRect();
+                return { top: box.top, bottom: box.bottom };
+              }));
+              expect(bars.length).toBeGreaterThan(0);
+              for (const bar of bars) {
+                expect(bar.top).toBeLessThan(bar.bottom);
+                expect(Math.abs(bar.bottom - visualizerBottom)).toBeLessThanOrEqual(2);
+              }
+            }
+          }
+        });
+      }
     }
   }
+});
+
+test.describe('display mode animations', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+  });
+
+  test('enables track text enter and album frame layout transitions', async ({ page }) => {
+    await page.addInitScript(() => {
+      const browserState = globalThis as typeof globalThis & {
+        __wallpaperAnimationStarts?: string[];
+        __wallpaperTransitionRuns?: string[];
+        __wallpaperElementIdentity?: {
+          albumFrame: Element | null;
+          albumVisualizer: Element | null;
+          seekbarPanel: Element | null;
+        };
+      };
+      browserState.__wallpaperAnimationStarts = [];
+      browserState.__wallpaperTransitionRuns = [];
+      document.addEventListener('animationstart', (event) => {
+        browserState.__wallpaperAnimationStarts?.push(event.animationName);
+      });
+      document.addEventListener('transitionrun', (event) => {
+        const target = event.target;
+        if (target instanceof Element) {
+          const targetName = target.matches('.album-frame')
+            ? 'album-frame'
+            : target.matches('.visualizer-album')
+              ? 'visualizer-album'
+              : target.matches('.seekbar-panel')
+                ? 'seekbar-panel'
+                : null;
+          if (targetName) browserState.__wallpaperTransitionRuns?.push(`${targetName}:${event.propertyName}`);
+        }
+      });
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        transitions: { enabled: false, reduceMotion: false }
+      }));
+    });
+    await freezeBrowserState(page);
+    await page.goto('/');
+
+    const albumFrame = page.locator('.album-frame');
+    const albumVisualizer = page.locator('.visualizer-album');
+    const seekbarPanel = page.locator('.seekbar-panel');
+    await expect(albumFrame).toBeVisible();
+    await expect(albumVisualizer).toBeVisible();
+    await expect(seekbarPanel).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Track details' })).toHaveCount(0);
+    await page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & {
+        __wallpaperElementIdentity?: {
+          albumFrame: Element | null;
+          albumVisualizer: Element | null;
+          seekbarPanel: Element | null;
+        };
+      };
+      browserState.__wallpaperElementIdentity = {
+        albumFrame: document.querySelector('.album-frame'),
+        albumVisualizer: document.querySelector('.visualizer-album'),
+        seekbarPanel: document.querySelector('.seekbar-panel')
+      };
+    });
+    expect(await albumFrame.evaluate((element) => getComputedStyle(element).animationName)).toMatch(/album-enter$/);
+    const albumOnlySeekbarStyle = await seekbarPanel.evaluate((element) => ({
+      top: element.style.top,
+      width: element.style.width,
+      transitionProperty: getComputedStyle(element).transitionProperty.split(',').map((value) => value.trim()),
+      transitionDuration: getComputedStyle(element).transitionDuration.split(',').map((value) => value.trim())
+    }));
+    const albumOnlyVisualizerStyle = await albumVisualizer.evaluate((element) => ({
+      top: element.style.top,
+      left: element.style.left,
+      transitionProperty: getComputedStyle(element).transitionProperty.split(',').map((value) => value.trim()),
+      transitionDuration: getComputedStyle(element).transitionDuration.split(',').map((value) => value.trim())
+    }));
+    await page.getByRole('button', { name: 'Show album details' }).click();
+    await expect.poll(async () => page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & {
+        __wallpaperAnimationStarts?: string[];
+        __wallpaperTransitionRuns?: string[];
+      };
+      const animationStarts = browserState.__wallpaperAnimationStarts ?? [];
+      const transitionRuns = browserState.__wallpaperTransitionRuns ?? [];
+      return animationStarts.some((name) => /album-enter$/.test(name))
+        && animationStarts.some((name) => /text-enter$/.test(name))
+        && transitionRuns.some((name) => name.startsWith('album-frame:'))
+        && transitionRuns.some((name) => name.startsWith('visualizer-album:'))
+        && transitionRuns.some((name) => name.startsWith('seekbar-panel:'));
+    })).toBe(true);
+
+    const motionEvents = await page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & {
+        __wallpaperAnimationStarts?: string[];
+        __wallpaperTransitionRuns?: string[];
+        __wallpaperElementIdentity?: {
+          albumFrame: Element | null;
+          albumVisualizer: Element | null;
+          seekbarPanel: Element | null;
+        };
+      };
+      return {
+        animationStarts: browserState.__wallpaperAnimationStarts ?? [],
+        transitionRuns: browserState.__wallpaperTransitionRuns ?? [],
+        sameAlbumFrame: browserState.__wallpaperElementIdentity?.albumFrame === document.querySelector('.album-frame'),
+        sameAlbumVisualizer: browserState.__wallpaperElementIdentity?.albumVisualizer === document.querySelector('.visualizer-album'),
+        sameSeekbarPanel: browserState.__wallpaperElementIdentity?.seekbarPanel === document.querySelector('.seekbar-panel')
+      };
+    });
+    expect(motionEvents.animationStarts.some((name) => /album-enter$/.test(name))).toBe(true);
+    expect(motionEvents.animationStarts.some((name) => /text-enter$/.test(name))).toBe(true);
+    expect(motionEvents.transitionRuns.some((name) => name.startsWith('album-frame:'))).toBe(true);
+    expect(motionEvents.transitionRuns.some((name) => name.startsWith('visualizer-album:'))).toBe(true);
+    expect(motionEvents.transitionRuns.some((name) => name.startsWith('seekbar-panel:'))).toBe(true);
+    expect(motionEvents.sameAlbumFrame).toBe(true);
+    expect(motionEvents.sameAlbumVisualizer).toBe(true);
+    expect(motionEvents.sameSeekbarPanel).toBe(true);
+
+    const trackPanel = page.locator('.track-panel');
+    await expect(trackPanel).toBeVisible();
+    expect(await trackPanel.evaluate((element) => getComputedStyle(element).animationName)).toMatch(/text-enter$/);
+    await expect(seekbarPanel).toHaveAttribute('aria-hidden', 'true');
+    const detailsSeekbarStyle = await seekbarPanel.evaluate((element) => ({
+      top: element.style.top,
+      width: element.style.width
+    }));
+    await expect(seekbarPanel.locator('.seekbar-input')).toBeDisabled();
+    expect(detailsSeekbarStyle.top).not.toBe(albumOnlySeekbarStyle.top);
+    expect(detailsSeekbarStyle.width).not.toBe(albumOnlySeekbarStyle.width);
+    expect(albumOnlySeekbarStyle.transitionProperty).toEqual(expect.arrayContaining(['left', 'top', 'width', 'height', 'transform']));
+    expect(albumOnlySeekbarStyle.transitionDuration.some((duration) => duration !== '0s')).toBe(true);
+    const detailsVisualizerStyle = await albumVisualizer.evaluate((element) => ({
+      top: element.style.top,
+      left: element.style.left
+    }));
+    expect(detailsVisualizerStyle.top).not.toBe(albumOnlyVisualizerStyle.top);
+    expect(detailsVisualizerStyle.left).not.toBe(albumOnlyVisualizerStyle.left);
+    expect(albumOnlyVisualizerStyle.transitionProperty).toEqual(expect.arrayContaining(['left', 'top', 'width', 'height', 'transform']));
+    expect(albumOnlyVisualizerStyle.transitionDuration.some((duration) => duration !== '0s')).toBe(true);
+    const albumFrameMotion = await albumFrame.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        properties: style.transitionProperty.split(',').map((value) => value.trim()),
+        durations: style.transitionDuration.split(',').map((value) => value.trim())
+      };
+    });
+    expect(albumFrameMotion.properties).toContain('transform');
+    expect(albumFrameMotion.durations.some((duration) => duration !== '0s')).toBe(true);
+
+    await page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & { __wallpaperTransitionRuns?: string[] };
+      browserState.__wallpaperTransitionRuns = [];
+    });
+    await page.getByRole('button', { name: 'Show album only' }).click();
+    await expect.poll(async () => page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & { __wallpaperTransitionRuns?: string[] };
+      return browserState.__wallpaperTransitionRuns?.length ?? 0;
+    })).toBeGreaterThan(0);
+    const reverseTransitionRuns = await page.evaluate(() => {
+      const browserState = globalThis as typeof globalThis & { __wallpaperTransitionRuns?: string[] };
+      return browserState.__wallpaperTransitionRuns ?? [];
+    });
+    expect(reverseTransitionRuns.some((name) => name.startsWith('album-frame:'))).toBe(true);
+    expect(reverseTransitionRuns.some((name) => name.startsWith('visualizer-album:'))).toBe(true);
+    expect(reverseTransitionRuns.some((name) => name.startsWith('seekbar-panel:'))).toBe(true);
+    await expect(seekbarPanel).toBeVisible();
+    expect(await seekbarPanel.evaluate((element) => element.style.top)).toBe(albumOnlySeekbarStyle.top);
+    expect(await albumVisualizer.evaluate((element) => element.style.top)).toBe(albumOnlyVisualizerStyle.top);
+  });
+
+  test('stops track text enter and album frame transitions when reduced motion is enabled', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        transitions: { reduceMotion: true }
+      }));
+    });
+    await freezeBrowserState(page);
+    await page.goto('/');
+    const albumFrame = page.locator('.album-frame');
+    const albumVisualizer = page.locator('.visualizer-album');
+    const seekbarPanel = page.locator('.seekbar-panel');
+    await page.getByRole('button', { name: 'Show album details' }).click();
+    const trackPanel = page.locator('.track-panel');
+    await expect(trackPanel).toBeVisible();
+
+    for (const element of [albumFrame, trackPanel, albumVisualizer, seekbarPanel]) {
+      const motion = await element.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return {
+          animationName: style.animationName,
+          animationDurations: style.animationDuration.split(',').map((value) => value.trim()),
+          transitionDurations: style.transitionDuration.split(',').map((value) => value.trim())
+        };
+      });
+      expect(motion.animationName).toBe('none');
+      expect(motion.animationDurations.every((duration) => duration === '0s')).toBe(true);
+      expect(motion.transitionDurations.every((duration) => duration === '0s')).toBe(true);
+    }
+  });
+
+  test('stops display mode animations when the user agent requests reduced motion', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        transitions: { enabled: false, reduceMotion: false }
+      }));
+    });
+    await freezeBrowserState(page);
+    await page.goto('/');
+    const albumFrame = page.locator('.album-frame');
+    const albumVisualizer = page.locator('.visualizer-album');
+    const seekbarPanel = page.locator('.seekbar-panel');
+    await page.getByRole('button', { name: 'Show album details' }).click();
+    const trackPanel = page.locator('.track-panel');
+    await expect(trackPanel).toBeVisible();
+
+    for (const element of [albumFrame, trackPanel, albumVisualizer, seekbarPanel]) {
+      const motion = await element.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return {
+          animationName: style.animationName,
+          animationDurations: style.animationDuration.split(',').map((value) => value.trim()),
+          transitionDurations: style.transitionDuration.split(',').map((value) => value.trim())
+        };
+      });
+      expect(motion.animationName).toBe('none');
+      expect(motion.animationDurations.every((duration) => duration === '0s')).toBe(true);
+      expect(motion.transitionDurations.every((duration) => duration === '0s')).toBe(true);
+    }
+  });
 });
 
 for (const viewport of viewports) {
@@ -184,8 +460,8 @@ for (const viewport of viewports) {
         }
       });
       await page.goto('/');
-      await expect(page.locator('.waveform polyline')).toHaveCount(1);
-      await expect.poll(async () => page.locator('.waveform polyline').getAttribute('points').then((points) => points?.trim().split(' ').length ?? 0)).toBe(24);
+      await expect(page.locator('.visualizer .circular-waveform')).toHaveCount(1);
+      await expect.poll(async () => page.locator('.visualizer .circular-waveform').getAttribute('points').then((points) => points?.trim().split(' ').length ?? 0)).toBe(24);
 
       await page.evaluate(() => {
         const source = JSON.parse(localStorage.getItem('spotify-wallpaper-settings') ?? '{}') as Record<string, unknown> & { visualizer?: Record<string, unknown> };
@@ -195,7 +471,7 @@ for (const viewport of viewports) {
         }));
       });
       await page.reload();
-      await expect(page.locator('.visualizer span')).toHaveCount(24);
+      await expect(page.locator('.visualizer .radial-bar')).toHaveCount(24);
     });
   });
 }

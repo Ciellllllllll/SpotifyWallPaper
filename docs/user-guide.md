@@ -176,6 +176,7 @@ Visible user property keys:
 - `spotify_refresh_token`
 - `visualizer_enabled`
 - `visualizer_mode`
+- `visualizer_position`
 - `visualizer_intensity`
 - `visualizer_sensitivity`
 - `visualizer_smoothing`
@@ -211,8 +212,18 @@ slider accepts two decimal places in 0.01 steps:
 
 Changes apply without reloading. Start by lowering Smoothing, then raise
 Sensitivity for quiet sources, and use Intensity only for the final visual
-size. Album Ring, Radial Bars, and Waveform Line remain centered on the album
-and do not rotate.
+size. Set Visualizer Position to `around-album` to keep circular geometry
+centered on the album art, or to `bottom-up` to anchor the visualizer at the
+bottom of the screen and grow radial bars upward. The position is independent
+of the selected mode, and the visualizer does not rotate as a whole.
+
+### Display mode animation
+
+The default `album-only` mode hides track details. Switching to
+`album-details` reveals the track panel with its text-entry animation while the
+album frame transitions to its details layout. Switching back reverses the
+album and seekbar position changes; the detail text is removed. Enable Reduce
+Motion when these display-mode animations and transitions should be stopped.
 
 ## Rust/WASM Visual Core
 

@@ -1,12 +1,19 @@
 <script lang="ts">
   import type { LayoutItem, WallpaperViewIntent, WallpaperViewModel } from '@spotify-wallpaper/shared-types';
-  import { effectiveVisualizerConfig, visualizerRingRadius, visualizerStyleVariables } from './visualizerStyle';
+  import AlbumVisualizer from './visualizer/AlbumVisualizer.svelte';
+  import BottomVisualizer from './visualizer/BottomVisualizer.svelte';
+  import { effectiveVisualizerConfig, visualizerStyleVariables } from './visualizerStyle';
 
   export let model: WallpaperViewModel;
   export let onIntent: (intent: WallpaperViewIntent) => void = () => undefined;
   export let showDebug = false;
 
   let detailHoverUiVisible = false;
+
+  const squareAlbumItem = (item: LayoutItem): LayoutItem => {
+    const size = Math.max(1, Math.min(item.width, item.height));
+    return item.width === size && item.height === size ? item : { ...item, width: size, height: size };
+  };
 
   $: settings = model.settings;
   $: playback = model.playback;
@@ -19,9 +26,9 @@
       )
     : playback.progressMs;
   $: progressPercent = playback.durationMs > 0 ? Math.min(100, (displayedProgressMs / playback.durationMs) * 100) : 0;
-  $: activeAlbumItem = showAlbumDetails
+  $: activeAlbumItem = squareAlbumItem(showAlbumDetails
     ? settings.layout.items.albumArt
-    : { ...settings.layout.items.albumArt, x: 50, y: 48, anchor: 'center' as const, zIndex: 2 };
+    : { ...settings.layout.items.albumArt, x: 50, y: 48, anchor: 'center' as const, zIndex: 2 });
   $: activeSeekbarItem = showAlbumDetails
     ? settings.layout.items.seekbar
     : { ...settings.layout.items.seekbar, x: 50, y: 70.5, anchor: 'center' as const, width: Math.min(440, activeAlbumItem.width + 40), zIndex: 3 };
@@ -33,6 +40,16 @@
   $: visualizerVariables = Object.entries(visualizerStyleVariables(settings.visualizer, model.theme, effectiveVisualizer))
     .map(([key, value]) => `${key}: ${value}`)
     .join('; ');
+  $: bottomVisualizerStyle = [
+    'left: 50%',
+    'top: auto',
+    'bottom: clamp(16px, 5cqh, 48px)',
+    'width: min(92cqw, 1200px)',
+    'height: clamp(120px, 26cqh, 300px)',
+    'z-index: 1',
+    'transform: translateX(-50%)',
+    'transform-origin: center bottom'
+  ].join('; ');
   $: themeVariables = [
     `--theme-primary: ${model.theme.primaryColor}`,
     `--theme-secondary: ${model.theme.secondaryColor}`,
@@ -128,6 +145,7 @@
   class:album-only-mode={!showAlbumDetails}
   class:album-details-mode={showAlbumDetails}
   class:detail-hover-ui-visible={detailHoverUiVisible}
+  class:reduce-motion={settings.transitions.reduceMotion}
   aria-label="Spotify wallpaper"
   style={themeVariables}
 >
@@ -141,17 +159,22 @@
   {/if}
 
   {#if settings.visualizer.enabled}
-    <div class="visualizer" aria-hidden="true" style={`${layoutStyle(activeAlbumItem, 0)}; ${visualizerVariables}`}>
-      {#if settings.visualizer.mode === 'waveform-line'}
-        <svg class="waveform" viewBox="0 0 100 40" preserveAspectRatio="none"><polyline points={visualizerSamples.map((sample, index, samples) => `${(index / Math.max(1, samples.length - 1)) * 100},${20 - Math.max(-18, Math.min(18, sample * 20))}`).join(' ')} /></svg>
-      {:else if settings.visualizer.mode === 'album-ring'}
-        <svg class="visualizer-ring" viewBox="-100 -100 200 200"><circle class="ring-base" r={visualizerRingRadius(settings.visualizer.radius)} /><circle class="ring-active" r={visualizerRingRadius(settings.visualizer.radius)} stroke-dasharray={`${Math.max(0.08, (model.visualizerFrame?.peak ?? 0) * 0.94)} 1`} /></svg>
-      {:else}
-        {#each visualizerSamples as sample, index}
-          <span style={`--bar: ${Math.max(0.08, sample)}; --angle: ${(index / Math.max(1, Math.min(effectiveVisualizer.barCount, visualizerSamples.length))) * 360}deg`}></span>
-        {/each}
-      {/if}
-    </div>
+    {#if settings.visualizer.position === 'around-album'}
+      <AlbumVisualizer
+        mode={settings.visualizer.mode}
+        samples={visualizerSamples}
+        peak={model.visualizerFrame?.peak ?? 0}
+        style={`${layoutStyle(activeAlbumItem, 0)}; ${visualizerVariables}`}
+      />
+    {:else}
+      <BottomVisualizer
+        mode={settings.visualizer.mode}
+        samples={visualizerSamples}
+        peak={model.visualizerFrame?.peak ?? 0}
+        gap={settings.visualizer.gap}
+        style={`${bottomVisualizerStyle}; ${visualizerVariables}`}
+      />
+    {/if}
   {/if}
 
   {#if settings.albumArt.visible && activeAlbumItem.enabled}
@@ -234,9 +257,9 @@
     </section>
   {/if}
 
-  {#if !showAlbumDetails && settings.seekbar.visible && settings.seekbar.style === 'line' && activeSeekbarItem.enabled}
-    <section class="layout-item seekbar-panel" style={layoutStyle(activeSeekbarItem)} role="group" aria-label="Playback progress">
-      <input class="seekbar-input" type="range" min="0" max="100" value={progressPercent} disabled={!model.canControlPlayback || playback.durationMs <= 0} aria-label="Seek playback position" on:input={seekFromInput} />
+  {#if settings.seekbar.visible && settings.seekbar.style === 'line' && activeSeekbarItem.enabled}
+    <section class="layout-item seekbar-panel" style={layoutStyle(activeSeekbarItem)} class:seekbar-panel-hidden={showAlbumDetails} aria-hidden={showAlbumDetails} role="group" aria-label="Playback progress">
+      <input class="seekbar-input" type="range" min="0" max="100" value={progressPercent} disabled={showAlbumDetails || !model.canControlPlayback || playback.durationMs <= 0} aria-label="Seek playback position" on:input={seekFromInput} />
       <div class="seekbar" aria-hidden="true"><div class="seekbar-fill" style={`width: ${progressPercent}%`}></div></div>
       <div class="time-row"><span>{formatTime(displayedProgressMs)}</span><span>{formatTime(playback.durationMs)}</span></div>
     </section>
@@ -272,20 +295,21 @@
 
 <style>
   :global(*) { box-sizing: border-box; }
-  .wallpaper { container-type: size; position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; color: var(--theme-text, #f6f7fb); background: #111318; isolation: isolate; }
+  .wallpaper { --ease-out-circ: cubic-bezier(0, 0.55, 0.45, 1); container-type: size; position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; color: var(--theme-text, #f6f7fb); background: #111318; isolation: isolate; }
   .album-backdrop { position: absolute; inset: -8cqh -8cqw; z-index: -2; transform: scale(1.08); }
   .layout-item { position: absolute; }
   .provider-status { position: absolute; top: 18px; left: 50%; z-index: 10; padding: 8px 14px; border: 1px solid rgb(255 255 255 / 30%); border-radius: 999px; color: var(--theme-text); background: rgb(0 0 0 / 38%); transform: translateX(-50%); }
   .settings-status { position: absolute; top: 58px; left: 50%; z-index: 10; padding: 8px 14px; border: 1px solid rgb(255 208 122 / 44%); border-radius: 999px; color: #ffe0a6; background: rgb(0 0 0 / 42%); transform: translateX(-50%); }
-  .album-frame { border-radius: 50%; pointer-events: none; }
-  .album-disc { position: relative; width: 100%; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / 20%); border-radius: 50%; box-shadow: 0 28px 80px rgb(0 0 0 / 42%); }
+  .album-frame { aspect-ratio: 1; overflow: visible; border-radius: 50%; pointer-events: none; filter: drop-shadow(0 28px 80px rgb(0 0 0 / 42%)); animation: album-enter 780ms cubic-bezier(.22, 1, .36, 1) both; transition: left 560ms var(--ease-out-circ), top 560ms var(--ease-out-circ), width 560ms var(--ease-out-circ), height 560ms var(--ease-out-circ), transform 560ms var(--ease-out-circ), filter 420ms ease; }
+  .album-only-mode .album-frame { z-index: 8 !important; }
+  .album-disc { position: relative; width: 100%; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / 20%); border-radius: 50%; background: rgb(255 255 255 / 8%); box-shadow: 0 28px 80px rgb(0 0 0 / 42%); transform-origin: center; transition: filter 420ms ease, scale 420ms cubic-bezier(.22, 1, .36, 1); will-change: transform; }
   .album-art { display: block; width: 100%; height: 100%; object-fit: cover; }
   .album-spinning { animation: album-spin 22s linear infinite; }
   .album-progress-ring { position: absolute; inset: -5%; width: 110%; height: 110%; transform: rotate(-90deg); }
   .album-progress-track, .album-progress-fill { fill: none; stroke-linecap: round; stroke-width: 2.2; }
   .album-progress-track { stroke: rgb(255 255 255 / 20%); }
-  .album-progress-fill { stroke: var(--theme-accent, #96d0b4); stroke-dasharray: 295.31; }
-  .track-panel { display: flex; min-width: 0; flex-direction: column; justify-content: center; text-shadow: 0 2px 18px rgb(0 0 0 / 48%); }
+  .album-progress-fill { stroke: var(--theme-accent, #96d0b4); stroke-dasharray: 295.31; transition: stroke-dashoffset 240ms ease; }
+  .track-panel { position: relative; display: flex; min-width: 0; flex-direction: column; justify-content: center; overflow: visible; text-shadow: 0 2px 18px rgb(0 0 0 / 48%); animation: text-enter 680ms 90ms cubic-bezier(.22, 1, .36, 1) both; transition: opacity 360ms ease, transform 520ms var(--ease-out-circ); }
   .track-panel h1 { margin: 0; display: block; width: 100%; max-width: min(100%, 680px); max-height: 3.05em; overflow: hidden; overflow-wrap: anywhere; font-size: clamp(2.2rem, 4.7cqw, 4.6rem); line-height: 1.04; }
   .track-panel p { margin: 0; overflow-wrap: anywhere; }
   .track-panel .eyebrow { margin: 0 0 16px; color: var(--theme-accent); font-size: clamp(.78rem, 1.2cqw, .9rem); font-weight: 700; text-transform: uppercase; }
@@ -301,8 +325,9 @@
   .volume-control { display: flex; align-items: center; gap: 8px; min-width: 150px; color: var(--theme-muted); font-size: .72rem; }
   .volume-control input { min-width: 0; flex: 1; accent-color: var(--theme-accent); }
   .detail-hover-seekbar { position: relative; min-width: 180px; flex: 1; }
-  .seekbar-panel { display: grid; gap: 6px; padding: 8px 12px; color: var(--theme-text); opacity: 1; transition: opacity 320ms ease; }
-  .album-details-mode .seekbar-panel { opacity: 0; pointer-events: none; }
+  .seekbar-panel { display: grid; gap: 6px; padding: 8px 12px; color: var(--theme-text); opacity: 1; transition: left 560ms var(--ease-out-circ), top 560ms var(--ease-out-circ), width 560ms var(--ease-out-circ), height 560ms var(--ease-out-circ), transform 560ms var(--ease-out-circ), opacity 320ms ease; }
+  .album-details-mode .seekbar-panel,
+  .seekbar-panel-hidden { opacity: 0; pointer-events: none; }
   .seekbar-input { position: absolute; inset: -10px 0 auto; z-index: 1; width: 100%; height: 24px; cursor: pointer; opacity: 0; }
   .seekbar { width: 100%; height: 5px; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 16%); }
   .seekbar-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--theme-primary), var(--theme-accent)); }
@@ -313,14 +338,6 @@
   .clock strong { font-size: clamp(1.2rem, 3cqw, 2.2rem); font-variant-numeric: tabular-nums; }
   .clock span { color: var(--theme-muted); }
   .debug-panel { display: grid; gap: 4px; padding: 10px; color: var(--theme-muted); background: rgb(0 0 0 / 35%); border-radius: 8px; font: .72rem/1.35 ui-monospace, monospace; }
-  .visualizer { position: absolute; pointer-events: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; opacity: .7; overflow: visible; color: var(--visualizer-color); filter: drop-shadow(0 0 calc(14px * var(--visualizer-glow)) var(--visualizer-color)); }
-  .visualizer span { position: absolute; width: var(--visualizer-gap); height: calc(20% + var(--bar) * 30% * var(--visualizer-radius)); background: var(--visualizer-color); transform: rotate(var(--angle)) translateY(calc(-110% * var(--visualizer-radius))); transform-origin: center bottom; box-shadow: 0 0 calc(12px * var(--visualizer-glow)) var(--visualizer-color); }
-  .visualizer-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
-  .ring-base, .ring-active { fill: none; stroke: var(--visualizer-color); stroke-linecap: round; stroke-width: var(--visualizer-line-width); }
-  .ring-base { opacity: .22; }
-  .ring-active { stroke-width: calc(var(--visualizer-line-width) + 2px); }
-  .waveform { width: 100%; height: 100%; overflow: visible; }
-  .waveform polyline { fill: none; stroke: var(--visualizer-color); stroke-width: var(--visualizer-line-width); stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 calc(8px * var(--visualizer-glow)) var(--visualizer-color)); }
   .transition-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; animation: transition-fade-out var(--transition-duration, 700ms) var(--transition-easing, ease-out) both; }
   .transition-backdrop { position: absolute; inset: -8cqh -8cqw; z-index: -1; }
   .transition-album { position: absolute; overflow: hidden; border: 1px solid rgb(255 255 255 / 18%); border-radius: 8px; box-shadow: 0 28px 80px rgb(0 0 0 / 42%); }
@@ -333,8 +350,23 @@
   .transition-slide-left { animation-name: transition-slide-left; }
   .transition-zoom-in { animation-name: transition-zoom-in; }
   .transition-blur-fade { animation-name: transition-blur-fade; }
+  @keyframes album-enter { from { opacity: 0; scale: .94; filter: drop-shadow(0 12px 38px rgb(0 0 0 / 20%)); } to { opacity: 1; scale: 1; filter: drop-shadow(0 28px 80px rgb(0 0 0 / 42%)); } }
+  @keyframes text-enter { from { opacity: 0; translate: 18px 0; } to { opacity: 1; translate: 0 0; } }
   @keyframes transition-slide-left { to { opacity: 0; transform: translateX(-54px); } }
   @keyframes transition-zoom-in { to { opacity: 0; transform: scale(1.08); } }
   @keyframes transition-blur-fade { to { filter: blur(12px); opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .album-spinning { animation: none; } }
+  .reduce-motion .album-spinning,
+  .reduce-motion .album-frame,
+  .reduce-motion .track-panel { animation: none; }
+  .reduce-motion .album-frame,
+  .reduce-motion .seekbar-panel,
+  .reduce-motion .track-panel { transition: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .album-spinning,
+    .album-frame,
+    .track-panel { animation: none; }
+    .album-frame,
+    .seekbar-panel,
+    .track-panel { transition: none; }
+  }
 </style>

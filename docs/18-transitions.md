@@ -44,6 +44,18 @@ Support:
 - visualizer participation
 - reduce motion
 
+## Display mode changes
+
+Switching between `album-only` and `album-details` animates the display
+components independently. The album frame uses its layout transition while the
+track panel enters with the `text-enter` animation. The album frame and seekbar
+position transitions also run in reverse when details are hidden; the track
+panel is removed after details are hidden. The current and previous track state
+must remain safe while a track-change transition is active.
+
 ## Reduce motion
 
-When reduce motion is enabled, aggressive effects should resolve to fade/crossfade behavior.
+When `transitions.reduceMotion` is enabled, aggressive effects should resolve to
+fade/crossfade behavior and display-mode animations and transitions must stop.
+The same stop behavior applies when the user agent reports
+`prefers-reduced-motion: reduce`.

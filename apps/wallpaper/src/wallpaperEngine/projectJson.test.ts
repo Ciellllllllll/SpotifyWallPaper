@@ -61,6 +61,7 @@ describe('Wallpaper Engine project.json', () => {
       'spotify_refresh_token',
       'visualizer_enabled',
       'visualizer_mode',
+      'visualizer_position',
       'visualizer_intensity',
       'visualizer_sensitivity',
       'visualizer_smoothing',
@@ -262,6 +263,18 @@ describe('Wallpaper Engine project.json', () => {
         condition: 'visualizer_enabled.value == true'
       });
     }
+  });
+
+  it('exposes the two supported visualizer positions', () => {
+    expect(loadProjectJson().general?.properties?.visualizer_position).toMatchObject({
+      text: 'Visualizer Position',
+      type: 'combo',
+      value: 'around-album',
+      options: [
+        { label: 'Around Album', value: 'around-album' },
+        { label: 'Bottom Up', value: 'bottom-up' }
+      ]
+    });
   });
 });
 

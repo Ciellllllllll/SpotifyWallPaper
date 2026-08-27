@@ -87,6 +87,13 @@
       ]
     },
     {
+      "name": "active-plans",
+      "classification": "implementation-plan",
+      "paths": [
+        "docs/superpowers/plans/2026-08-27-visualizer-position-display-animation.md"
+      ]
+    },
+    {
       "name": "historical-plans",
       "classification": "historical-evidence",
       "paths": [

@@ -14,6 +14,7 @@ Use this checklist before release or when changing settings, Spotify, Wallpaper 
 - `cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml`
 - `npm audit --audit-level=moderate`
 - `git diff --check`
+- `npx playwright test tests/playwright/wallpaper-characterization.spec.ts --grep "visualizer positioning|display mode animations"`
 
 Resource-intensive commands should run through `h5i capture run`.
 
@@ -49,6 +50,7 @@ Resource-intensive commands should run through `h5i capture run`.
   - `settings_json`
   - `selected_preset`
   - `visualizer_enabled`
+  - `visualizer_position`
   - `performance_mode`
   - `debug_enabled`
 - Confirm `settings_json` is editable as single-line JSON with valid JSON, an empty value, and malformed JSON; malformed JSON must not crash the wallpaper.
@@ -115,6 +117,11 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm long title and many-artist fixtures do not break text layout.
 - Confirm very bright and very dark theme cases keep text readable.
 - Confirm low-power mode reduces visualizer work and blur.
+- Confirm `around-album` centers circular visualizer geometry on the album art.
+- Confirm `bottom-up` is anchored to the lower edge and radial bars grow upward.
+- Confirm `album-only`/`album-details` changes enable track-panel `text-enter`
+  and album-frame transitions.
+- Confirm reduced motion stops those display-mode animations and transitions.
 - Confirm track transitions retain previous/current display state during animation.
 - Confirm reduce-motion resolves aggressive transition presets to safe motion.
 
