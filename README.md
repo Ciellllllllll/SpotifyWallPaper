@@ -285,9 +285,10 @@ Rust/TypeScript runtime boundary:
 | Layout and safe-area semantics | TypeScript settings/view contracts | TypeScript repair/defaults | The retired Rust layout ABI and config-schema crate are not runtime authorities. |
 | Full nested settings validation | TypeScript shared-types | Safe v2 repair/defaults | Settings migration, repair, presets, and secret-free serialization remain TypeScript-owned. |
 
-Visualizer settings support the Phase 6 MVP modes: `album-ring`, `radial-bars`, and `waveform-line`. Intensity and
-sensitivity directly affect the normalized audio output. Low-power performance mode reduces visualizer bar count, sample
-usage, glow, and idle rotation speed.
+Visualizer settings support the Phase 6 MVP modes: `album-ring`, `radial-bars`, and `waveform-line`. The `position` can
+be `around-album` for a circular visualizer centered on the album art or `bottom-up` for a bottom-anchored visualizer
+whose bars grow upward. Intensity and sensitivity directly affect the normalized audio output. Low-power performance mode
+reduces visualizer bar count, sample usage, glow, and idle rotation speed.
 
 ```js
 localStorage.setItem(
@@ -296,6 +297,7 @@ localStorage.setItem(
     visualizer: {
       enabled: true,
       mode: 'radial-bars',
+      position: 'around-album',
       intensity: 0.9,
       sensitivity: 1.2,
       smoothing: 0.35,
@@ -323,8 +325,9 @@ localStorage.setItem(
 location.reload();
 ```
 
-Track-change transitions retain the previous track display until the configured duration finishes. Reduce motion resolves
-aggressive presets to a fade:
+Track-change transitions retain the previous track display until the configured duration finishes. Display-mode changes
+animate the album frame and track panel independently. Reduce motion resolves aggressive presets to a fade and stops
+the display-mode animations:
 
 ```js
 localStorage.setItem(
@@ -446,6 +449,7 @@ Wallpaper Engine manual QA before release candidate:
 | `spotify_client_id` | Legacy direct mode only. Optional for `swpt1.` tokens. Empty and dummy values can be entered without logging the value. |
 | `spotify_refresh_token` | Legacy direct mode only. Accepts a `swpt1.` bundle or raw Refresh Token for manual testing. Never expose a real value in screenshots or logs. |
 | `visualizer_enabled` | Enables/disables visualizer rendering and clears visualizer state when disabled. |
+| `visualizer_position` | Selects `around-album` or `bottom-up`; invalid values are repaired to `around-album`. |
 | `performance_mode` | Accepts `low-power`, `standard`, and `high-effect`; invalid values keep safe defaults. |
 | `debug_enabled` | Toggles the debug panel without exposing token values. |
 | Wallpaper Engine audio listener | Real data uses `wallpaper-engine`; unavailable data falls back to mock or idle visualizer state. |
@@ -545,6 +549,7 @@ The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 - `seekbar_style`
 - `visualizer_enabled`
 - `visualizer_mode`
+- `visualizer_position`
 - `transitions_enabled`
 - `transition_preset`
 - `clock_enabled`

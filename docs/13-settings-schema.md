@@ -48,6 +48,7 @@ The v2 default profile is visually simple and low-risk:
 
 - background album blur or gradient
 - album art center or left-center
+- visualizer position `around-album`
 - track text hidden in the default `album-only` mode
 - seekbar visible
 - clock hidden in the default `album-only` mode; visible in `album-details`
@@ -71,6 +72,10 @@ errors, Rainmeter, and phase reports. A deliberate legacy direct export, if
 ever retained, is a separate user-mediated native sink and is not a settings
 serializer. The v2 field is `spotify.backendOrigin`; legacy `backendUrl` is
 accepted only by the migration DTO and is never emitted.
+
+`visualizer.position` is serialized as either `around-album` or `bottom-up`.
+Missing, malformed, and unsupported values are repaired to the safe default
+`around-album`.
 
 ## Validation policy
 

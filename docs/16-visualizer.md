@@ -57,8 +57,21 @@ The Wallpaper Engine property UI exposes mode plus four live tuning controls:
 
 The optional configurator may expose the remaining parameters. Legacy
 `rotationSpeed` values are accepted during settings repair but have no
-presentation effect; all current visualizer modes remain fixed to the album
-center.
+presentation effect; current visualizer modes do not rotate as a whole.
+
+## Position
+
+`visualizer.position` is independent from the visualizer mode:
+
+- `around-album` places the visualizer around the album art. The album frame is
+  circular and the visualizer geometry shares the album-art center.
+- `bottom-up` anchors the visualizer to the lower edge of the viewport. Radial
+  bars grow upward from the bottom edge; the other modes use the same bottom
+  placement without changing their mode-specific geometry.
+
+The safe default is `around-album`. Unsupported values are repaired at the
+settings boundary. Positioning and geometry remain web-view responsibilities;
+Rust/WASM only supplies pure audio normalization and readability calculations.
 
 ## Data source
 
@@ -73,7 +86,8 @@ normalize each frame to its own peak because that would erase absolute
 loudness. Audio callbacks are rendered as received; no additional polling or
 timer throttling is introduced. Album ring, radial bars, and waveform line do
 not rotate; layout translation and scale are the only shared visualizer
-placement transforms.
+placement transforms. Position-specific geometry and anchoring are owned by the
+web view.
 
 ## Performance
 

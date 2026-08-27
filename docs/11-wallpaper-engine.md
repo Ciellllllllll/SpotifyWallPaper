@@ -13,7 +13,7 @@ The display target is a Wallpaper Engine Web Wallpaper. The same app must also o
 The native property panel exposes only:
 
 - one Spotify Token field
-- visualizer enabled and mode
+- visualizer enabled, mode, and position
 - visualizer intensity, sensitivity, smoothing, and decay speed
 - clock enabled, 12-hour display, and date display
 - performance mode
@@ -52,6 +52,11 @@ intensity (0–2), sensitivity (0–3), smoothing (0–0.95), and decay speed
 (0–1). They are shown only while the visualizer is enabled and apply without
 reloading the wallpaper. Invalid or non-finite property values are ignored and
 the shared settings repair boundary remains authoritative.
+
+The visualizer position is selected independently from its mode. `around-album`
+centers the visualizer on the album art and uses the circular album geometry;
+`bottom-up` anchors it to the lower edge of the viewport and grows radial bars
+upward. Invalid position values are repaired to `around-album`.
 
 Fallback modes:
 
