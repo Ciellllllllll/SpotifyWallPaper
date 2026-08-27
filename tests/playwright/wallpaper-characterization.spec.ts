@@ -106,8 +106,8 @@ test.describe('visualizer positioning', () => {
           await expect(visualizer).toBeVisible();
           const geometrySelector = {
             'album-ring': '.visualizer-ring circle',
-            'radial-bars': 'span',
-            'waveform-line': '.waveform polyline'
+            'radial-bars': '.radial-bar, .bottom-bar',
+            'waveform-line': '.circular-waveform, .horizontal-waveform'
           }[visualizerMode];
           const geometry = visualizer.locator(geometrySelector);
           expect(await geometry.count()).toBeGreaterThan(0);
@@ -285,8 +285,8 @@ for (const viewport of viewports) {
         }
       });
       await page.goto('/');
-      await expect(page.locator('.waveform polyline')).toHaveCount(1);
-      await expect.poll(async () => page.locator('.waveform polyline').getAttribute('points').then((points) => points?.trim().split(' ').length ?? 0)).toBe(24);
+      await expect(page.locator('.visualizer .circular-waveform')).toHaveCount(1);
+      await expect.poll(async () => page.locator('.visualizer .circular-waveform').getAttribute('points').then((points) => points?.trim().split(' ').length ?? 0)).toBe(24);
 
       await page.evaluate(() => {
         const source = JSON.parse(localStorage.getItem('spotify-wallpaper-settings') ?? '{}') as Record<string, unknown> & { visualizer?: Record<string, unknown> };
@@ -296,7 +296,7 @@ for (const viewport of viewports) {
         }));
       });
       await page.reload();
-      await expect(page.locator('.visualizer span')).toHaveCount(24);
+      await expect(page.locator('.visualizer .radial-bar')).toHaveCount(24);
     });
   });
 }
