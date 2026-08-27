@@ -15,10 +15,18 @@ Before changing files, every agent must read:
 
 1. `docs/README.md`
 2. `docs/00-codex-entrypoint.md`
-3. `docs/01-project-goals-and-non-goals.md`
-4. `docs/04-quality-gates.md`
-5. `docs/05-repository-authority.md`
-6. The domain document that matches the current task.
+3. The domain document that matches the current task.
+
+Use the work classes in `docs/04-quality-gates.md` to choose the remaining
+reading. Small isolated changes need only the touched domain document and the
+relevant quality checks. Normal changes also read these documents:
+
+- `docs/01-project-goals-and-non-goals.md`
+- `docs/04-quality-gates.md`
+- `docs/05-repository-authority.md`
+
+Strict-gated, documentation-authority, and repository-policy changes read all
+entry documents.
 
 Architecture or cross-cutting work must also read:
 
@@ -44,38 +52,46 @@ Do not remove mock/browser preview support.
 Do not discard previous track state immediately on track change; transitions need previous and current states.
 Please commit once each phase is complete. Please refer to previous commit messages when writing your commit message.
 
+## Work size and review policy
+
+Ponytail's minimal-solution guidance remains enabled for all coding work, but
+marketplace refresh/freeze and the full audit are required only for strict
+gates (or when the user explicitly requests them). Review cost is proportional
+to risk:
+
+- Small isolated changes meet all of these conditions: they change at most
+  three tracked files; all changed files are inside one existing boundary
+  (`apps/<name>/`, `packages/<name>/`, `crates/<name>/`, `scripts/`, or
+  `tests/`), or they change one `docs/<file>` or one root file; and they change
+  no credential, authentication, security-sensitive, external contract,
+  settings schema, architecture, dependency, CI, repository policy, Phase, or
+  release behavior.
+  They use focused local verification only. Do not start a reviewer or
+  SubAgent by default.
+- Normal changes may cross existing implementation boundaries but do not touch
+  the strict triggers below. Every change that is neither small nor strict is
+  normal. They use focused self-review and tests. Add an
+  independent reviewer or SubAgent only when material uncertainty remains or
+  the user requests it.
+- Security-sensitive, authentication, secrets, public backend, Tauri, settings
+  schema or migration, external contract, dependency, architecture,
+  cross-cutting, documentation-authority, CI or repository-policy changes,
+  Phase/release work, and explicitly requested full QA use the strict review
+  gates below. A task assigned to a Phase or release is strict even when its
+  file count fits the small boundary.
+
+When uncertain, classify the work as high risk. Security and repository hard
+rules are never waived by the small-change path.
+
 ## Ponytail baseline and review policy
-For every implementation or QA plan, resolve the official Ponytail
-marketplace's latest stable release when the plan is finalized and again at
-execution start if that occurs on another day. Confirm the marketplace Git source with
-`codex plugin marketplace list --json`, refresh its snapshot with
-`codex plugin marketplace upgrade ponytail --json`, and cross-check the
-source and exact revision in `.codex-marketplace-install.json`, the snapshot
-and installed `.codex-plugin/plugin.json` plus `package.json`, and
-`codex plugin list --available --json --marketplace ponytail`. If the
-advertised stable differs from the installed version, update with
-`codex plugin add ponytail@ponytail --json`.
 
-Do not adopt a prerelease, source mismatch, indeterminate version, update that
-needs additional authority, or version with unknown compatibility. Stop on
-failure; do not automatically remove Ponytail or fall back to an older
-version. After an update, restart Codex Desktop and use a new task to verify
-identity/version, standard trusted/enabled `SessionStart`, `SubagentStart`, and
-`UserPromptSubmit` hooks, permissions, full mode, the `ponytail` and
-`ponytail-audit` skills, the whole-repository read-only audit contract, and the
-`Lean already. Ship.`
-sentinel. An update also invalidates any earlier reviewer: create a new
-read-only reviewer with the same model, reasoning level, permissions, and
-scope, then review the complete plan again.
-
-Freeze the resolved source, snapshot revision, exact version, verification
-time, hooks, mode, and audit result for that plan in `.codex/reports` and in
-the report's `Review outcome`; a tracked plan or report must carry the same
-baseline. Preserve exact versions in historical evidence. For each frozen
-diff, obtain an explicit read-only Sol review PASS before the Ponytail full
-audit. Only `Lean already. Ship.` is PONYTAIL PASS. A finding or diff change
-returns to Sol review. Commit only after consecutive Sol and Ponytail PASS
-results, then verify HEAD and a clean worktree.
+For strict-gated work only, resolve and freeze the official Ponytail
+marketplace baseline, source, exact revision, version, hooks, mode, and audit
+result in `.codex/reports`. Use the current repository quality-gate procedure
+for the required marketplace checks, Sol review, SpecGuard review, Ponytail
+audit, re-review, and clean-HEAD verification. Do not adopt a prerelease,
+source mismatch, indeterminate version, or update with unknown compatibility.
+`Lean already. Ship.` is the only PONYTAIL PASS.
 
 ## Architectural rule
 The wallpaper display is a Web Wallpaper. Rendering belongs to the web frontend. Rust is used for pure logic through WASM and for the optional Tauri configurator backend.
@@ -111,20 +127,12 @@ Minimum order:
 Lyrics/LRC support is deferred from the current v1 scope. Reintroduce it only after updating the current specs, settings schema, tests, and SpecGuard checklist in the same phase.
 
 ## Reporting format
-At the end of each task or phase, report exactly:
 
-- Phase name
-- Summary
-- Changed files
-- Relevant docs read
-- Implemented requirements
-- Known gaps
-- Tests run
-- Risks introduced
-- Review outcome
-- Fixes from review
-- Verification commands
-- Next recommended task
+Use the full report format for Phase, release, and strict-gated work. For a
+small or normal task, report: work class, summary, changed files, verification,
+known risks, intentionally omitted gates, and next recommended task. Do not
+create a full Phase report for a small isolated change unless the task is part
+of a Phase.
 
 ## Repository authority
 `config/repository-authority.json` is the machine-readable ownership contract.
@@ -134,7 +142,10 @@ exception, ignore ownership, and migration safeguards. All Markdown beneath
 evidence, not current normative behavior.
 
 ## SpecGuard requirement
-SpecGuard must review every phase before it is considered complete. SpecGuard checks scope, secrets handling, performance, settings safety, and whether the implementation still works without Spotify connection by using mock data.
+SpecGuard must review every phase before it is considered complete. For
+non-Phase work, use SpecGuard for strict-gated or explicitly requested reviews.
+It checks scope, secrets handling, performance, settings safety, and whether
+the implementation still works without Spotify connection by using mock data.
 
 ## Rules for Using Commands
 Read the `docs/how-to-use-h5i.md` section before using the h5i command.
