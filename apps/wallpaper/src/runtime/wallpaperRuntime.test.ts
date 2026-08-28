@@ -282,6 +282,132 @@ describe('WallpaperRuntime', () => {
     runtime.dispose();
   });
 
+  it('does not reintroduce idle animation after a Wallpaper Engine source is established', () => {
+    const intervals: Array<() => void> = [];
+    const runtime = createWallpaperRuntime(defaultSettings, {
+      startAudioBridge: () => ({
+        source: 'wallpaper-engine',
+        stop: () => undefined
+      })
+    });
+    const windowStub = {
+      setTimeout: vi.fn(() => 1),
+      clearTimeout: vi.fn(),
+      setInterval: vi.fn((callback: () => void) => {
+        intervals.push(callback);
+        return intervals.length;
+      }),
+      clearInterval: vi.fn()
+    };
+    vi.stubGlobal('window', windowStub);
+
+    try {
+      runtime.start();
+
+      const snapshot = runtimeSnapshot(runtime);
+      expect(snapshot.visualizerFrame?.source).toBe('wallpaper-engine');
+      expect(snapshot.visualizerFrame?.peak).toBe(0);
+      expect(intervals.length).toBeGreaterThan(0);
+    } finally {
+      try {
+        runtime.dispose();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    }
+  });
+
+  it('fades a silent Wallpaper Engine stream to zero within the silence release window', () => {
+    vi.useFakeTimers();
+    const runtime = createWallpaperRuntime(defaultSettings);
+    try {
+      vi.setSystemTime(1000);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0.8],
+        bass: 0.8,
+        mid: 0.8,
+        treble: 0.8,
+        peak: 0.8,
+        timestampMs: 1000
+      });
+      vi.setSystemTime(1100);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0],
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        peak: 0,
+        timestampMs: 1100
+      });
+      expect(runtimeSnapshot(runtime).visualizerFrame?.peak).toBeGreaterThan(0);
+
+      vi.setSystemTime(1301);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0],
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        peak: 0,
+        timestampMs: 1301
+      });
+      expect(runtimeSnapshot(runtime).visualizerFrame?.peak).toBe(0);
+    } finally {
+      runtime.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('uses zero frames instead of idle frames when a Wallpaper Engine callback becomes stale', () => {
+    vi.useFakeTimers();
+    const intervals: Array<() => void> = [];
+    const runtime = createWallpaperRuntime(defaultSettings, {
+      startAudioBridge: () => ({
+        source: 'wallpaper-engine',
+        stop: () => undefined
+      })
+    });
+    try {
+      vi.setSystemTime(1000);
+      const windowStub = {
+        setTimeout: vi.fn(() => 1),
+        clearTimeout: vi.fn(),
+        setInterval: vi.fn((callback: () => void) => {
+          intervals.push(callback);
+          return intervals.length;
+        }),
+        clearInterval: vi.fn()
+      };
+      vi.stubGlobal('window', windowStub);
+      runtime.start();
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0.8],
+        bass: 0.8,
+        mid: 0.8,
+        treble: 0.8,
+        peak: 0.8,
+        timestampMs: 1000
+      });
+
+      vi.setSystemTime(1801);
+      intervals.at(-1)?.();
+
+      const snapshot = runtimeSnapshot(runtime);
+      expect(snapshot.visualizerFrame?.source).toBe('wallpaper-engine');
+      expect(snapshot.visualizerFrame?.peak).toBe(0);
+    } finally {
+      try {
+        runtime.dispose();
+      } finally {
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+      }
+    }
+  });
+
   it('ignores a stale poll completion after provider reconfiguration', async () => {
     const firstPoll = deferred<ProviderResult<NormalizedPlayback>>();
     const secondPoll = deferred<ProviderResult<NormalizedPlayback>>();
@@ -453,7 +579,7 @@ describe('WallpaperRuntime', () => {
     const runtime = createWallpaperRuntime(defaultSettings, {
       startAudioBridge: (onFrame) => {
         callbacks.push(onFrame);
-        return () => undefined;
+        return { source: 'wallpaper-engine', stop: () => undefined };
       }
     });
     let emissions = 0;
@@ -464,31 +590,34 @@ describe('WallpaperRuntime', () => {
     });
     const windowStub = createWindowStub();
     vi.stubGlobal('window', windowStub);
-    runtime.start();
-    const beforeDispose = observed;
-    runtime.dispose();
-    callbacks[0]?.({
-      source: 'wallpaper-engine',
-      samples: [0.8],
-      bass: 0.8,
-      mid: 0.8,
-      treble: 0.8,
-      peak: 0.8,
-      timestampMs: Date.now()
-    });
-    runtime.acceptAudioFrame({
-      source: 'wallpaper-engine',
-      samples: [0.8],
-      bass: 0.8,
-      mid: 0.8,
-      treble: 0.8,
-      peak: 0.8,
-      timestampMs: Date.now()
-    });
-    runtime.toggleDisplayMode();
-    expect(observed).toEqual(beforeDispose);
-    expect(emissions).toBeGreaterThan(0);
-    vi.unstubAllGlobals();
+    try {
+      runtime.start();
+      const beforeDispose = observed;
+      runtime.dispose();
+      callbacks[0]?.({
+        source: 'wallpaper-engine',
+        samples: [0.8],
+        bass: 0.8,
+        mid: 0.8,
+        treble: 0.8,
+        peak: 0.8,
+        timestampMs: Date.now()
+      });
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0.8],
+        bass: 0.8,
+        mid: 0.8,
+        treble: 0.8,
+        peak: 0.8,
+        timestampMs: Date.now()
+      });
+      runtime.toggleDisplayMode();
+      expect(observed).toEqual(beforeDispose);
+      expect(emissions).toBeGreaterThan(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('reconciles owned clock and visualizer timers when settings change', () => {
@@ -507,8 +636,11 @@ describe('WallpaperRuntime', () => {
     expect(windowStub.clearTimeout).toHaveBeenCalled();
     expect(windowStub.setInterval.mock.calls.length).toBeGreaterThan(initialIntervals);
     expect(windowStub.setTimeout.mock.calls.length).toBeGreaterThan(initialTimeouts);
-    runtime.dispose();
-    vi.unstubAllGlobals();
+    try {
+      runtime.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

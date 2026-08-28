@@ -4,6 +4,13 @@ import type { WallpaperAudioListener } from './types';
 const MOCK_SAMPLE_COUNT = 64;
 const MOCK_INTERVAL_MS = 100;
 
+export type AudioBridgeSource = 'wallpaper-engine' | 'mock';
+
+export interface AudioBridgeHandle {
+  source: AudioBridgeSource;
+  stop: () => void;
+}
+
 export const normalizeAudioFrame = (
   input: ArrayLike<number> | null | undefined,
   source: VisualizerSource,
@@ -39,21 +46,24 @@ export const createMockAudioFrame = (timestampMs = Date.now()): VisualizerFrame 
   return normalizeAudioFrame(samples, 'mock', timestampMs);
 };
 
+export const createSilentAudioFrame = (timestampMs = Date.now()): VisualizerFrame =>
+  normalizeAudioFrame(Array<number>(MOCK_SAMPLE_COUNT).fill(0), 'wallpaper-engine', timestampMs);
+
 export const startAudioBridge = (
   onFrame: (frame: VisualizerFrame) => void,
   target: Window = window
-): (() => void) => {
+): AudioBridgeHandle => {
   if (typeof target.wallpaperRegisterAudioListener === 'function') {
     const listener: WallpaperAudioListener = (samples) => onFrame(normalizeAudioFrame(samples, 'wallpaper-engine'));
     target.wallpaperRegisterAudioListener(listener);
-    return () => undefined;
+    return { source: 'wallpaper-engine', stop: () => undefined };
   }
 
   const interval = target.setInterval(() => {
     onFrame(createMockAudioFrame());
   }, MOCK_INTERVAL_MS);
 
-  return () => target.clearInterval(interval);
+  return { source: 'mock', stop: () => target.clearInterval(interval) };
 };
 
 const clampSample = (value: number): number => {

@@ -64,10 +64,26 @@ presentation effect; current visualizer modes do not rotate as a whole.
 `visualizer.position` is independent from the visualizer mode:
 
 - `around-album` places the visualizer around the album art. The album frame is
-  circular and the visualizer geometry shares the album-art center.
+  circular and the visualizer geometry shares the album-art center. The album
+  image and the visualizer use the same frame, so position, size, and display
+  mode transitions stay aligned. In the normalized 100×100 SVG, the album
+  edge is radius 50 for album ring, radial bars, and waveform line.
+- In `around-album`, radial bars are four-corner rectangles rather than round
+  strokes. Their inner edge touches radius 50. Each bar starts as a 2×2
+  normalized square, then adds only the sample-derived extension outward.
+  The 0.03 threshold is checked after normalization but before intensity;
+  intensity still scales the added extension. Samples below the threshold
+  keep their angular and DOM slot but are hidden. An intensity of 0 hides all
+  bars. Bars are placed evenly from the sample count; `gap` is not used by
+  this position.
+- `visualizer.radius` does not move the album edge. It changes only the
+  outward extension of radial bars and the waveform; the album ring remains
+  on radius 50. If album art is hidden or its layout item is disabled, the
+  `around-album` visualizer is hidden with it.
 - `bottom-up` anchors the visualizer to the lower edge of the viewport. Radial
   bars grow upward from the bottom edge, the waveform is stretched across the
-  bottom, and `album-ring` becomes a horizontal peak band.
+  bottom, and `album-ring` becomes a horizontal peak band. Its existing `gap`
+  and radius behavior are unchanged.
 
 The safe default is `around-album`. Unsupported values are repaired at the
 settings boundary. Positioning and geometry remain web-view responsibilities;
@@ -85,9 +101,10 @@ Rust/WASM-or-fallback normalization pass, then rendered intensity. Do not
 normalize each frame to its own peak because that would erase absolute
 loudness. Audio callbacks are rendered as received; no additional polling or
 timer throttling is introduced. Album ring, radial bars, and waveform line do
-not rotate; layout translation and scale are the only shared visualizer
-placement transforms. Position-specific geometry and anchoring are owned by the
-web view.
+not rotate as a whole. In `around-album`, the visualizer cancels the album
+frame's layout rotation while continuing to share its translation, scale,
+size, transitions, and visibility. Position-specific geometry and anchoring
+are owned by the web view.
 
 ## Performance
 
