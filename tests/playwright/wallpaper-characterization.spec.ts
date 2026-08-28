@@ -37,9 +37,14 @@ async function freezeBrowserState(page: Page, samples = audioFixture.samples) {
     Math.random = () => 0.42;
   });
   await page.addInitScript((samples: number[]) => {
-    (window as Window & {
+    const browserWindow = window as Window & {
       wallpaperRegisterAudioListener?: (listener: (samples: number[]) => void) => void;
-    }).wallpaperRegisterAudioListener = (listener) => listener(samples);
+      __wallpaperAudioListener?: (samples: number[]) => void;
+    };
+    browserWindow.wallpaperRegisterAudioListener = (listener) => {
+      browserWindow.__wallpaperAudioListener = listener;
+      listener(samples);
+    };
   }, samples);
 }
 
@@ -118,10 +123,18 @@ test.describe('visualizer positioning', () => {
           })).toBe(true);
 
           if (visualizerPosition === 'around-album') {
+            expect(await visualizer.evaluate((element) => element.parentElement?.classList.contains('album-frame'))).toBe(true);
             expect(await visualizer.evaluate((element) => getComputedStyle(element).borderRadius)).toBe('50%');
             await page.locator('.album-frame').evaluate(async (element) => {
               await Promise.all(element.getAnimations().map((animation) => animation.finished));
             });
+            const visualizerScreenMatrix = await visualizer.locator('.visualizer-canvas').evaluate((element) => {
+              const matrix = element.getScreenCTM();
+              return matrix ? { b: Math.abs(matrix.b), c: Math.abs(matrix.c) } : null;
+            });
+            expect(visualizerScreenMatrix).not.toBeNull();
+            expect(visualizerScreenMatrix?.b).toBeLessThanOrEqual(0.01);
+            expect(visualizerScreenMatrix?.c).toBeLessThanOrEqual(0.01);
             const albumBox = await page.locator('.album-art').boundingBox();
             const visualizerBox = await visualizer.boundingBox();
             expect(albumBox).not.toBeNull();
@@ -136,6 +149,19 @@ test.describe('visualizer positioning', () => {
             );
             expect(centerDeltaX).toBeLessThanOrEqual(0.01);
             expect(centerDeltaY).toBeLessThanOrEqual(0.01);
+
+            if (visualizerMode === 'radial-bars') {
+              const radialBarShape = await visualizer.locator('.radial-bar').first().evaluate((element) => ({
+                tagName: element.tagName,
+                pointCount: element.getAttribute('points')?.trim().split(/\s+/).length ?? 0,
+                stroke: getComputedStyle(element).stroke,
+                strokeLinecap: getComputedStyle(element).strokeLinecap
+              }));
+              expect(radialBarShape.tagName).toBe('polygon');
+              expect(radialBarShape.pointCount).toBe(4);
+              expect(radialBarShape.stroke).toBe('none');
+              expect(radialBarShape.strokeLinecap).not.toBe('round');
+            }
           } else {
             const visualizerBox = await visualizer.boundingBox();
             expect(visualizerBox).not.toBeNull();
@@ -255,7 +281,6 @@ test.describe('display mode animations', () => {
       return animationStarts.some((name) => /album-enter$/.test(name))
         && animationStarts.some((name) => /text-enter$/.test(name))
         && transitionRuns.some((name) => name.startsWith('album-frame:'))
-        && transitionRuns.some((name) => name.startsWith('visualizer-album:'))
         && transitionRuns.some((name) => name.startsWith('seekbar-panel:'));
     })).toBe(true);
 
@@ -280,7 +305,6 @@ test.describe('display mode animations', () => {
     expect(motionEvents.animationStarts.some((name) => /album-enter$/.test(name))).toBe(true);
     expect(motionEvents.animationStarts.some((name) => /text-enter$/.test(name))).toBe(true);
     expect(motionEvents.transitionRuns.some((name) => name.startsWith('album-frame:'))).toBe(true);
-    expect(motionEvents.transitionRuns.some((name) => name.startsWith('visualizer-album:'))).toBe(true);
     expect(motionEvents.transitionRuns.some((name) => name.startsWith('seekbar-panel:'))).toBe(true);
     expect(motionEvents.sameAlbumFrame).toBe(true);
     expect(motionEvents.sameAlbumVisualizer).toBe(true);
@@ -301,12 +325,15 @@ test.describe('display mode animations', () => {
     expect(albumOnlySeekbarStyle.transitionDuration.some((duration) => duration !== '0s')).toBe(true);
     const detailsVisualizerStyle = await albumVisualizer.evaluate((element) => ({
       top: element.style.top,
-      left: element.style.left
+      left: element.style.left,
+      transitionDurations: getComputedStyle(element).transitionDuration.split(',').map((value) => value.trim())
     }));
-    expect(detailsVisualizerStyle.top).not.toBe(albumOnlyVisualizerStyle.top);
-    expect(detailsVisualizerStyle.left).not.toBe(albumOnlyVisualizerStyle.left);
-    expect(albumOnlyVisualizerStyle.transitionProperty).toEqual(expect.arrayContaining(['left', 'top', 'width', 'height', 'transform']));
-    expect(albumOnlyVisualizerStyle.transitionDuration.some((duration) => duration !== '0s')).toBe(true);
+    expect(albumOnlyVisualizerStyle.top).toBe('');
+    expect(albumOnlyVisualizerStyle.left).toBe('');
+    expect(detailsVisualizerStyle.top).toBe('');
+    expect(detailsVisualizerStyle.left).toBe('');
+    expect(albumOnlyVisualizerStyle.transitionDuration.every((duration) => duration === '0s')).toBe(true);
+    expect(detailsVisualizerStyle.transitionDurations.every((duration) => duration === '0s')).toBe(true);
     const albumFrameMotion = await albumFrame.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -326,7 +353,6 @@ test.describe('display mode animations', () => {
       const browserState = globalThis as typeof globalThis & { __wallpaperTransitionRuns?: string[] };
       const transitionRuns = browserState.__wallpaperTransitionRuns ?? [];
       return transitionRuns.some((name) => name.startsWith('album-frame:'))
-        && transitionRuns.some((name) => name.startsWith('visualizer-album:'))
         && transitionRuns.some((name) => name.startsWith('seekbar-panel:'));
     })).toBe(true);
     const reverseTransitionRuns = await page.evaluate(() => {
@@ -334,11 +360,10 @@ test.describe('display mode animations', () => {
       return browserState.__wallpaperTransitionRuns ?? [];
     });
     expect(reverseTransitionRuns.some((name) => name.startsWith('album-frame:'))).toBe(true);
-    expect(reverseTransitionRuns.some((name) => name.startsWith('visualizer-album:'))).toBe(true);
     expect(reverseTransitionRuns.some((name) => name.startsWith('seekbar-panel:'))).toBe(true);
     await expect(seekbarPanel).toBeVisible();
     expect(await seekbarPanel.evaluate((element) => element.style.top)).toBe(albumOnlySeekbarStyle.top);
-    expect(await albumVisualizer.evaluate((element) => element.style.top)).toBe(albumOnlyVisualizerStyle.top);
+    expect(await albumVisualizer.evaluate((element) => element.style.top)).toBe('');
   });
 
   test('stops track text enter and album frame transitions when reduced motion is enabled', async ({ page }) => {
@@ -402,6 +427,200 @@ test.describe('display mode animations', () => {
       expect(motion.animationDurations.every((duration) => duration === '0s')).toBe(true);
       expect(motion.transitionDurations.every((duration) => duration === '0s')).toBe(true);
     }
+  });
+});
+
+test.describe('album visualizer geometry', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  for (const { intensity, sample, visible } of [
+    { intensity: 0.5, sample: 0.04, visible: true },
+    { intensity: 2, sample: 0.029, visible: false }
+  ]) {
+    test(`checks the radial threshold before intensity ${intensity}`, async ({ page }) => {
+      await page.addInitScript(({ intensity }) => {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          visualizer: {
+            position: 'around-album',
+            mode: 'radial-bars',
+            barCount: 8,
+            intensity,
+            sensitivity: 1,
+            smoothing: 0,
+            decay: 1,
+            bassWeight: 1,
+            midWeight: 1,
+            trebleWeight: 1,
+            clampMax: 1,
+            noiseGate: 0
+          }
+        }));
+      }, { intensity });
+      await freezeBrowserState(page, Array.from({ length: 128 }, () => 0));
+      await page.goto('/');
+      await page.evaluate(({ sample }) => {
+        const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
+        const samples = Array.from({ length: 128 }, () => 0);
+        samples[3] = sample;
+        samples[67] = sample;
+        browserWindow.__wallpaperAudioListener?.(samples);
+      }, { sample });
+
+      const bar = page.locator('.visualizer-album .radial-bar').nth(3);
+      if (visible) {
+        await expect(bar).toBeVisible();
+      } else {
+        await expect(bar).toBeHidden();
+      }
+    });
+  }
+
+  test('keeps radial bar DOM slots stable while the threshold changes visibility', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        visualizer: {
+          position: 'around-album',
+          mode: 'radial-bars',
+          barCount: 8,
+          smoothing: 0,
+          decay: 1
+        }
+      }));
+    });
+    await freezeBrowserState(page, Array.from({ length: 128 }, () => 0));
+    await page.goto('/');
+    await page.evaluate(() => {
+      const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
+      browserWindow.__wallpaperAudioListener?.(Array.from({ length: 128 }, () => 0));
+    });
+
+    const bars = page.locator('.visualizer-album .radial-bar');
+    await expect(bars).toHaveCount(8);
+    expect(await bars.evaluateAll((elements) => elements.map((element) => getComputedStyle(element).display))).toEqual(
+      Array.from({ length: 8 }, () => 'none')
+    );
+    await page.evaluate(() => {
+      const browserWindow = window as Window & { __radialBarNodes?: Element[] };
+      browserWindow.__radialBarNodes = [...document.querySelectorAll('.visualizer-album .radial-bar')];
+    });
+
+    await page.evaluate(() => {
+      const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
+      const samples = Array.from({ length: 128 }, () => 0);
+      samples[3] = 1;
+      samples[67] = 1;
+      browserWindow.__wallpaperAudioListener?.(samples);
+    });
+
+    await expect(bars.nth(3)).toBeVisible();
+    expect(await page.evaluate(() => {
+      const browserWindow = window as Window & { __radialBarNodes?: Element[] };
+      const current = [...document.querySelectorAll('.visualizer-album .radial-bar')];
+      return current.length === browserWindow.__radialBarNodes?.length
+        && current.every((element, index) => element === browserWindow.__radialBarNodes?.[index]);
+    })).toBe(true);
+  });
+
+  test('uses the album edge for a custom album size', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        visualizer: { position: 'around-album', mode: 'album-ring' },
+        layout: { items: { albumArt: { width: 320, height: 520 } } }
+      }));
+    });
+    await freezeBrowserState(page);
+    await page.goto('/');
+
+    const albumFrame = page.locator('.album-frame');
+    const visualizer = page.locator('.visualizer-album');
+    await albumFrame.evaluate(async (element) => {
+      await Promise.all(element.getAnimations().map((animation) => animation.finished));
+    });
+    const albumBox = await albumFrame.boundingBox();
+    const visualizerBox = await visualizer.boundingBox();
+    expect(albumBox).not.toBeNull();
+    expect(visualizerBox).not.toBeNull();
+    expect(albumBox?.width).toBeCloseTo(320, 1);
+    expect(albumBox?.height).toBeCloseTo(320, 1);
+    expect(visualizerBox?.width).toBeCloseTo(albumBox?.width ?? 0, 1);
+    expect(visualizerBox?.height).toBeCloseTo(albumBox?.height ?? 0, 1);
+    expect(await visualizer.locator('.ring-base').getAttribute('r')).toBe('50');
+  });
+
+  test('changes only outward extension when radius changes', async ({ page }) => {
+    const readGeometry = async (mode: 'radial-bars' | 'waveform-line', radius: number) => {
+      await page.evaluate(({ mode, radius }) => {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          visualizer: { position: 'around-album', mode, radius }
+        }));
+      }, { mode, radius });
+      await page.reload();
+      if (mode === 'radial-bars') {
+        const bars = page.locator('.visualizer-album .radial-bar');
+        await expect(bars).not.toHaveCount(0);
+        return bars.first().getAttribute('points');
+      }
+      await expect(page.locator('.visualizer-album .circular-waveform')).toHaveCount(1);
+      return page.locator('.visualizer-album .circular-waveform').getAttribute('points');
+    };
+
+    await freezeBrowserState(page);
+    await page.goto('/');
+    const parsePoints = (points: string | null) => (points ?? '').trim().split(/\s+/).map((point) => point.split(',').map(Number));
+
+    const radialSmall = parsePoints(await readGeometry('radial-bars', 0.6));
+    const radialLarge = parsePoints(await readGeometry('radial-bars', 2.2));
+    expect(radialSmall[0][0]).toBeCloseTo(49, 4);
+    expect(radialSmall[0][1]).toBeCloseTo(0, 4);
+    expect(radialSmall[0][0]).toBeCloseTo(radialLarge[0][0], 5);
+    expect(radialSmall[0][1]).toBeCloseTo(radialLarge[0][1], 5);
+    expect(Math.abs(radialSmall[1][1])).toBeLessThan(Math.abs(radialLarge[1][1]));
+
+    const waveformSmall = parsePoints(await readGeometry('waveform-line', 0.6));
+    const waveformLarge = parsePoints(await readGeometry('waveform-line', 2.2));
+    expect(waveformSmall[0][0]).toBeCloseTo(waveformLarge[0][0], 5);
+    expect(waveformSmall[0][1]).toBeGreaterThan(-1.5);
+    expect(waveformSmall[0][1]).toBeLessThan(0);
+    expect(waveformSmall[0][1]).toBeGreaterThan(waveformLarge[0][1]);
+  });
+
+  for (const [name, override] of [
+    ['album art hidden', { albumArt: { visible: false } }],
+    ['album layout disabled', { layout: { items: { albumArt: { enabled: false } } } }]
+  ] as const) {
+    test(`hides around-album visualizer when ${name}`, async ({ page }) => {
+      await page.addInitScript((settings) => {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          visualizer: { position: 'around-album' },
+          ...settings
+        }));
+      }, override);
+      await freezeBrowserState(page);
+      await page.goto('/');
+
+      await expect(page.locator('.album-frame')).toHaveCount(0);
+      await expect(page.locator('.visualizer-album')).toHaveCount(0);
+    });
+  }
+
+  test('keeps bottom-up visualizer independent from hidden album art', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        albumArt: { visible: false },
+        visualizer: { position: 'bottom-up', mode: 'radial-bars' }
+      }));
+    });
+    await freezeBrowserState(page);
+    await page.goto('/');
+
+    await expect(page.locator('.album-frame')).toHaveCount(0);
+    await expect(page.locator('.visualizer-bottom')).toBeVisible();
   });
 });
 

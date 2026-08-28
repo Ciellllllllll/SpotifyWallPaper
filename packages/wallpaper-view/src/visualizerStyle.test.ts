@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { defaultWallpaperPreferences } from '@spotify-wallpaper/shared-types';
-import { effectiveVisualizerConfig, visualizerRingRadius, visualizerStyleVariables } from './visualizerStyle';
+import { defaultWallpaperPreferences, type VisualizerFrame } from '@spotify-wallpaper/shared-types';
+import {
+  effectiveVisualizerConfig,
+  visualizerImpact,
+  visualizerResponseSample,
+  visualizerStyleVariables
+} from './visualizerStyle';
 
 describe('wallpaper view visualizer presentation contract', () => {
   it('maps visualizer presentation settings to CSS variables', () => {
@@ -32,8 +37,13 @@ describe('wallpaper view visualizer presentation contract', () => {
     expect(Object.keys(variables)).not.toContain('--visualizer-rotation-duration');
     expect(Object.keys(variables)).not.toContain('--visualizer-rotation-direction');
     expect(Object.keys(variables)).not.toContain('--visualizer-animation-play-state');
-    expect(visualizerRingRadius(1.7)).toBe(96);
-    expect(config).toEqual({ barCount: 56, glowStrength: 0.62, sampleStep: 1 });
+    expect(config).toEqual({
+      barCount: 56,
+      glowStrength: 0.62,
+      sampleStep: 1,
+      responseGain: 1.15,
+      decorativeLayers: true
+    });
   });
 
   it('reduces presentation work in low-power mode', () => {
@@ -47,6 +57,8 @@ describe('wallpaper view visualizer presentation contract', () => {
     expect(config.barCount).toBe(24);
     expect(config.glowStrength).toBe(0.45);
     expect(config.sampleStep).toBe(2);
+    expect(config.responseGain).toBe(0.9);
+    expect(config.decorativeLayers).toBe(false);
   });
 
   it('caps high-effect presentation work without changing the standard step', () => {
@@ -60,5 +72,27 @@ describe('wallpaper view visualizer presentation contract', () => {
     expect(config.barCount).toBe(120);
     expect(config.glowStrength).toBe(0.96);
     expect(config.sampleStep).toBe(1);
+    expect(config.responseGain).toBe(1.35);
+    expect(config.decorativeLayers).toBe(true);
+  });
+
+  it('uses a bounded nonlinear response curve for visible motion', () => {
+    expect(visualizerResponseSample(0.25, 1.15)).toBeGreaterThan(0.25);
+    expect(visualizerResponseSample(1, 2)).toBe(1.35);
+    expect(visualizerResponseSample(Number.NaN, 1.15)).toBe(0);
+    expect(visualizerResponseSample(-1, 1.15)).toBe(0);
+  });
+
+  it('combines peak and frequency bands into a bounded impact level', () => {
+    const frame: Pick<VisualizerFrame, 'peak' | 'bass' | 'mid' | 'treble'> = {
+      peak: 1,
+      bass: 0.5,
+      mid: 0.25,
+      treble: 0
+    };
+
+    expect(visualizerImpact(frame)).toBeCloseTo(0.6375, 5);
+    expect(visualizerImpact(null)).toBe(0);
+    expect(visualizerImpact({ peak: Number.NaN, bass: 1, mid: 1, treble: 1 })).toBeCloseTo(0.55, 5);
   });
 });

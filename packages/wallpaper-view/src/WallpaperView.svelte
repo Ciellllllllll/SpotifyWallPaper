@@ -158,23 +158,14 @@
     <div class="settings-status" role="status" aria-live="polite">{model.settingsWarning}</div>
   {/if}
 
-  {#if settings.visualizer.enabled}
-    {#if settings.visualizer.position === 'around-album'}
-      <AlbumVisualizer
-        mode={settings.visualizer.mode}
-        samples={visualizerSamples}
-        peak={model.visualizerFrame?.peak ?? 0}
-        style={`${layoutStyle(activeAlbumItem, 0)}; ${visualizerVariables}`}
-      />
-    {:else}
-      <BottomVisualizer
-        mode={settings.visualizer.mode}
-        samples={visualizerSamples}
-        peak={model.visualizerFrame?.peak ?? 0}
-        gap={settings.visualizer.gap}
-        style={`${bottomVisualizerStyle}; ${visualizerVariables}`}
-      />
-    {/if}
+  {#if settings.visualizer.enabled && settings.visualizer.position === 'bottom-up'}
+    <BottomVisualizer
+      mode={settings.visualizer.mode}
+      samples={visualizerSamples}
+      peak={model.visualizerFrame?.peak ?? 0}
+      gap={settings.visualizer.gap}
+      style={`${bottomVisualizerStyle}; ${visualizerVariables}`}
+    />
   {/if}
 
   {#if settings.albumArt.visible && activeAlbumItem.enabled}
@@ -188,6 +179,17 @@
       on:focusin={() => (detailHoverUiVisible = true)}
       on:focusout={() => (detailHoverUiVisible = false)}
     >
+      {#if settings.visualizer.enabled && settings.visualizer.position === 'around-album'}
+        <AlbumVisualizer
+          mode={settings.visualizer.mode}
+          samples={visualizerSamples}
+          peak={model.visualizerFrame?.peak ?? 0}
+          radius={settings.visualizer.radius}
+          rotation={activeAlbumItem.rotation}
+          intensity={settings.visualizer.intensity}
+          style={visualizerVariables}
+        />
+      {/if}
       <div class:album-spinning={playback.isPlaying} class="album-disc">
         <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
       </div>
@@ -302,10 +304,10 @@
   .settings-status { position: absolute; top: 58px; left: 50%; z-index: 10; padding: 8px 14px; border: 1px solid rgb(255 208 122 / 44%); border-radius: 999px; color: #ffe0a6; background: rgb(0 0 0 / 42%); transform: translateX(-50%); }
   .album-frame { aspect-ratio: 1; overflow: visible; border-radius: 50%; pointer-events: none; filter: drop-shadow(0 28px 80px rgb(0 0 0 / 42%)); animation: album-enter 780ms cubic-bezier(.22, 1, .36, 1) both; transition: left 560ms var(--ease-out-circ), top 560ms var(--ease-out-circ), width 560ms var(--ease-out-circ), height 560ms var(--ease-out-circ), transform 560ms var(--ease-out-circ), filter 420ms ease; }
   .album-only-mode .album-frame { z-index: 8 !important; }
-  .album-disc { position: relative; width: 100%; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / 20%); border-radius: 50%; background: rgb(255 255 255 / 8%); box-shadow: 0 28px 80px rgb(0 0 0 / 42%); transform-origin: center; transition: filter 420ms ease, scale 420ms cubic-bezier(.22, 1, .36, 1); will-change: transform; }
+  .album-disc { position: relative; z-index: 1; width: 100%; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / 20%); border-radius: 50%; background: rgb(255 255 255 / 8%); box-shadow: 0 28px 80px rgb(0 0 0 / 42%); transform-origin: center; transition: filter 420ms ease, scale 420ms cubic-bezier(.22, 1, .36, 1); will-change: transform; }
   .album-art { display: block; width: 100%; height: 100%; object-fit: cover; }
   .album-spinning { animation: album-spin 22s linear infinite; }
-  .album-progress-ring { position: absolute; inset: -5%; width: 110%; height: 110%; transform: rotate(-90deg); }
+  .album-progress-ring { position: absolute; inset: -5%; z-index: 2; width: 110%; height: 110%; transform: rotate(-90deg); }
   .album-progress-track, .album-progress-fill { fill: none; stroke-linecap: round; stroke-width: 2.2; }
   .album-progress-track { stroke: rgb(255 255 255 / 20%); }
   .album-progress-fill { stroke: var(--theme-accent, #96d0b4); stroke-dasharray: 295.31; transition: stroke-dashoffset 240ms ease; }

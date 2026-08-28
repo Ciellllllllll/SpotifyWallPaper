@@ -287,8 +287,14 @@ Rust/TypeScript runtime boundary:
 
 Visualizer settings support the Phase 6 MVP modes: `album-ring`, `radial-bars`, and `waveform-line`. The `position` can
 be `around-album` for a circular visualizer centered on the album art or `bottom-up` for a bottom-anchored visualizer
-whose bars grow upward. Intensity and sensitivity directly affect the normalized audio output. Low-power performance mode
-reduces visualizer bar count, sample usage, and glow; the visualizer does not rotate as a whole.
+whose bars grow upward. In `around-album`, the album image and visualizer share the same moving and resizing frame. The
+normalized 100×100 SVG uses radius 50 for the album edge in all three modes. Radial bars are four-point rectangles with
+a 2×2-unit square base; their inner edge touches the album edge, they add audio-derived length outward, values below 0.03
+are checked before intensity, keep their slot but are hidden, and `gap` is ignored in favor of equal placement by sample count. `visualizer.radius`
+changes only the outward extension of radial bars and waveform; it does not move the album edge, and the album ring stays at radius 50. If album
+art is hidden or its layout item is disabled, the `around-album` visualizer is hidden as well. `bottom-up` keeps its
+existing gap and radius behavior. Sensitivity affects normalization, while intensity scales the final rendered output. Low-power
+performance mode reduces visualizer bar count, sample usage, and glow; the visualizer does not rotate as a whole.
 
 ```js
 localStorage.setItem(

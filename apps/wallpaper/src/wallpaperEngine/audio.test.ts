@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createMockAudioFrame, normalizeAudioFrame, startAudioBridge } from './audio';
+import { createMockAudioFrame, createSilentAudioFrame, normalizeAudioFrame, startAudioBridge } from './audio';
 
 describe('Wallpaper Engine audio adapter', () => {
   it('normalizes audio samples into a shared visualizer frame', () => {
@@ -37,6 +37,15 @@ describe('Wallpaper Engine audio adapter', () => {
     expect(frame.peak).toBeGreaterThan(0);
   });
 
+  it('creates a zero Wallpaper Engine frame for stale callbacks', () => {
+    const frame = createSilentAudioFrame(1000);
+
+    expect(frame.source).toBe('wallpaper-engine');
+    expect(frame.samples).toHaveLength(64);
+    expect(frame.peak).toBe(0);
+    expect(frame.samples.every((sample) => sample === 0)).toBe(true);
+  });
+
   it('uses Wallpaper Engine audio listener when present', () => {
     const onFrame = vi.fn();
     let listener: ((samples: number[]) => void) | null = null;
@@ -48,12 +57,13 @@ describe('Wallpaper Engine audio adapter', () => {
       clearInterval: vi.fn()
     } as unknown as Window;
 
-    const stop = startAudioBridge(onFrame, target);
+    const handle = startAudioBridge(onFrame, target);
     expect(listener).not.toBeNull();
     const registeredListener = listener as unknown as (samples: number[]) => void;
     registeredListener([0.1, 0.2, 0.3]);
-    stop();
+    handle.stop();
 
+    expect(handle.source).toBe('wallpaper-engine');
     expect(onFrame).toHaveBeenCalledWith(expect.objectContaining({ source: 'wallpaper-engine', peak: 0.3 }));
   });
 });
