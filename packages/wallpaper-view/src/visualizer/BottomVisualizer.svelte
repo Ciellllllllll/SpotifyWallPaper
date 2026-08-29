@@ -1,11 +1,10 @@
 <script lang="ts">
   import type { WallpaperPreferences } from '@spotify-wallpaper/shared-types';
   import { closedPolarSamplePoints } from '../visualizerGeometry';
-  import { visualizerResponsePeak, visualizerResponseSample } from '../visualizerStyle';
+  import { visualizerResponseSample } from '../visualizerStyle';
 
   export let mode: WallpaperPreferences['visualizer']['mode'];
   export let samples: number[];
-  export let peak: number;
   export let style: string;
   export let gap = 10;
   export let radius = 1;
@@ -20,14 +19,12 @@
   $: safeSamples = Array.isArray(samples)
     ? samples.map((sample) => Number.isFinite(sample) ? Math.max(0, sample) : 0)
     : [];
-  $: displayPeak = Number.isFinite(peak) ? Math.max(0, peak) : 0;
   $: visualizerRadius = Number.isFinite(radius) ? Math.min(2.2, Math.max(0.6, radius)) : 1;
   $: visualizerIntensity = Number.isFinite(intensity) ? Math.min(2, Math.max(0, intensity)) : 1;
   $: sourceSamples = visualizerIntensity > 0
     ? safeSamples.map((sample) => sample / visualizerIntensity)
     : safeSamples.map(() => 0);
   $: responseSamples = sourceSamples.map((sample) => visualizerResponseSample(sample, responseGain) * visualizerIntensity);
-  $: responsePeak = visualizerResponsePeak(displayPeak, visualizerIntensity, responseGain);
   $: radialResponseSamples = sourceSamples.map((sample) => sample + radialBarThresholdEpsilon < radialBarMinSample
     ? 0
     : visualizerResponseSample(sample, responseGain) * visualizerIntensity);
@@ -46,8 +43,6 @@
         })
         .join(' ')
     : '';
-  $: activeBandWidth = mode === 'album-ring' ? responsePeak * 90 : 0;
-  $: activeBandHeight = mode === 'album-ring' ? 3 + responsePeak * 14 : 0;
   $: circularWaveformPoints = mode === 'album-ring'
     ? closedPolarSamplePoints(responseSamples, {
         centerX: 50,
@@ -57,7 +52,6 @@
       })
     : [];
   $: circularWaveformSvgPoints = circularWaveformPoints.map(({ x, y }) => `${x},${y}`).join(' ');
-  $: peakBandBaseline = mode === 'album-ring' ? 98 : 40;
 </script>
 
 <div class="visualizer visualizer-bottom" class:visualizer-low-power={!decorativeLayers} aria-hidden="true" style={style}>
@@ -109,31 +103,13 @@
         points={circularWaveformSvgPoints}
         style={`opacity: ${0.58 + impactLevel * 0.42}`}
       />
-      <rect class="peak-band-base" x="5" y={peakBandBaseline - 2} width="90" height="2" rx="1" />
-      {#if decorativeLayers}
-        <rect
-          class="visualizer-glow peak-band-glow"
-          x={50 - activeBandWidth / 2}
-          y={peakBandBaseline - activeBandHeight - 2}
-          width={activeBandWidth}
-          height={activeBandHeight + 4}
-        />
-      {/if}
-      <rect
-        class="peak-band-active"
-        x={50 - activeBandWidth / 2}
-        y={peakBandBaseline - activeBandHeight}
-        width={activeBandWidth}
-        height={activeBandHeight}
-        rx="2"
-      />
     {/if}
   </svg>
 </div>
 
 <style>
   .visualizer { position: absolute; display: grid; width: 100%; height: 100%; place-items: center; overflow: visible; pointer-events: none; color: var(--visualizer-color, #ffffff); opacity: .84; filter: drop-shadow(0 0 calc(18px * var(--visualizer-glow, 0)) var(--visualizer-color, #ffffff)); transition: color 450ms ease, filter 450ms ease; }
-  .visualizer-low-power { filter: none; }
+  .visualizer-low-power { filter: none; transition: color 450ms ease; }
   .visualizer-canvas { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   .bottom-bar { fill: currentColor; }
   .bottom-bar-glow { fill: currentColor; opacity: .28; filter: blur(1px); }
@@ -144,7 +120,4 @@
   .bottom-ring-base { opacity: .2; stroke-width: var(--visualizer-line-width, 2px); }
   .bottom-circular-waveform { stroke-linecap: round; stroke-width: var(--visualizer-line-width, 2px); }
   .bottom-circular-waveform-glow { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; filter: blur(1px); }
-  .peak-band-base { fill: currentColor; fill-opacity: .22; }
-  .peak-band-glow { fill: currentColor; opacity: .3; filter: blur(1px); }
-  .peak-band-active { fill: currentColor; fill-opacity: .88; }
 </style>

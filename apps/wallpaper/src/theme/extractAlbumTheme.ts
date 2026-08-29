@@ -6,9 +6,11 @@ const COLOR_BUCKET_SIZE = 16;
 const MIN_ALPHA = 0.35;
 const BLACK_THRESHOLD = 24;
 const WHITE_THRESHOLD = 232;
-type ThemeWithDominantColor = WallpaperTheme & { dominantColor?: string };
+export interface AlbumThemeExtraction extends WallpaperTheme {
+  dominantColor?: string;
+}
 
-export const extractAlbumTheme = async (imageUrl: string, seed: string): Promise<WallpaperTheme> => {
+export const extractAlbumTheme = async (imageUrl: string, seed: string): Promise<AlbumThemeExtraction> => {
   if (!imageUrl || typeof Image === 'undefined' || typeof document === 'undefined') {
     return fallbackThemeFromSeed(seed);
   }
@@ -28,7 +30,7 @@ export const extractAlbumTheme = async (imageUrl: string, seed: string): Promise
     return {
       ...themeFromPrimary(averageImageData(data), 'extracted'),
       dominantColor: dominantColorFromImageData(data)
-    } as ThemeWithDominantColor;
+    };
   } catch {
     return fallbackThemeFromSeed(seed);
   }

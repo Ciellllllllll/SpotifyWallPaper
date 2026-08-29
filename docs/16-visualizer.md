@@ -71,7 +71,10 @@ presentation effect; current visualizer modes do not rotate as a whole.
   circular and the visualizer geometry shares the album-art center. The album
   image and the visualizer use the same frame, so position, size, and display
   mode transitions stay aligned. In the normalized 100×100 SVG, the album
-  edge is radius 50 for album ring, radial bars, and waveform line.
+  edge is radius 50 for album ring, radial bars, and waveform line. The
+  `album-ring` mode is a closed, sample-driven circular waveform with a small
+  low-frequency lift; `radial-bars` and `waveform-line` retain their existing
+  shapes for saved settings and explicit selection.
 - In `around-album`, radial bars are four-corner rectangles rather than round
   strokes. Their inner edge touches radius 50. Each bar starts as a 2×2
   normalized square, then adds only the sample-derived extension outward.
@@ -86,7 +89,8 @@ presentation effect; current visualizer modes do not rotate as a whole.
   `around-album` visualizer is hidden with it.
 - `bottom-up` anchors the visualizer to the lower edge of the viewport. Radial
   bars grow upward from the bottom edge, the waveform is stretched across the
-  bottom, and `album-ring` becomes a horizontal peak band. Radial bars are
+  bottom, and `album-ring` becomes a smaller closed circular waveform in that
+  existing bottom region. Radial bars are
   four-corner rectangles with no rounded corners. The same 0.03 threshold is
   applied before intensity, so quieter bars keep their slots but are hidden.
   `gap` still controls their bottom-up spacing; `visualizer.radius` changes
@@ -105,7 +109,7 @@ audio bridge reports whether the active source is `wallpaper-engine` or
 `mock`. Browser preview keeps its mock frames and may use idle animation while
 no audio source is connected. Once the Wallpaper Engine source is established,
 noise-gated input is treated as silence: it never falls back to idle animation,
-it may decay for at most 200ms, and then its normalized state is reset to zero.
+it may decay for about 450ms, and then its normalized state is reset to zero.
 If the Wallpaper Engine callback stops, the performance-mode timeout injects a
 zero frame instead of restarting idle animation.
 
@@ -135,10 +139,12 @@ response = min(1.35, pow(clamp(sample, 0, 1), 0.72) * responseGain)
 only. Standard and high-effect modes add thin glow layers: the album ring
 pulses in thickness and opacity, while radial bars and both waveform views
 receive a back-glow. Low-power keeps the main geometry but omits these extra
-layers. The motion coupling applies a threshold of `impactLevel > 0.40` after
-normalization. Above the threshold, `stretchLevel` maps to album scale
-`1.0..1.12` and particle speed multiplier `1.0..2.0`; the view eases release
-over about 450ms.
+layers. The separate motion state uses the weighted normalized impact
+continuously; it is not gated at a visible threshold. `stretchLevel` maps to
+album scale `1.0..1.18`, particle speed `1.0..2.0`, and particle brightness
+`1.0..1.6`. Low-frequency impact also moves the album content along a stable
+outward vector, capped at 8px. Silence releases all of these values toward
+neutral over about 450ms.
 
 ## Glowing objects
 
@@ -146,15 +152,22 @@ The glowing-object layer is one full-screen Canvas with no per-particle DOM
 nodes. Particles spawn inside a small disk near the viewport center, travel in
 a random outward direction, and are removed when they leave the viewport or
 reach their lifetime. Each object draws as a small theme-colored light with a
-short trail. Spawn timing has jitter, while audio changes speed only and does
-not change the spawn rate. The layer uses a dedicated seeded pseudo-random
-sequence so the particle model can be tested reproducibly.
+short trail. Spawn timing has jitter, while audio changes speed and brightness
+only and does not change the spawn rate. The layer uses a dedicated seeded
+pseudo-random sequence so the particle model can be tested reproducibly.
+
+In `theme` color mode, the runtime extracts a quantized dominant color from the
+album image when that image changes. It is used only by the SVG visualizer
+geometries and glowing objects, with white as the missing-image or
+extraction-failure fallback. Both SVG color and Canvas particle color
+transition over about 450ms; text, background, and the persisted theme object
+are not replaced by this visualizer-only color.
 
 `glowingObjectsEnabled` stops the Canvas animation loop and clears all active
 particles immediately. It is independent of album-art visibility and SVG
 visualizer visibility. The album image and around-album SVG visualizer share an
-inner reactive layer for audio scale; the progress ring remains outside that
-layer and keeps its original size and position.
+inner reactive layer for audio scale and capped outward movement; the progress
+ring remains outside that layer and keeps its original size and position.
 
 ## Performance
 

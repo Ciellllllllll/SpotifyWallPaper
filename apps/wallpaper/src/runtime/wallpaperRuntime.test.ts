@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { NormalizedPlayback, ProviderResult, VisualizerFrame, WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
 import { mockPlayback } from '../mock/mockPlayback';
 import { defaultSettings } from '../settings/defaultSettings';
+import { neutralVisualizerMotion } from '../visualizer/motion';
 import { createWallpaperRuntime } from './wallpaperRuntime';
 
 const settingsForProvider = (provider: WallpaperPreferences['spotify']['provider']): WallpaperPreferences => ({
@@ -534,6 +535,96 @@ describe('WallpaperRuntime', () => {
     }
   });
 
+  it('uses the receive time when an audio frame has an invalid timestamp', () => {
+    vi.useFakeTimers();
+    const runtime = createWallpaperRuntime(defaultSettings);
+    try {
+      vi.setSystemTime(1000);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0.8],
+        bass: 0.8,
+        mid: 0.8,
+        treble: 0.8,
+        peak: 0.8,
+        timestampMs: Number.NaN
+      });
+      vi.setSystemTime(1200);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0],
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        peak: 0,
+        timestampMs: Number.NaN
+      });
+
+      const snapshot = runtimeSnapshot(runtime);
+      expect(snapshot.previousVisualizerFrame?.timestampMs).toBe(1200);
+      expect(Object.values(snapshot.visualizerMotion).every((value) => Number.isFinite(value))).toBe(true);
+      expect(snapshot.visualizerMotion.albumScale).toBeGreaterThan(1);
+    } finally {
+      runtime.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('releases motion from silence start even when visualizer smoothing holds the frame', () => {
+    vi.useFakeTimers();
+    const runtime = createWallpaperRuntime({
+      ...defaultSettings,
+      visualizer: {
+        ...defaultSettings.visualizer,
+        smoothing: 0.95,
+        decay: 0,
+        noiseGate: 0,
+        sensitivity: 1,
+        bassWeight: 1,
+        midWeight: 1,
+        trebleWeight: 1
+      }
+    });
+    try {
+      vi.setSystemTime(1000);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0.8],
+        bass: 0.8,
+        mid: 0.8,
+        treble: 0.8,
+        peak: 0.8,
+        timestampMs: 1000
+      });
+      vi.setSystemTime(1100);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0],
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        peak: 0,
+        timestampMs: 1100
+      });
+      expect(runtimeSnapshot(runtime).visualizerMotion.albumScale).toBeGreaterThan(1);
+
+      vi.setSystemTime(1550);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0],
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        peak: 0,
+        timestampMs: 1550
+      });
+      expect(runtimeSnapshot(runtime).visualizerMotion).toEqual(neutralVisualizerMotion());
+    } finally {
+      runtime.dispose();
+      vi.useRealTimers();
+    }
+  });
+
   it('uses zero frames instead of idle frames when a Wallpaper Engine callback becomes stale', () => {
     vi.useFakeTimers();
     const intervals: Array<() => void> = [];
@@ -664,6 +755,46 @@ describe('WallpaperRuntime', () => {
     expect(extractTheme).toHaveBeenCalledTimes(1);
     expect(snapshot.theme.primaryColor).toBe('#abcdef');
     expect(snapshot.visualizerColor).toBe('#123456');
+    runtime.dispose();
+  });
+
+  it('restores a cached album visualizer color when only glowing objects are re-enabled', async () => {
+    const extractTheme = vi.fn(async () => ({
+      ...themeFixture,
+      dominantColor: '#123456'
+    }));
+    const noVisualReactions = {
+      ...defaultSettings,
+      albumArt: { visible: false },
+      layout: {
+        ...defaultSettings.layout,
+        items: {
+          ...defaultSettings.layout.items,
+          albumArt: { ...defaultSettings.layout.items.albumArt, enabled: false }
+        }
+      },
+      visualizer: {
+        ...defaultSettings.visualizer,
+        enabled: false,
+        glowingObjectsEnabled: false
+      }
+    };
+    const runtime = createWallpaperRuntime(defaultSettings, { extractTheme });
+
+    runtime.applyConfiguration({
+      ...noVisualReactions,
+      visualizer: { ...noVisualReactions.visualizer, glowingObjectsEnabled: true }
+    }, { kind: 'retain' }, true);
+    await flushAsync();
+    expect(runtimeSnapshot(runtime).visualizerColor).toBe('#123456');
+
+    runtime.applyConfiguration(noVisualReactions, { kind: 'retain' }, true);
+    expect(runtimeSnapshot(runtime).visualizerColor).toBe('#ffffff');
+
+    runtime.applyConfiguration(defaultSettings, { kind: 'retain' }, true);
+    await flushAsync();
+    expect(runtimeSnapshot(runtime).visualizerColor).toBe('#123456');
+    expect(extractTheme).toHaveBeenCalledTimes(1);
     runtime.dispose();
   });
 

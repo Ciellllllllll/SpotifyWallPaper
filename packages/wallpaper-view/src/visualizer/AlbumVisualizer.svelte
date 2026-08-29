@@ -132,7 +132,7 @@
 
 <style>
   .visualizer { position: absolute; inset: 0; display: grid; width: 100%; height: 100%; place-items: center; overflow: visible; pointer-events: none; color: var(--visualizer-color, #ffffff); opacity: .84; filter: drop-shadow(0 0 calc(18px * var(--visualizer-glow, 0)) var(--visualizer-color, #ffffff)); transition: color 450ms ease, filter 450ms ease; }
-  .visualizer-low-power { filter: none; }
+  .visualizer-low-power { filter: none; transition: color 450ms ease; }
   .visualizer-album { z-index: 0; border-radius: 50%; }
   .visualizer-canvas { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: visible; transform-origin: center; }
   .ring-base, .ring-active { fill: none; stroke: currentColor; stroke-linecap: round; }

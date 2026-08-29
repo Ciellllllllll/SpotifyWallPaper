@@ -21,7 +21,7 @@ import {
 } from '../spotify/polling';
 import { selectPlaybackProvider } from '../spotify/providers/factory';
 import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from '../theme/colors';
-import { extractAlbumTheme } from '../theme/extractAlbumTheme';
+import { extractAlbumTheme, type AlbumThemeExtraction } from '../theme/extractAlbumTheme';
 import { createTransitionState, type TrackTransitionState } from '../transitions/model';
 import { applyVisualizerIntensity, idleVisualizerFrame, isSilentWallpaperFrame, shapeVisualizerFrame } from '../visualizer/model';
 import { calculateVisualizerMotion, neutralVisualizerMotion, releaseVisualizerMotion } from '../visualizer/motion';
@@ -30,8 +30,6 @@ import type { CredentialUpdate } from '../wallpaperEngine/types';
 
 const SILENCE_RELEASE_MS = 450;
 const FALLBACK_VISUALIZER_COLOR = '#ffffff';
-type AlbumExtractionTheme = WallpaperTheme & { dominantColor?: string };
-
 interface WallpaperRuntimeSnapshot {
   settings: WallpaperPreferences;
   playback: NormalizedPlayback;
@@ -103,7 +101,7 @@ export const createWallpaperRuntime = (
   let pollingRunId = 0;
   let themeGeneration = 0;
   let activeVisualizerColorKey = '';
-  let albumExtractionCache: { key: string; theme: AlbumExtractionTheme } | null = null;
+  let albumExtractionCache: { key: string; theme: AlbumThemeExtraction } | null = null;
   let started = false;
   let disposed = false;
   let safetyGateOpen = true;
@@ -228,7 +226,13 @@ export const createWallpaperRuntime = (
         ? JSON.stringify(['fallback', seed])
         : albumThemeKey;
 
-    if (themeKey === activeThemeKey && artworkKey === activeVisualizerColorKey) return;
+    const cachedVisualizerColor = albumExtractionCache?.key === artworkKey
+      ? albumExtractionCache.theme.dominantColor ?? FALLBACK_VISUALIZER_COLOR
+      : null;
+    const needsCachedVisualizerColor = audioReactionEnabled(snapshot.settings)
+      && cachedVisualizerColor !== null
+      && snapshot.visualizerColor !== cachedVisualizerColor;
+    if (themeKey === activeThemeKey && artworkKey === activeVisualizerColorKey && !needsCachedVisualizerColor) return;
 
     const requestAlbumExtraction = () => {
       if (!imageUrl) {
@@ -245,10 +249,11 @@ export const createWallpaperRuntime = (
       if (albumExtractionCache?.key === artworkKey) {
         const visualizerColor = albumExtractionCache.theme.dominantColor ?? FALLBACK_VISUALIZER_COLOR;
         const shouldApplyTheme = snapshot.settings.theme.mode === 'album' && snapshot.theme !== albumExtractionCache.theme;
-        if (snapshot.visualizerColor === visualizerColor && !shouldApplyTheme) return;
+        const shouldApplyVisualizerColor = audioReactionEnabled(snapshot.settings);
+        if ((!shouldApplyVisualizerColor || snapshot.visualizerColor === visualizerColor) && !shouldApplyTheme) return;
         snapshot = {
           ...snapshot,
-          visualizerColor,
+          ...(shouldApplyVisualizerColor ? { visualizerColor } : {}),
           ...(shouldApplyTheme ? { theme: albumExtractionCache.theme } : {})
         };
         emit();
@@ -258,14 +263,16 @@ export const createWallpaperRuntime = (
       activeVisualizerColorKey = artworkKey;
       const generation = ++themeGeneration;
       void extractTheme(imageUrl, seed)
-        .catch(() => fallbackThemeFromSeed(seed))
+        .catch((): AlbumThemeExtraction => fallbackThemeFromSeed(seed))
         .then((theme) => {
-          const extractedTheme = theme as AlbumExtractionTheme;
+          const extractedTheme = theme;
           if (disposed || generation !== themeGeneration) return;
           albumExtractionCache = { key: artworkKey, theme: extractedTheme };
           snapshot = {
             ...snapshot,
-            visualizerColor: extractedTheme.dominantColor ?? FALLBACK_VISUALIZER_COLOR,
+            ...(audioReactionEnabled(snapshot.settings)
+              ? { visualizerColor: extractedTheme.dominantColor ?? FALLBACK_VISUALIZER_COLOR }
+              : {}),
             ...(snapshot.settings.theme.mode === 'album' && activeThemeKey === albumThemeKey ? { theme: extractedTheme } : {})
           };
           emit();
@@ -449,6 +456,8 @@ export const createWallpaperRuntime = (
         ...(!settings.transitions.enabled ? { transitionState: null } : {})
       };
       if (!nextAudioReactionEnabled) {
+        activeVisualizerColorKey = '';
+        themeGeneration += 1;
         motionReleaseSource = null;
         motionReleaseStartedAtMs = null;
       }
@@ -484,6 +493,7 @@ export const createWallpaperRuntime = (
       if (frame.source === 'mock') {
         lastMockFrameAtMs = nowMs;
       }
+      const safeTimestampMs = Number.isFinite(frame.timestampMs) ? frame.timestampMs : nowMs;
       const isSilent = isSilentWallpaperFrame(frame, snapshot.settings.visualizer);
       let previous = snapshot.previousVisualizerFrame;
       if (frame.source === 'wallpaper-engine') {
@@ -495,19 +505,20 @@ export const createWallpaperRuntime = (
           silentSinceMs = null;
         }
       }
-      const normalized = shapeVisualizerFrame(frame, previous, snapshot.settings.visualizer);
+      const normalized = shapeVisualizerFrame({ ...frame, timestampMs: safeTimestampMs }, previous, snapshot.settings.visualizer);
       const shaped = applyVisualizerIntensity(normalized, snapshot.settings.visualizer.intensity);
-      const targetMotion = calculateVisualizerMotion(normalized);
+      const targetMotion = isSilent ? neutralVisualizerMotion() : calculateVisualizerMotion(normalized);
       const targetEnergy = Math.max(targetMotion.stretchLevel, Math.hypot(targetMotion.albumOffsetX, targetMotion.albumOffsetY) / 8);
       const currentEnergy = Math.max(snapshot.visualizerMotion.stretchLevel, Math.hypot(snapshot.visualizerMotion.albumOffsetX, snapshot.visualizerMotion.albumOffsetY) / 8);
       let visualizerMotion = targetMotion;
       if (targetEnergy < currentEnergy) {
         motionReleaseSource ??= snapshot.visualizerMotion;
-        motionReleaseStartedAtMs ??= normalized.timestampMs;
+        const motionClockMs = isSilent ? nowMs : normalized.timestampMs;
+        motionReleaseStartedAtMs ??= isSilent ? (silentSinceMs ?? motionClockMs) : motionClockMs;
         visualizerMotion = releaseVisualizerMotion(
           motionReleaseSource,
           targetMotion,
-          normalized.timestampMs - motionReleaseStartedAtMs
+          motionClockMs - motionReleaseStartedAtMs
         );
       } else {
         motionReleaseSource = null;

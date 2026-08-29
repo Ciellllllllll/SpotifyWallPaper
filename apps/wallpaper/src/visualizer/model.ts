@@ -12,20 +12,21 @@ export const shapeVisualizerFrame = (
     normalizeSamplesWithCore({ ...frame, samples: weightedSamples }, previous, settings) ??
     normalizeSamplesFallback(weightedSamples, previous?.samples ?? [], settings);
 
-  return frameFromSamples(normalized.samples, frame.source, frame.timestampMs);
+  return frameFromSamples(normalized.samples, frame.source, safeTimestamp(frame.timestampMs));
 };
 
 export const applyVisualizerIntensity = (frame: VisualizerFrame, intensity: number): VisualizerFrame =>
   frameFromSamples(frame.samples.map((sample) => sample * intensity), frame.source, frame.timestampMs);
 
 export const idleVisualizerFrame = (timestampMs: number, settings: WallpaperPreferences['visualizer']): VisualizerFrame => {
-  const phase = timestampMs / 1200;
+  const safeTimestampMs = safeTimestamp(timestampMs);
+  const phase = safeTimestampMs / 1200;
   const samples = Array.from({ length: Math.max(8, Math.min(32, settings.barCount)) }, (_, index) => {
     const wave = Math.sin(phase + index * 0.62) * 0.5 + 0.5;
     return settings.idleAnimation ? wave * 0.18 + 0.08 : 0.08;
   });
 
-  return frameFromSamples(samples, 'idle', timestampMs);
+  return frameFromSamples(samples, 'idle', safeTimestampMs);
 };
 
 export const isSilentWallpaperFrame = (
@@ -83,3 +84,5 @@ const average = (samples: number[]): number => {
 
   return samples.reduce((sum, sample) => sum + sample, 0) / samples.length;
 };
+
+const safeTimestamp = (value: number): number => Number.isFinite(value) ? value : Date.now();

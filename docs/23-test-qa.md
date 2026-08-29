@@ -16,11 +16,15 @@ geometry, while `bottom-up` is anchored to the viewport bottom and grows radial
 bars upward. Display-mode coverage checks the track-panel `text-enter` animation
 and album-frame transition, and reduced motion verifies that both are stopped.
 Glowing-object coverage verifies the shared motion state with the SVG visualizer
-disabled, the 450ms album release scale, the fixed progress ring, automatic
-particle density for all three performance profiles, and immediate Canvas loop
-shutdown. Fixed-time visual fixtures still cover 1920×1080 and 3440×1440 for
-both display modes; these contract checks do not alter the existing default
-screenshot set.
+disabled, continuous album scale and capped offset, synchronized speed and
+brightness, the fixed progress ring, automatic particle density for all three
+performance profiles, and immediate Canvas loop shutdown. Circular waveform
+coverage verifies closed album and bottom paths and the visualizer-only color
+transition contract. Fixed-time visual fixtures still cover 1920×1080 and
+3440×1440 for both display modes; the fixed-time default screenshots disable
+the continuously animated particle layer and are updated when an intentional
+visual change such as the video-style visualizer changes the rendered
+appearance.
 
 ## Unit tests
 
@@ -43,8 +47,8 @@ TypeScript:
 - error classification
 - settings load fallback
 - mock mode initialization
-- Visualizer motion threshold, maximum album scale, maximum particle speed,
-  silence release, and non-finite input handling
+- Visualizer motion continuity, maximum album scale, maximum particle speed and
+  brightness, capped album offset, silence release, and non-finite input handling
 - Glowing-particle outward movement, speed multiplier, lifetime, viewport cull,
   and finite-state safety
 - Worker OAuth state expiry and replay
@@ -85,13 +89,17 @@ Confirm:
 - Visualizer intensity changes output.
 - Glowing objects start near the viewport center, travel outward, and remain
   visible independently of album art and the SVG visualizer.
-- Impact above 0.40 expands the album content and accelerates particles; silence
-  returns both to their neutral state.
-- The album progress ring remains fixed while the inner album content scales.
+- Continuous impact expands the album content and accelerates/brightens
+  particles; low-frequency impact moves the content by at most 8px and silence
+  returns all values to neutral.
+- The album progress ring remains fixed while the inner album content scales
+  and moves.
 - Zero particle count/life use the automatic performance-mode values, and the
   disabled toggle stops and clears the Canvas loop.
 - `around-album` centers circular visualizer geometry on the album art.
-- `bottom-up` stays at the lower edge and grows radial bars upward.
+- `album-ring` is a closed circular waveform around the album and in the
+  smaller bottom region; `bottom-up` stays at the lower edge and grows radial
+  bars upward.
 - Switching between `album-only` and `album-details` enables the track-panel
   text entry and album-frame transition.
 - Reduced motion stops those display-mode animations and transitions.

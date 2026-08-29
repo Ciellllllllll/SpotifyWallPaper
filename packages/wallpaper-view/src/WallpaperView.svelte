@@ -177,7 +177,6 @@
     <BottomVisualizer
       mode={settings.visualizer.mode}
       samples={visualizerSamples}
-      peak={model.visualizerFrame?.peak ?? 0}
       gap={settings.visualizer.gap}
       radius={settings.visualizer.radius}
       intensity={settings.visualizer.intensity}
@@ -332,7 +331,7 @@
   .settings-status { position: absolute; top: 58px; left: 50%; z-index: 10; padding: 8px 14px; border: 1px solid rgb(255 208 122 / 44%); border-radius: 999px; color: #ffe0a6; background: rgb(0 0 0 / 42%); transform: translateX(-50%); }
   .album-frame { aspect-ratio: 1; overflow: visible; border-radius: 50%; pointer-events: none; filter: drop-shadow(0 28px 80px rgb(0 0 0 / 42%)); animation: album-enter 780ms cubic-bezier(.22, 1, .36, 1) both; transition: left 560ms var(--ease-out-circ), top 560ms var(--ease-out-circ), width 560ms var(--ease-out-circ), height 560ms var(--ease-out-circ), transform 560ms var(--ease-out-circ), filter 420ms ease; }
   .album-only-mode .album-frame { z-index: 8 !important; }
-  .album-reactive-content { position: absolute; inset: 0; overflow: visible; border-radius: 50%; transform-origin: center; transition: scale 450ms cubic-bezier(.22, 1, .36, 1); will-change: scale; }
+  .album-reactive-content { position: absolute; inset: 0; overflow: visible; border-radius: 50%; transform-origin: center; transition: scale 90ms linear, translate 90ms linear; will-change: scale, translate; }
   .album-disc { position: relative; z-index: 1; width: 100%; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / 20%); border-radius: 50%; background: rgb(255 255 255 / 8%); box-shadow: 0 28px 80px rgb(0 0 0 / 42%); transform-origin: center; transition: filter 420ms ease, scale 420ms cubic-bezier(.22, 1, .36, 1); will-change: transform; }
   .album-art { display: block; width: 100%; height: 100%; object-fit: cover; }
   .album-spinning { animation: album-spin 22s linear infinite; }

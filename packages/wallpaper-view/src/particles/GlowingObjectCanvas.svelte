@@ -1,10 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import {
-    PARTICLE_SPEED_TRANSITION_MS,
     advanceGlowingParticles,
     clampParticleBrightness,
-    interpolateParticleSpeedMultiplier,
     spawnGlowingParticle,
     type GlowingParticle,
     type ParticleViewport
@@ -33,10 +31,6 @@
   let lastFrameMs: number | null = null;
   let drawAccumulatorMs = 0;
   let nextSpawnAtMs = 0;
-  let smoothedSpeedMultiplier = 1;
-  let speedTransitionFrom = 1;
-  let speedTransitionTo = 1;
-  let speedTransitionElapsedMs = PARTICLE_SPEED_TRANSITION_MS;
   let renderedColor = '#ffffff';
   let colorTransitionFrom = '#ffffff';
   let colorTransitionTo = '#ffffff';
@@ -114,10 +108,6 @@
     lastFrameMs = null;
     drawAccumulatorMs = 0;
     nextSpawnAtMs = 0;
-    smoothedSpeedMultiplier = 1;
-    speedTransitionFrom = 1;
-    speedTransitionTo = 1;
-    speedTransitionElapsedMs = PARTICLE_SPEED_TRANSITION_MS;
     particles = [];
     setActiveParticleCount(0);
     clearCanvas();
@@ -139,18 +129,6 @@
 
   const renderFrame = (nowMs: number, deltaMs: number) => {
     if (!context) return;
-    const targetSpeed = clamp(Number.isFinite(speedMultiplier) ? speedMultiplier : 1, 1, 2);
-    if (targetSpeed !== speedTransitionTo) {
-      speedTransitionFrom = smoothedSpeedMultiplier;
-      speedTransitionTo = targetSpeed;
-      speedTransitionElapsedMs = 0;
-    }
-    speedTransitionElapsedMs = Math.min(PARTICLE_SPEED_TRANSITION_MS, speedTransitionElapsedMs + deltaMs);
-    smoothedSpeedMultiplier = interpolateParticleSpeedMultiplier(
-      speedTransitionFrom,
-      speedTransitionTo,
-      speedTransitionElapsedMs
-    );
     const targetColor = normalizeColor(color);
     if (targetColor !== colorTransitionTo) {
       colorTransitionFrom = renderedColor;
@@ -160,7 +138,7 @@
     colorTransitionElapsedMs = Math.min(COLOR_TRANSITION_MS, colorTransitionElapsedMs + deltaMs);
     renderedColor = interpolateColor(colorTransitionFrom, colorTransitionTo, colorTransitionElapsedMs / COLOR_TRANSITION_MS);
     const requestedCount = safeParticleCount(particleCount);
-    particles = advanceGlowingParticles(particles, viewport, deltaMs, smoothedSpeedMultiplier);
+    particles = advanceGlowingParticles(particles, viewport, deltaMs, speedMultiplier);
     if (particles.length > requestedCount) {
       particles = requestedCount > 0 ? particles.slice(-requestedCount) : [];
     }
@@ -265,16 +243,6 @@
 <div
   class="glowing-object-layer"
   aria-hidden="true"
-  data-enabled={enabled}
-  data-particle-count={particleCount}
-  data-active-particles={activeParticleCount}
-  data-speed-multiplier={speedMultiplier}
-  data-brightness-multiplier={brightnessMultiplier}
-  data-color={color}
-  data-rendered-color={renderedColor}
-  data-pixel-ratio={pixelRatio}
-  data-glow={glow}
-  data-glow-strength={glowStrength}
 >
   <canvas
     bind:this={canvas}
@@ -286,7 +254,6 @@
     data-speed-multiplier={speedMultiplier}
     data-brightness-multiplier={brightnessMultiplier}
     data-color={color}
-    data-rendered-color={renderedColor}
     data-pixel-ratio={pixelRatio}
     data-glow={glow}
     data-glow-strength={glowStrength}

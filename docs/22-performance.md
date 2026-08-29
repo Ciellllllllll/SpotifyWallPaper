@@ -47,12 +47,15 @@ High-effect:
 - Glowing objects use one full-screen Canvas and one animation frame loop only
   while enabled; individual particles are not DOM elements.
 - Particle count is independent of audio volume. Audio only changes the
-  particle speed multiplier, which is capped at 2.0 and eases back over about
-  450ms.
+  particle speed multiplier and brightness multiplier. Speed is capped at 2.0,
+  brightness at 1.6, and both ease back over about 450ms.
 - Standard uses particle glow strength 1.0 and high-effect uses 1.35; low-power
   uses 0 and disables particle shadow blur.
 - Particle lifetime defaults to 3.5 seconds. A dedicated pseudo-random sequence
   supplies spawn jitter and is isolated from audio and API timing.
+- Album dominant-color extraction runs only when the artwork URL changes. The
+  resulting visualizer-only color is interpolated over about 450ms and is not
+  extracted or polled from the animation frame loop.
 - Avoid unnecessary state updates.
 
 ## Debug metrics

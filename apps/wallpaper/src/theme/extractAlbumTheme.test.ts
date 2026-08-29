@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { dominantColorFromImageData, extractAlbumTheme } from './extractAlbumTheme';
 
-type ThemeWithDominantColor = Awaited<ReturnType<typeof extractAlbumTheme>> & { dominantColor?: string };
-
 describe('extractAlbumTheme', () => {
   it('falls back deterministically when browser image APIs are unavailable or image loading fails', async () => {
-    const first = await extractAlbumTheme('', 'missing-image') as ThemeWithDominantColor;
-    const second = await extractAlbumTheme('', 'missing-image') as ThemeWithDominantColor;
+    const first = await extractAlbumTheme('', 'missing-image');
+    const second = await extractAlbumTheme('', 'missing-image');
 
     expect(first).toEqual(second);
     expect(first.source).toBe('fallback');

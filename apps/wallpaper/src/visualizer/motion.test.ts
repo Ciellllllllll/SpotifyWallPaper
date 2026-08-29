@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { VisualizerFrame } from '@spotify-wallpaper/shared-types';
-import { calculateVisualizerMotion, neutralVisualizerMotion } from './motion';
+import { calculateVisualizerMotion, neutralVisualizerMotion, releaseVisualizerMotion } from './motion';
 
 const frame = (partial: Partial<VisualizerFrame> = {}): VisualizerFrame => ({
   source: 'mock',
@@ -70,5 +70,13 @@ describe('visualizer motion coupling', () => {
     }));
 
     expect(Math.hypot(motion.albumOffsetX, motion.albumOffsetY)).toBeCloseTo(8, 5);
+  });
+
+  it('keeps release output finite for an invalid elapsed time', () => {
+    const active = calculateVisualizerMotion(frame({ peak: 1, bass: 1, mid: 1, treble: 1 }));
+    const released = releaseVisualizerMotion(active, neutralVisualizerMotion(), Number.NaN);
+
+    expect(Object.values(released).every((value) => Number.isFinite(value))).toBe(true);
+    expect(released).toEqual(active);
   });
 });

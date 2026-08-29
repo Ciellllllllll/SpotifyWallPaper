@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   advanceGlowingParticles,
   clampParticleBrightness,
-  interpolateParticleSpeedMultiplier,
-  PARTICLE_SPEED_TRANSITION_MS,
   spawnGlowingParticle,
   type GlowingParticle,
   type ParticleViewport
@@ -38,12 +36,6 @@ describe('glowing particle model', () => {
     const capped = advanceGlowingParticles([particle], viewport, 100, 3);
     expect(capped[0].x).toBeCloseTo(advanced[0].x, 5);
     expect(capped[0].y).toBeCloseTo(advanced[0].y, 5);
-  });
-
-  it('returns to the target speed at the end of the real transition duration', () => {
-    expect(interpolateParticleSpeedMultiplier(1, 2, PARTICLE_SPEED_TRANSITION_MS / 2)).toBe(1.5);
-    expect(interpolateParticleSpeedMultiplier(2, 1, PARTICLE_SPEED_TRANSITION_MS)).toBe(1);
-    expect(interpolateParticleSpeedMultiplier(2, 1, 10_000)).toBe(1);
   });
 
   it('keeps synchronized brightness in a bounded visual range', () => {

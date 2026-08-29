@@ -50,7 +50,8 @@ export const releaseVisualizerMotion = (
   target: VisualizerMotionState,
   elapsedMs: number
 ): VisualizerMotionState => {
-  const progress = clamp(elapsedMs / MOTION_RELEASE_MS, 0, 1);
+  const safeElapsedMs = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0;
+  const progress = clamp(safeElapsedMs / MOTION_RELEASE_MS, 0, 1);
   if (progress >= 1 || motionEnergy(target) >= motionEnergy(source)) {
     return target;
   }
@@ -59,8 +60,8 @@ export const releaseVisualizerMotion = (
     impactLevel: releaseValue(source.impactLevel, target.impactLevel, progress),
     stretchLevel: releaseValue(source.stretchLevel, target.stretchLevel, progress),
     albumScale: releaseValue(source.albumScale, target.albumScale, progress),
-    albumOffsetX: releaseValue(source.albumOffsetX, target.albumOffsetX, progress),
-    albumOffsetY: releaseValue(source.albumOffsetY, target.albumOffsetY, progress),
+    albumOffsetX: interpolateValue(source.albumOffsetX, target.albumOffsetX, progress),
+    albumOffsetY: interpolateValue(source.albumOffsetY, target.albumOffsetY, progress),
     particleSpeedMultiplier: releaseValue(source.particleSpeedMultiplier, target.particleSpeedMultiplier, progress),
     particleBrightnessMultiplier: releaseValue(source.particleBrightnessMultiplier, target.particleBrightnessMultiplier, progress)
   };
@@ -72,6 +73,9 @@ const clamp = (value: number, min: number, max: number): number => Math.min(max,
 
 const releaseValue = (source: number, target: number, progress: number): number =>
   target >= source ? target : source + (target - source) * progress;
+
+const interpolateValue = (source: number, target: number, progress: number): number =>
+  source + (target - source) * progress;
 
 const motionEnergy = (motion: VisualizerMotionState): number =>
   Math.max(

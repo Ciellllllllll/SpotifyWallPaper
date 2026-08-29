@@ -222,12 +222,14 @@ of the selected mode, and the visualizer does not rotate as a whole.
 
 Glowing Objects Enabled controls a full-screen field of small lights that begin
 near the center and move outward. The effect is independent of album-art and
-SVG visualizer visibility. When the normalized audio impact exceeds 0.40, the
-album content grows up to 12% and the lights move up to twice their normal
-speed; after the sound stops, both ease back in about 450ms. Reduce Motion does
-not disable this effect. A particle count or lifetime of 0 selects the
-performance-aware automatic value; use the toggle when the effect should be
-off.
+SVG visualizer visibility. Normalized audio continuously grows the album
+content up to 18%, moves it outward by at most 8px, and raises particle speed
+up to twice normal with a brightness increase; after the sound stops, these
+values ease back in about 450ms. In theme color mode, the album's quantized
+dominant color is applied to the SVG visualizer and lights only, with white as
+the fallback and a short color transition. Reduce Motion does not disable
+this effect. A particle count or lifetime of 0 selects the performance-aware
+automatic value; use the toggle when the effect should be off.
 
 ### Display mode animation
 
