@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { LayoutItem, WallpaperViewIntent, WallpaperViewModel } from '@spotify-wallpaper/shared-types';
+  import GlowingObjectCanvas from './particles/GlowingObjectCanvas.svelte';
   import AlbumVisualizer from './visualizer/AlbumVisualizer.svelte';
   import BottomVisualizer from './visualizer/BottomVisualizer.svelte';
-  import { effectiveVisualizerConfig, visualizerImpact, visualizerStyleVariables } from './visualizerStyle';
+  import { effectiveVisualizerConfig, visualizerStyleVariables } from './visualizerStyle';
 
   export let model: WallpaperViewModel;
   export let onIntent: (intent: WallpaperViewIntent) => void = () => undefined;
@@ -37,7 +38,7 @@
   $: visualizerSamples = (model.visualizerFrame?.samples ?? [0])
     .filter((_, index) => index % effectiveVisualizer.sampleStep === 0)
     .slice(0, effectiveVisualizer.barCount);
-  $: visualizerImpactLevel = visualizerImpact(model.visualizerFrame);
+  $: visualizerImpactLevel = model.visualizerMotion.impactLevel;
   $: visualizerVariables = Object.entries(visualizerStyleVariables(settings.visualizer, model.theme, effectiveVisualizer))
     .map(([key, value]) => `${key}: ${value}`)
     .join('; ');
@@ -152,6 +153,21 @@
 >
   <div class="album-backdrop" aria-hidden="true" style={albumBackground}></div>
 
+  <GlowingObjectCanvas
+    enabled={settings.visualizer.glowingObjectsEnabled}
+    particleCount={effectiveVisualizer.particleCount}
+    particleLifeMs={effectiveVisualizer.particleLifeMs}
+    pixelRatio={effectiveVisualizer.particlePixelRatio}
+    glow={effectiveVisualizer.particleGlow}
+    glowStrength={effectiveVisualizer.particleGlowStrength}
+    speedMultiplier={model.visualizerMotion.particleSpeedMultiplier}
+    color={settings.visualizer.colorMode === 'accent'
+      ? model.theme.accentColor
+      : settings.visualizer.colorMode === 'white'
+        ? '#ffffff'
+        : model.theme.primaryColor}
+  />
+
   {#if model.providerConfigurationError}
     <div class="provider-status" role="status" aria-live="polite">{model.providerConfigurationError}</div>
   {/if}
@@ -185,22 +201,24 @@
       on:focusin={() => (detailHoverUiVisible = true)}
       on:focusout={() => (detailHoverUiVisible = false)}
     >
-      {#if settings.visualizer.enabled && settings.visualizer.position === 'around-album'}
-        <AlbumVisualizer
-          mode={settings.visualizer.mode}
-          samples={visualizerSamples}
-          peak={model.visualizerFrame?.peak ?? 0}
-          radius={settings.visualizer.radius}
-          rotation={activeAlbumItem.rotation}
-          intensity={settings.visualizer.intensity}
-          responseGain={effectiveVisualizer.responseGain}
-          impact={visualizerImpactLevel}
-          decorativeLayers={effectiveVisualizer.decorativeLayers}
-          style={visualizerVariables}
-        />
-      {/if}
-      <div class:album-spinning={playback.isPlaying} class="album-disc">
-        <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
+      <div class="album-reactive-content" style={`scale: ${model.visualizerMotion.albumScale}`}>
+        {#if settings.visualizer.enabled && settings.visualizer.position === 'around-album'}
+          <AlbumVisualizer
+            mode={settings.visualizer.mode}
+            samples={visualizerSamples}
+            peak={model.visualizerFrame?.peak ?? 0}
+            radius={settings.visualizer.radius}
+            rotation={activeAlbumItem.rotation}
+            intensity={settings.visualizer.intensity}
+            responseGain={effectiveVisualizer.responseGain}
+            impact={visualizerImpactLevel}
+            decorativeLayers={effectiveVisualizer.decorativeLayers}
+            style={visualizerVariables}
+          />
+        {/if}
+        <div class:album-spinning={playback.isPlaying} class="album-disc">
+          <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
+        </div>
       </div>
       {#if settings.seekbar.visible && settings.seekbar.style === 'album-ring'}
         <svg class="album-progress-ring" viewBox="0 0 100 100" aria-hidden="true">
@@ -313,6 +331,7 @@
   .settings-status { position: absolute; top: 58px; left: 50%; z-index: 10; padding: 8px 14px; border: 1px solid rgb(255 208 122 / 44%); border-radius: 999px; color: #ffe0a6; background: rgb(0 0 0 / 42%); transform: translateX(-50%); }
   .album-frame { aspect-ratio: 1; overflow: visible; border-radius: 50%; pointer-events: none; filter: drop-shadow(0 28px 80px rgb(0 0 0 / 42%)); animation: album-enter 780ms cubic-bezier(.22, 1, .36, 1) both; transition: left 560ms var(--ease-out-circ), top 560ms var(--ease-out-circ), width 560ms var(--ease-out-circ), height 560ms var(--ease-out-circ), transform 560ms var(--ease-out-circ), filter 420ms ease; }
   .album-only-mode .album-frame { z-index: 8 !important; }
+  .album-reactive-content { position: absolute; inset: 0; overflow: visible; border-radius: 50%; transform-origin: center; transition: scale 450ms cubic-bezier(.22, 1, .36, 1); will-change: scale; }
   .album-disc { position: relative; z-index: 1; width: 100%; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / 20%); border-radius: 50%; background: rgb(255 255 255 / 8%); box-shadow: 0 28px 80px rgb(0 0 0 / 42%); transform-origin: center; transition: filter 420ms ease, scale 420ms cubic-bezier(.22, 1, .36, 1); will-change: transform; }
   .album-art { display: block; width: 100%; height: 100%; object-fit: cover; }
   .album-spinning { animation: album-spin 22s linear infinite; }

@@ -123,7 +123,11 @@ test.describe('visualizer positioning', () => {
           })).toBe(true);
 
           if (visualizerPosition === 'around-album') {
-            expect(await visualizer.evaluate((element) => element.parentElement?.classList.contains('album-frame'))).toBe(true);
+            expect(await visualizer.evaluate((element) => {
+              const reactiveContent = element.parentElement;
+              return reactiveContent?.classList.contains('album-reactive-content')
+                && reactiveContent.parentElement?.classList.contains('album-frame');
+            })).toBe(true);
             expect(await visualizer.evaluate((element) => getComputedStyle(element).borderRadius)).toBe('50%');
             await page.locator('.album-frame').evaluate(async (element) => {
               await Promise.all(element.getAnimations().map((animation) => animation.finished));
@@ -229,6 +233,166 @@ test.describe('visualizer effect layers', () => {
       }
     }
   }
+});
+
+test.describe('glowing object canvas', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  test('stays independent from the SVG visualizer and follows the shared motion state', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        visualizer: {
+          enabled: false,
+          glowingObjectsEnabled: true,
+          intensity: 0.5,
+          sensitivity: 1,
+          smoothing: 0,
+          decay: 1,
+          bassWeight: 1,
+          midWeight: 1,
+          trebleWeight: 1,
+          noiseGate: 0
+        }
+      }));
+    });
+    await freezeBrowserState(page, [0.8, 0.8, 0.8]);
+    await page.goto('/');
+
+    const canvas = page.locator('.glowing-object-canvas');
+    await expect(canvas).toBeVisible();
+    await expect(canvas).toHaveCount(1);
+    await expect(page.locator('.visualizer')).toHaveCount(0);
+    expect(await canvas.getAttribute('data-enabled')).toBe('true');
+    expect(Number(await canvas.getAttribute('data-speed-multiplier'))).toBeCloseTo(5 / 3, 2);
+    await page.locator('.album-reactive-content').evaluate(async (element) => {
+      await Promise.all(element.getAnimations().map((animation) => animation.finished));
+    });
+    expect(Number(await page.locator('.album-reactive-content').evaluate((element) => getComputedStyle(element).scale))).toBeCloseTo(1.08, 2);
+  });
+
+  for (const viewCase of [
+    { name: '1920x1080 album-only', width: 1920, height: 1080, displayMode: 'album-only' },
+    { name: '1920x1080 album-details', width: 1920, height: 1080, displayMode: 'album-details' },
+    { name: '3440x1440 album-only', width: 3440, height: 1440, displayMode: 'album-only' },
+    { name: '3440x1440 album-details', width: 3440, height: 1440, displayMode: 'album-details' }
+  ] as const) {
+    test(`scales only album content and keeps the progress ring fixed in ${viewCase.name}`, async ({ page }) => {
+      await page.setViewportSize({ width: viewCase.width, height: viewCase.height });
+      await page.addInitScript(({ displayMode }) => {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          player: { displayMode },
+          seekbar: { visible: true, style: 'album-ring' },
+          visualizer: {
+            intensity: 1,
+            sensitivity: 1,
+            smoothing: 0,
+            decay: 1,
+            bassWeight: 1,
+            midWeight: 1,
+            trebleWeight: 1,
+            noiseGate: 0
+          }
+        }));
+      }, viewCase);
+      await freezeBrowserState(page, [0, 0, 0]);
+      await page.goto('/');
+
+      const albumFrame = page.locator('.album-frame');
+      await albumFrame.evaluate(async (element) => {
+        await Promise.all(element.getAnimations().map((animation) => animation.finished));
+      });
+      const reactiveContent = page.locator('.album-reactive-content');
+      const progressRing = page.locator('.album-progress-ring');
+      const beforeContent = await reactiveContent.boundingBox();
+      const beforeRing = await progressRing.boundingBox();
+      await page.evaluate(() => {
+        const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
+        browserWindow.__wallpaperAudioListener?.([0.8, 0.8, 0.8]);
+      });
+
+      await expect.poll(() => reactiveContent.evaluate((element) => Number(getComputedStyle(element).scale))).toBeGreaterThan(1.04);
+      const afterContent = await reactiveContent.boundingBox();
+      const afterRing = await progressRing.boundingBox();
+      expect(afterContent?.width).toBeGreaterThan((beforeContent?.width ?? 0) + 1);
+      expect(Math.abs((afterRing?.width ?? 0) - (beforeRing?.width ?? 0))).toBeLessThanOrEqual(0.1);
+      expect(Math.abs((afterRing?.height ?? 0) - (beforeRing?.height ?? 0))).toBeLessThanOrEqual(0.1);
+    });
+  }
+
+  for (const [performanceMode, expectedCount, expectedPixelRatio, expectedGlowStrength] of [
+    ['low-power', 24, 1, 0],
+    ['standard', 48, 1.5, 1],
+    ['high-effect', 96, 1.5, 1.35]
+  ] as const) {
+    test(`uses the automatic particle density for ${performanceMode}`, async ({ page }) => {
+      await page.addInitScript(() => {
+        Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2 });
+      });
+      await page.addInitScript(({ performanceMode }) => {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          performance: { mode: performanceMode }
+        }));
+      }, { performanceMode });
+      await freezeBrowserState(page);
+      await page.goto('/');
+
+      const canvas = page.locator('.glowing-object-canvas');
+      expect(await canvas.getAttribute('data-particle-count')).toBe(String(expectedCount));
+      expect(await canvas.getAttribute('data-pixel-ratio')).toBe(String(expectedPixelRatio));
+      expect(await canvas.getAttribute('data-glow')).toBe(String(performanceMode !== 'low-power'));
+      expect(await canvas.getAttribute('data-glow-strength')).toBe(String(expectedGlowStrength));
+      await expect.poll(async () => Number(await canvas.getAttribute('data-active-particles'))).toBeGreaterThan(0);
+      expect(await canvas.evaluate((element) => ({
+        width: element.width,
+        height: element.height,
+        clientWidth: element.clientWidth,
+        clientHeight: element.clientHeight
+      }))).toEqual({
+        width: 1920 * expectedPixelRatio,
+        height: 1080 * expectedPixelRatio,
+        clientWidth: 1920,
+        clientHeight: 1080
+      });
+    });
+  }
+
+  test('stops the canvas loop and clears its field when disabled', async ({ page }) => {
+    await page.addInitScript(() => {
+      const browserWindow = globalThis as typeof globalThis & { __glowingObjectRafCalls?: number };
+      browserWindow.__glowingObjectRafCalls = 0;
+      const nativeRequestAnimationFrame = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (callback) => {
+        browserWindow.__glowingObjectRafCalls = (browserWindow.__glowingObjectRafCalls ?? 0) + 1;
+        return nativeRequestAnimationFrame(callback);
+      };
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        visualizer: { glowingObjectsEnabled: true }
+      }));
+    });
+    await freezeBrowserState(page);
+    await page.goto('/');
+
+    const canvas = page.locator('.glowing-object-canvas');
+    await expect(canvas).toHaveCount(1);
+    await expect.poll(async () => Number(await canvas.getAttribute('data-active-particles'))).toBeGreaterThan(0);
+    await page.evaluate(() => {
+      const browserWindow = window as Window & {
+        wallpaperPropertyListener?: { applyUserProperties?: (properties: Record<string, { value: unknown }>) => void };
+      };
+      browserWindow.wallpaperPropertyListener?.applyUserProperties?.({
+        glowing_objects_enabled: { value: false }
+      });
+    });
+    await expect(canvas).toHaveAttribute('data-enabled', 'false');
+    await expect.poll(async () => Number(await canvas.getAttribute('data-active-particles'))).toBe(0);
+    const stoppedRafCalls = await page.evaluate(() => (globalThis as typeof globalThis & { __glowingObjectRafCalls?: number }).__glowingObjectRafCalls);
+    await page.waitForTimeout(150);
+    expect(await page.evaluate(() => (globalThis as typeof globalThis & { __glowingObjectRafCalls?: number }).__glowingObjectRafCalls)).toBe(stoppedRafCalls);
+  });
 });
 
 test.describe('display mode animations', () => {

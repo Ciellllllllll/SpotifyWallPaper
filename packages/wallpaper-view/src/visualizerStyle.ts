@@ -1,4 +1,4 @@
-import type { VisualizerFrame, WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+import type { WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
 
 export interface EffectiveVisualizerConfig {
   barCount: number;
@@ -6,6 +6,11 @@ export interface EffectiveVisualizerConfig {
   sampleStep: number;
   responseGain: number;
   decorativeLayers: boolean;
+  particleCount: number;
+  particleLifeMs: number;
+  particlePixelRatio: number;
+  particleGlow: boolean;
+  particleGlowStrength: number;
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
@@ -24,33 +29,36 @@ export const visualizerResponsePeak = (peak: number, intensity: number, response
   return visualizerResponseSample(safeSignal(peak) / safeIntensity, responseGain) * safeIntensity;
 };
 
-export const visualizerImpact = (
-  frame: Pick<VisualizerFrame, 'peak' | 'bass' | 'mid' | 'treble'> | null
-): number => {
-  if (!frame) return 0;
-  return clamp(
-    safeSignal(frame.peak) * 0.45
-      + safeSignal(frame.bass) * 0.3
-      + safeSignal(frame.mid) * 0.15
-      + safeSignal(frame.treble) * 0.1,
-    0,
-    1
-  );
-};
-
 export const effectiveVisualizerConfig = (settings: WallpaperPreferences): EffectiveVisualizerConfig => {
   const requestedBars = settings.visualizer.barCount;
-  const maxBars = settings.performance.mode === 'low-power' ? 24 : settings.performance.mode === 'high-effect' ? 120 : 72;
+  const performanceMode = settings.performance.mode;
+  const maxBars = performanceMode === 'low-power' ? 24 : performanceMode === 'high-effect' ? 120 : 72;
   const sampleStep = settings.performance.mode === 'low-power' ? 2 : 1;
   const glowScale = settings.performance.mode === 'low-power' ? 0.45 : settings.performance.mode === 'high-effect' ? 1.2 : 1;
   const responseGain = settings.performance.mode === 'low-power' ? 0.9 : settings.performance.mode === 'high-effect' ? 1.35 : 1.15;
+  const automaticParticleCount = performanceMode === 'low-power' ? 24 : performanceMode === 'high-effect' ? 96 : 48;
+  const maximumParticleCount = performanceMode === 'low-power' ? 24 : performanceMode === 'high-effect' ? 192 : 96;
+  const requestedParticleCount = Number.isFinite(settings.visualizer.particleCount)
+    ? Math.round(settings.visualizer.particleCount)
+    : 0;
+  const requestedParticleLife = Number.isFinite(settings.visualizer.particleLife)
+    ? settings.visualizer.particleLife
+    : 0;
 
   return {
     barCount: Math.max(8, Math.min(maxBars, Math.round(requestedBars))),
     glowStrength: Math.max(0, Math.min(1, settings.visualizer.glowStrength * glowScale)),
     sampleStep,
     responseGain,
-    decorativeLayers: settings.performance.mode !== 'low-power'
+    decorativeLayers: performanceMode !== 'low-power',
+    particleCount: Math.max(1, Math.min(
+      maximumParticleCount,
+      requestedParticleCount > 0 ? requestedParticleCount : automaticParticleCount
+    )),
+    particleLifeMs: Math.round(Math.max(0.1, Math.min(10, requestedParticleLife > 0 ? requestedParticleLife : 3.5)) * 1000),
+    particlePixelRatio: performanceMode === 'low-power' ? 1 : 1.5,
+    particleGlow: performanceMode !== 'low-power',
+    particleGlowStrength: performanceMode === 'low-power' ? 0 : performanceMode === 'high-effect' ? 1.35 : 1
   };
 };
 

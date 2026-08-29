@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { defaultWallpaperPreferences, type VisualizerFrame } from '@spotify-wallpaper/shared-types';
+import { defaultWallpaperPreferences } from '@spotify-wallpaper/shared-types';
 import {
   effectiveVisualizerConfig,
-  visualizerImpact,
   visualizerResponsePeak,
   visualizerResponseSample,
   visualizerStyleVariables
@@ -42,7 +41,12 @@ describe('wallpaper view visualizer presentation contract', () => {
       glowStrength: 0.62,
       sampleStep: 1,
       responseGain: 1.15,
-      decorativeLayers: true
+      decorativeLayers: true,
+      particleCount: 48,
+      particleLifeMs: 3500,
+      particlePixelRatio: 1.5,
+      particleGlow: true,
+      particleGlowStrength: 1
     });
   });
 
@@ -59,6 +63,11 @@ describe('wallpaper view visualizer presentation contract', () => {
     expect(config.sampleStep).toBe(2);
     expect(config.responseGain).toBe(0.9);
     expect(config.decorativeLayers).toBe(false);
+    expect(config.particleCount).toBe(24);
+    expect(config.particleLifeMs).toBe(3500);
+    expect(config.particlePixelRatio).toBe(1);
+    expect(config.particleGlow).toBe(false);
+    expect(config.particleGlowStrength).toBe(0);
   });
 
   it('caps high-effect presentation work without changing the standard step', () => {
@@ -74,6 +83,34 @@ describe('wallpaper view visualizer presentation contract', () => {
     expect(config.sampleStep).toBe(1);
     expect(config.responseGain).toBe(1.35);
     expect(config.decorativeLayers).toBe(true);
+    expect(config.particleCount).toBe(96);
+    expect(config.particleLifeMs).toBe(3500);
+    expect(config.particlePixelRatio).toBe(1.5);
+    expect(config.particleGlow).toBe(true);
+    expect(config.particleGlowStrength).toBe(1.35);
+  });
+
+  it('turns zero particle settings into performance-aware automatic values', () => {
+    const preferences = defaultWallpaperPreferences();
+    const config = effectiveVisualizerConfig({
+      ...preferences,
+      performance: { mode: 'high-effect' },
+      visualizer: { ...preferences.visualizer, particleCount: 0, particleLife: 0 }
+    });
+
+    expect(config.particleCount).toBe(96);
+    expect(config.particleLifeMs).toBe(3500);
+  });
+
+  it('keeps explicit particle settings bounded and finite', () => {
+    const preferences = defaultWallpaperPreferences();
+    const config = effectiveVisualizerConfig({
+      ...preferences,
+      visualizer: { ...preferences.visualizer, particleCount: 400, particleLife: 99 }
+    });
+
+    expect(config.particleCount).toBe(96);
+    expect(config.particleLifeMs).toBe(10_000);
   });
 
   it('uses a bounded nonlinear response curve for visible motion', () => {
@@ -88,16 +125,4 @@ describe('wallpaper view visualizer presentation contract', () => {
     expect(visualizerResponsePeak(Number.NaN, 1.15, 1.15)).toBe(0);
   });
 
-  it('combines peak and frequency bands into a bounded impact level', () => {
-    const frame: Pick<VisualizerFrame, 'peak' | 'bass' | 'mid' | 'treble'> = {
-      peak: 1,
-      bass: 0.5,
-      mid: 0.25,
-      treble: 0
-    };
-
-    expect(visualizerImpact(frame)).toBeCloseTo(0.6375, 5);
-    expect(visualizerImpact(null)).toBe(0);
-    expect(visualizerImpact({ peak: Number.NaN, bass: 1, mid: 1, treble: 1 })).toBeCloseTo(0.55, 5);
-  });
 });
