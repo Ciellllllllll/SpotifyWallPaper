@@ -10,7 +10,7 @@ visual fixtures cover 1920×1080 and 3440×1440 for both display modes;
 the accepted maximum visual diff ratio is 0.002.
 
 Playwright visualizer contract coverage exercises the Cartesian product of the
-two performance profiles, three MVP modes, and two positions. It verifies that
+three performance profiles, three MVP modes, and two positions. It verifies that
 `around-album` keeps the album-art and visualizer centers aligned with circular
 geometry, while `bottom-up` is anchored to the viewport bottom and grows radial
 bars upward. Display-mode coverage checks the track-panel `text-enter` animation

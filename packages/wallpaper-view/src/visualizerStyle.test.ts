@@ -3,6 +3,7 @@ import { defaultWallpaperPreferences, type VisualizerFrame } from '@spotify-wall
 import {
   effectiveVisualizerConfig,
   visualizerImpact,
+  visualizerResponsePeak,
   visualizerResponseSample,
   visualizerStyleVariables
 } from './visualizerStyle';
@@ -32,7 +33,6 @@ describe('wallpaper view visualizer presentation contract', () => {
 
     expect(variables['--visualizer-color']).toBe('#aabbcc');
     expect(variables['--visualizer-line-width']).toBe('9px');
-    expect(variables['--visualizer-radius']).toBe('1.7');
     expect(variables['--visualizer-glow']).toBe('0.9');
     expect(Object.keys(variables)).not.toContain('--visualizer-rotation-duration');
     expect(Object.keys(variables)).not.toContain('--visualizer-rotation-direction');
@@ -81,6 +81,11 @@ describe('wallpaper view visualizer presentation contract', () => {
     expect(visualizerResponseSample(1, 2)).toBe(1.35);
     expect(visualizerResponseSample(Number.NaN, 1.15)).toBe(0);
     expect(visualizerResponseSample(-1, 1.15)).toBe(0);
+  });
+
+  it('restores an intensity-scaled peak before applying the response curve', () => {
+    expect(visualizerResponsePeak(2, 2, 1.15)).toBeCloseTo(2.3, 5);
+    expect(visualizerResponsePeak(Number.NaN, 1.15, 1.15)).toBe(0);
   });
 
   it('combines peak and frequency bands into a bounded impact level', () => {

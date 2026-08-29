@@ -92,7 +92,7 @@ test.describe('visualizer positioning', () => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
   });
 
-  for (const performanceMode of ['standard', 'low-power'] as const) {
+  for (const performanceMode of ['standard', 'low-power', 'high-effect'] as const) {
     for (const visualizerPosition of ['around-album', 'bottom-up'] as const) {
       for (const visualizerMode of ['album-ring', 'radial-bars', 'waveform-line'] as const) {
         test(`renders ${visualizerPosition} ${visualizerMode} in ${performanceMode}`, async ({ page }) => {
@@ -162,6 +162,14 @@ test.describe('visualizer positioning', () => {
               expect(radialBarShape.stroke).toBe('none');
               expect(radialBarShape.strokeLinecap).not.toBe('round');
             }
+            if (visualizerMode === 'waveform-line') {
+              const waveformShape = await visualizer.locator('.circular-waveform').evaluate((element) => ({
+                tagName: element.tagName,
+                fill: getComputedStyle(element).fill
+              }));
+              expect(waveformShape.tagName).toBe('polyline');
+              expect(waveformShape.fill).toBe('none');
+            }
           } else {
             const visualizerBox = await visualizer.boundingBox();
             expect(visualizerBox).not.toBeNull();
@@ -179,11 +187,43 @@ test.describe('visualizer positioning', () => {
                 return { top: box.top, bottom: box.bottom };
               }));
               expect(bars.length).toBeGreaterThan(0);
+              expect(await visualizer.locator('.bottom-bar').first().getAttribute('rx')).toBeNull();
               for (const bar of bars) {
                 expect(bar.top).toBeLessThan(bar.bottom);
                 expect(Math.abs(bar.bottom - visualizerBottom)).toBeLessThanOrEqual(2);
               }
             }
+          }
+        });
+      }
+    }
+  }
+});
+
+test.describe('visualizer effect layers', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  for (const performanceMode of ['standard', 'high-effect', 'low-power'] as const) {
+    for (const visualizerPosition of ['around-album', 'bottom-up'] as const) {
+      for (const visualizerMode of ['album-ring', 'radial-bars', 'waveform-line'] as const) {
+        test(`controls glow layers for ${visualizerPosition} ${visualizerMode} in ${performanceMode}`, async ({ page }) => {
+          await page.addInitScript(({ performanceMode, visualizerMode, visualizerPosition }) => {
+          localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+            schemaVersion: 2,
+            performance: { mode: performanceMode },
+            visualizer: { mode: visualizerMode, position: visualizerPosition }
+          }));
+          }, { performanceMode, visualizerMode, visualizerPosition });
+          await freezeBrowserState(page);
+          await page.goto('/');
+
+          const visualizer = page.locator('.visualizer');
+          const glowLayers = visualizer.locator('.visualizer-glow');
+          if (performanceMode === 'low-power') {
+            await expect(glowLayers).toHaveCount(0);
+            expect(await visualizer.evaluate((element) => getComputedStyle(element).filter)).toBe('none');
+          } else {
+            expect(await glowLayers.count()).toBeGreaterThan(0);
           }
         });
       }
@@ -476,6 +516,46 @@ test.describe('album visualizer geometry', () => {
     });
   }
 
+  test('applies the 0.03 threshold to bottom-up radial bars', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        visualizer: {
+          position: 'bottom-up',
+          mode: 'radial-bars',
+          barCount: 8,
+          intensity: 1,
+          sensitivity: 1,
+          smoothing: 0,
+          decay: 1,
+          bassWeight: 1,
+          midWeight: 1,
+          trebleWeight: 1,
+          clampMax: 1,
+          noiseGate: 0
+        }
+      }));
+    });
+    await freezeBrowserState(page, Array.from({ length: 128 }, () => 0));
+    await page.goto('/');
+
+    const sendSample = async (sample: number) => {
+      await page.evaluate(({ sample }) => {
+        const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
+        const samples = Array.from({ length: 128 }, () => 0);
+        samples[3] = sample;
+        samples[67] = sample;
+        browserWindow.__wallpaperAudioListener?.(samples);
+      }, { sample });
+    };
+
+    const bar = page.locator('.visualizer-bottom .bottom-bar').nth(3);
+    await sendSample(0.029);
+    await expect(bar).toBeHidden();
+    await sendSample(0.03);
+    await expect(bar).toBeVisible();
+  });
+
   test('keeps radial bar DOM slots stable while the threshold changes visibility', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
@@ -588,6 +668,236 @@ test.describe('album visualizer geometry', () => {
     expect(waveformSmall[0][1]).toBeGreaterThan(waveformLarge[0][1]);
   });
 
+  test('changes bottom-up radius extension without moving the bottom anchor', async ({ page }) => {
+    const samples = Array.from({ length: 128 }, () => 0.5);
+    await freezeBrowserState(page, samples);
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('spotify-wallpaper-settings')) {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          visualizer: {
+            position: 'bottom-up',
+            mode: 'radial-bars',
+            radius: 0.6,
+            barCount: 8,
+            intensity: 1,
+            sensitivity: 1,
+            smoothing: 0,
+            decay: 1,
+            bassWeight: 1,
+            midWeight: 1,
+            trebleWeight: 1,
+            clampMax: 1,
+            noiseGate: 0
+          }
+        }));
+      }
+    });
+    await page.goto('/');
+
+    const readFirstBar = async (radius: number) => {
+      await page.evaluate((nextRadius) => {
+        const source = JSON.parse(localStorage.getItem('spotify-wallpaper-settings') ?? '{}') as Record<string, unknown> & { visualizer?: Record<string, unknown> };
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          ...source,
+          visualizer: { ...(source.visualizer ?? {}), radius: nextRadius }
+        }));
+      }, radius);
+      await page.reload();
+      const bar = page.locator('.visualizer-bottom .bottom-bar').first();
+      await expect(bar).toBeVisible();
+      return bar.evaluate((element) => {
+        const y = Number(element.getAttribute('y'));
+        const height = Number(element.getAttribute('height'));
+        return { y, height, bottom: y + height };
+      });
+    };
+
+    const small = await readFirstBar(0.6);
+    const large = await readFirstBar(2.2);
+    expect(Math.abs(small.bottom - large.bottom)).toBeLessThanOrEqual(0.1);
+    expect(large.y).toBeLessThan(small.y);
+  });
+
+  test('changes bottom-up waveform extension without moving its zero-sample anchor', async ({ page }) => {
+    const samples = Array.from({ length: 128 }, (_, index) => index % 2 === 0 ? 0 : 0.5);
+    await freezeBrowserState(page, samples);
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('spotify-wallpaper-settings')) {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          visualizer: {
+            position: 'bottom-up',
+            mode: 'waveform-line',
+            radius: 0.6,
+            intensity: 1,
+            sensitivity: 1,
+            smoothing: 0,
+            decay: 1,
+            bassWeight: 1,
+            midWeight: 1,
+            trebleWeight: 1,
+            clampMax: 1,
+            noiseGate: 0
+          }
+        }));
+      }
+    });
+    await page.goto('/');
+
+    const readWaveform = async (radius: number) => {
+      await page.evaluate((nextRadius) => {
+        const source = JSON.parse(localStorage.getItem('spotify-wallpaper-settings') ?? '{}') as Record<string, unknown> & { visualizer?: Record<string, unknown> };
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          ...source,
+          visualizer: { ...(source.visualizer ?? {}), radius: nextRadius }
+        }));
+      }, radius);
+      await page.reload();
+      const waveform = page.locator('.visualizer-bottom .horizontal-waveform');
+      await expect(waveform).toHaveCount(1);
+      return (await waveform.getAttribute('points') ?? '')
+        .trim()
+        .split(/\s+/)
+        .map((point) => point.split(',').map(Number));
+    };
+
+    const small = await readWaveform(0.6);
+    const large = await readWaveform(2.2);
+    expect(small[0][1]).toBeCloseTo(39, 5);
+    expect(large[0][1]).toBeCloseTo(small[0][1], 5);
+    expect(large[1][1]).toBeLessThan(small[1][1]);
+  });
+
+  test('applies performance response gain to the around-album ring', async ({ page }) => {
+    const samples = Array.from({ length: 128 }, () => 0.5);
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('spotify-wallpaper-settings')) {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          performance: { mode: 'standard' },
+          visualizer: {
+            position: 'around-album',
+            mode: 'album-ring',
+            intensity: 1,
+            sensitivity: 1,
+            smoothing: 0,
+            decay: 1,
+            bassWeight: 1,
+            midWeight: 1,
+            trebleWeight: 1,
+            clampMax: 1,
+            noiseGate: 0
+          }
+        }));
+      }
+    });
+    await freezeBrowserState(page, samples);
+    await page.goto('/');
+
+    const readRingDash = async () => {
+      const dashArray = await page.locator('.visualizer-album .ring-active').getAttribute('stroke-dasharray');
+      return Number((dashArray ?? '0').split(/\s+/)[0]);
+    };
+
+    const standardDash = await readRingDash();
+    await page.evaluate(() => {
+      const source = JSON.parse(localStorage.getItem('spotify-wallpaper-settings') ?? '{}') as Record<string, unknown> & { performance?: Record<string, unknown> };
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        ...source,
+        performance: { ...(source.performance ?? {}), mode: 'high-effect' }
+      }));
+    });
+    await page.reload();
+    const highEffectDash = await readRingDash();
+
+    expect(highEffectDash).toBeGreaterThan(standardDash);
+  });
+
+  test('keeps intensity scaling after the response curve for ring thickness', async ({ page }) => {
+    const samples = Array.from({ length: 128 }, () => 1);
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('spotify-wallpaper-settings')) {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          visualizer: {
+            position: 'around-album',
+            mode: 'album-ring',
+            intensity: 1,
+            sensitivity: 1,
+            smoothing: 0,
+            decay: 1,
+            bassWeight: 1,
+            midWeight: 1,
+            trebleWeight: 1,
+            clampMax: 1,
+            noiseGate: 0
+          }
+        }));
+      }
+    });
+    await freezeBrowserState(page, samples);
+    await page.goto('/');
+
+    const readStrokeWidth = async () => Number.parseFloat(
+      await page.locator('.visualizer-album .ring-active').evaluate((element) => getComputedStyle(element).strokeWidth)
+    );
+    const normalIntensityStrokeWidth = await readStrokeWidth();
+
+    await page.evaluate(() => {
+      const source = JSON.parse(localStorage.getItem('spotify-wallpaper-settings') ?? '{}') as Record<string, unknown> & { visualizer?: Record<string, unknown> };
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        ...source,
+        visualizer: { ...(source.visualizer ?? {}), intensity: 2 }
+      }));
+    });
+    await page.reload();
+    const highIntensityStrokeWidth = await readStrokeWidth();
+
+    expect(highIntensityStrokeWidth).toBeGreaterThan(normalIntensityStrokeWidth);
+  });
+
+  test('keeps intensity scaling after the response curve for bottom-up bar height', async ({ page }) => {
+    const samples = Array.from({ length: 128 }, () => 1);
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('spotify-wallpaper-settings')) {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          visualizer: {
+            position: 'bottom-up',
+            mode: 'radial-bars',
+            intensity: 1,
+            sensitivity: 1,
+            smoothing: 0,
+            decay: 1,
+            bassWeight: 1,
+            midWeight: 1,
+            trebleWeight: 1,
+            clampMax: 1,
+            noiseGate: 0
+          }
+        }));
+      }
+    });
+    await freezeBrowserState(page, samples);
+    await page.goto('/');
+
+    const readBarHeight = async () => Number(await page.locator('.visualizer-bottom .bottom-bar').first().getAttribute('height'));
+    const normalIntensityHeight = await readBarHeight();
+
+    await page.evaluate(() => {
+      const source = JSON.parse(localStorage.getItem('spotify-wallpaper-settings') ?? '{}') as Record<string, unknown> & { visualizer?: Record<string, unknown> };
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        ...source,
+        visualizer: { ...(source.visualizer ?? {}), intensity: 2 }
+      }));
+    });
+    await page.reload();
+    const highIntensityHeight = await readBarHeight();
+
+    expect(highIntensityHeight - 3).toBeCloseTo((normalIntensityHeight - 3) * 2, 5);
+  });
+
   for (const [name, override] of [
     ['album art hidden', { albumArt: { visible: false } }],
     ['album layout disabled', { layout: { items: { albumArt: { enabled: false } } } }]
@@ -621,6 +931,27 @@ test.describe('album visualizer geometry', () => {
 
     await expect(page.locator('.album-frame')).toHaveCount(0);
     await expect(page.locator('.visualizer-bottom')).toBeVisible();
+  });
+
+  test('keeps browser mock audio active without a Wallpaper Engine listener', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        visualizer: {
+          position: 'around-album',
+          mode: 'waveform-line',
+          intensity: 1,
+          idleAnimation: false
+        }
+      }));
+    });
+    await page.goto('/');
+
+    await expect(page.locator('.visualizer-album')).toBeVisible();
+    const waveform = page.locator('.visualizer-album .circular-waveform');
+    const initialPoints = await waveform.getAttribute('points');
+    expect(initialPoints).not.toBeNull();
+    await expect.poll(() => waveform.getAttribute('points'), { timeout: 2_000 }).not.toBe(initialPoints);
   });
 });
 

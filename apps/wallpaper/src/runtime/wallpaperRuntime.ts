@@ -103,6 +103,7 @@ export const createWallpaperRuntime = (
   let activeThemeKey = '';
   let audioBridgeSource: AudioBridgeSource | null = null;
   let lastWallpaperFrameAtMs = 0;
+  let lastMockFrameAtMs = 0;
   let silentSinceMs: number | null = null;
 
   let snapshot: WallpaperRuntimeSnapshot = {
@@ -181,7 +182,12 @@ export const createWallpaperRuntime = (
       }
       return;
     }
-    if (audioBridgeSource === 'mock') return;
+    if (audioBridgeSource === 'mock') {
+      if (lastMockFrameAtMs === 0 || nowMs - lastMockFrameAtMs >= staleAfterMs) {
+        runtime.acceptAudioFrame(idleVisualizerFrame(nowMs, snapshot.settings.visualizer));
+      }
+      return;
+    }
     runtime.acceptAudioFrame(idleVisualizerFrame(nowMs, snapshot.settings.visualizer));
   };
 
@@ -399,6 +405,9 @@ export const createWallpaperRuntime = (
       if (frame.source === 'wallpaper-engine' || frame.source === 'mock') {
         audioBridgeSource = frame.source;
       }
+      if (frame.source === 'mock') {
+        lastMockFrameAtMs = nowMs;
+      }
       const isSilent = isSilentWallpaperFrame(frame, snapshot.settings.visualizer);
       let previous = snapshot.previousVisualizerFrame;
       if (frame.source === 'wallpaper-engine') {
@@ -484,6 +493,7 @@ export const createWallpaperRuntime = (
       stopAudio = null;
       audioBridgeSource = null;
       lastWallpaperFrameAtMs = 0;
+      lastMockFrameAtMs = 0;
       silentSinceMs = null;
       credentialClosure.clear();
       listeners.clear();

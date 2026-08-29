@@ -2,7 +2,7 @@
   import type { LayoutItem, WallpaperViewIntent, WallpaperViewModel } from '@spotify-wallpaper/shared-types';
   import AlbumVisualizer from './visualizer/AlbumVisualizer.svelte';
   import BottomVisualizer from './visualizer/BottomVisualizer.svelte';
-  import { effectiveVisualizerConfig, visualizerStyleVariables } from './visualizerStyle';
+  import { effectiveVisualizerConfig, visualizerImpact, visualizerStyleVariables } from './visualizerStyle';
 
   export let model: WallpaperViewModel;
   export let onIntent: (intent: WallpaperViewIntent) => void = () => undefined;
@@ -37,6 +37,7 @@
   $: visualizerSamples = (model.visualizerFrame?.samples ?? [0])
     .filter((_, index) => index % effectiveVisualizer.sampleStep === 0)
     .slice(0, effectiveVisualizer.barCount);
+  $: visualizerImpactLevel = visualizerImpact(model.visualizerFrame);
   $: visualizerVariables = Object.entries(visualizerStyleVariables(settings.visualizer, model.theme, effectiveVisualizer))
     .map(([key, value]) => `${key}: ${value}`)
     .join('; ');
@@ -164,6 +165,11 @@
       samples={visualizerSamples}
       peak={model.visualizerFrame?.peak ?? 0}
       gap={settings.visualizer.gap}
+      radius={settings.visualizer.radius}
+      intensity={settings.visualizer.intensity}
+      responseGain={effectiveVisualizer.responseGain}
+      impact={visualizerImpactLevel}
+      decorativeLayers={effectiveVisualizer.decorativeLayers}
       style={`${bottomVisualizerStyle}; ${visualizerVariables}`}
     />
   {/if}
@@ -187,6 +193,9 @@
           radius={settings.visualizer.radius}
           rotation={activeAlbumItem.rotation}
           intensity={settings.visualizer.intensity}
+          responseGain={effectiveVisualizer.responseGain}
+          impact={visualizerImpactLevel}
+          decorativeLayers={effectiveVisualizer.decorativeLayers}
           style={visualizerVariables}
         />
       {/if}

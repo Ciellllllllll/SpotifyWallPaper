@@ -63,7 +63,10 @@ settings are repaired to `around-album`.
 Fallback modes:
 
 - mock waveform in browser preview
-- idle animation when audio data is unavailable
+- idle animation while no Wallpaper Engine listener is available or a browser
+  mock callback is waiting/stale
+- after the Wallpaper Engine source is established, noise-gated silence and a
+  stale callback produce a zero frame instead of restarting idle animation
 - static low-power state if visualizer disabled
 
 ## Output

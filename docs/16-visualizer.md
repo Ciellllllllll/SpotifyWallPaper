@@ -82,8 +82,12 @@ presentation effect; current visualizer modes do not rotate as a whole.
   `around-album` visualizer is hidden with it.
 - `bottom-up` anchors the visualizer to the lower edge of the viewport. Radial
   bars grow upward from the bottom edge, the waveform is stretched across the
-  bottom, and `album-ring` becomes a horizontal peak band. Its existing `gap`
-  and radius behavior are unchanged.
+  bottom, and `album-ring` becomes a horizontal peak band. Radial bars are
+  four-corner rectangles with no rounded corners. The same 0.03 threshold is
+  applied before intensity, so quieter bars keep their slots but are hidden.
+  `gap` still controls their bottom-up spacing; `visualizer.radius` changes
+  only the upward extension of bars and the waveform and does not scale or
+  move the bottom anchor.
 
 The safe default is `around-album`. Unsupported values are repaired at the
 settings boundary. Positioning and geometry remain web-view responsibilities;
@@ -92,9 +96,14 @@ Rust/WASM only supplies pure audio normalization and readability calculations.
 ## Data source
 
 Use Wallpaper Engine audio data if available. Fold its left and right 64-bin
-channels into one averaged 64-bin spectrum, preserving frequency order. Use
-mock audio in browser preview. Use idle animation if no audio data is
-available.
+channels into one averaged 64-bin spectrum, preserving frequency order. The
+audio bridge reports whether the active source is `wallpaper-engine` or
+`mock`. Browser preview keeps its mock frames and may use idle animation while
+no audio source is connected. Once the Wallpaper Engine source is established,
+noise-gated input is treated as silence: it never falls back to idle animation,
+it may decay for at most 200ms, and then its normalized state is reset to zero.
+If the Wallpaper Engine callback stops, the performance-mode timeout injects a
+zero frame instead of restarting idle animation.
 
 The shaping order is safe input, sensitivity and band weighting, one
 Rust/WASM-or-fallback normalization pass, then rendered intensity. Do not
@@ -106,6 +115,26 @@ frame's layout rotation while continuing to share its translation, scale,
 size, transitions, and visibility. Position-specific geometry and anchoring
 are owned by the web view.
 
+## Response and effects
+
+The view applies a presentation-only response curve after runtime noise gating
+and normalization:
+
+```text
+response = min(1.35, pow(clamp(sample, 0, 1), 0.72) * responseGain)
+```
+
+`responseGain` is `0.90` in `low-power`, `1.15` in `standard`, and `1.35` in
+`high-effect`. The final `intensity` setting still scales the rendered output
+only. Standard and high-effect modes add thin glow layers: the album ring
+pulses in thickness and opacity, while radial bars and both waveform views
+receive a back-glow. Low-power keeps the main geometry but omits these extra
+layers.
+
 ## Performance
 
-Low-power mode must reduce samples, particles, blur, and draw frequency. Standard mode should be stable. High-effect mode may use heavier visuals but must be configurable.
+Low-power mode must reduce samples, particles, blur, and draw frequency.
+Standard mode uses the stronger response curve with restrained glow. High-effect
+mode uses the strongest response and the same SVG-only glow layers with the
+larger sample budget. No continuous decoration timer is used; effects change
+only when a visualizer frame changes.

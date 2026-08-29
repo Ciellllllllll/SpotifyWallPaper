@@ -317,6 +317,57 @@ describe('WallpaperRuntime', () => {
     }
   });
 
+  it('keeps browser mock idle fallback while waiting for or losing mock audio', () => {
+    vi.useFakeTimers();
+    const intervals: Array<() => void> = [];
+    const mockCallbackRef: { current: ((frame: VisualizerFrame) => void) | null } = { current: null };
+    const runtime = createWallpaperRuntime(defaultSettings, {
+      startAudioBridge: (onFrame) => {
+        mockCallbackRef.current = onFrame;
+        return { source: 'mock', stop: () => undefined };
+      }
+    });
+    const windowStub = {
+      setTimeout: vi.fn(() => 1),
+      clearTimeout: vi.fn(),
+      setInterval: vi.fn((callback: () => void) => {
+        intervals.push(callback);
+        return intervals.length;
+      }),
+      clearInterval: vi.fn()
+    };
+
+    try {
+      vi.setSystemTime(1000);
+      vi.stubGlobal('window', windowStub);
+      runtime.start();
+      expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+
+      mockCallbackRef.current?.({
+        source: 'mock',
+        samples: [0.8],
+        bass: 0.8,
+        mid: 0.8,
+        treble: 0.8,
+        peak: 0.8,
+        timestampMs: 1000
+      });
+      expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('mock');
+
+      vi.setSystemTime(1801);
+      intervals.at(-1)?.();
+      expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+      expect(runtimeSnapshot(runtime).visualizerFrame?.peak).toBeGreaterThan(0);
+    } finally {
+      try {
+        runtime.dispose();
+      } finally {
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+      }
+    }
+  });
+
   it('fades a silent Wallpaper Engine stream to zero within the silence release window', () => {
     vi.useFakeTimers();
     const runtime = createWallpaperRuntime(defaultSettings);

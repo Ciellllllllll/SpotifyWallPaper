@@ -54,9 +54,13 @@ export const startAudioBridge = (
   target: Window = window
 ): AudioBridgeHandle => {
   if (typeof target.wallpaperRegisterAudioListener === 'function') {
-    const listener: WallpaperAudioListener = (samples) => onFrame(normalizeAudioFrame(samples, 'wallpaper-engine'));
+    let stopped = false;
+    const listener: WallpaperAudioListener = (samples) => {
+      if (stopped) return;
+      onFrame(normalizeAudioFrame(samples, 'wallpaper-engine'));
+    };
     target.wallpaperRegisterAudioListener(listener);
-    return { source: 'wallpaper-engine', stop: () => undefined };
+    return { source: 'wallpaper-engine', stop: () => { stopped = true; } };
   }
 
   const interval = target.setInterval(() => {

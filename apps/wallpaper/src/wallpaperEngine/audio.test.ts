@@ -62,8 +62,31 @@ describe('Wallpaper Engine audio adapter', () => {
     const registeredListener = listener as unknown as (samples: number[]) => void;
     registeredListener([0.1, 0.2, 0.3]);
     handle.stop();
+    const callsAfterStop = onFrame.mock.calls.length;
+    registeredListener([0.9, 0.9, 0.9]);
 
     expect(handle.source).toBe('wallpaper-engine');
     expect(onFrame).toHaveBeenCalledWith(expect.objectContaining({ source: 'wallpaper-engine', peak: 0.3 }));
+    expect(onFrame).toHaveBeenCalledTimes(callsAfterStop);
+  });
+
+  it('uses mock audio when Wallpaper Engine is unavailable and stops its interval', () => {
+    const onFrame = vi.fn();
+    const callbacks: Array<() => void> = [];
+    const target = {
+      setInterval: vi.fn((callback: () => void) => {
+        callbacks.push(callback);
+        return 7;
+      }),
+      clearInterval: vi.fn()
+    } as unknown as Window;
+
+    const handle = startAudioBridge(onFrame, target);
+    expect(handle.source).toBe('mock');
+    callbacks[0]?.();
+    expect(onFrame).toHaveBeenCalledWith(expect.objectContaining({ source: 'mock', peak: expect.any(Number) }));
+
+    handle.stop();
+    expect(target.clearInterval).toHaveBeenCalledWith(7);
   });
 });

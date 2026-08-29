@@ -18,6 +18,12 @@ export const visualizerResponseSample = (sample: number, responseGain: number): 
   return Math.min(1.35, normalized ** 0.72 * gain);
 };
 
+export const visualizerResponsePeak = (peak: number, intensity: number, responseGain: number): number => {
+  const safeIntensity = Number.isFinite(intensity) ? Math.max(0, intensity) : 0;
+  if (safeIntensity === 0) return 0;
+  return visualizerResponseSample(safeSignal(peak) / safeIntensity, responseGain) * safeIntensity;
+};
+
 export const visualizerImpact = (
   frame: Pick<VisualizerFrame, 'peak' | 'bass' | 'mid' | 'treble'> | null
 ): number => {
@@ -60,7 +66,5 @@ export const visualizerStyleVariables = (
       ? '#ffffff'
       : theme.primaryColor,
   '--visualizer-line-width': `${settings.lineWidth}px`,
-  '--visualizer-glow': `${config.glowStrength}`,
-  '--visualizer-gap': `${Math.max(1, 6 - settings.gap / 20)}px`,
-  '--visualizer-radius': `${Math.max(0.6, Math.min(2.2, settings.radius))}`
+  '--visualizer-glow': `${config.glowStrength}`
 });

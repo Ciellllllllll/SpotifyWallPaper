@@ -291,10 +291,11 @@ whose bars grow upward. In `around-album`, the album image and visualizer share 
 normalized 100×100 SVG uses radius 50 for the album edge in all three modes. Radial bars are four-point rectangles with
 a 2×2-unit square base; their inner edge touches the album edge, they add audio-derived length outward, values below 0.03
 are checked before intensity, keep their slot but are hidden, and `gap` is ignored in favor of equal placement by sample count. `visualizer.radius`
-changes only the outward extension of radial bars and waveform; it does not move the album edge, and the album ring stays at radius 50. If album
-art is hidden or its layout item is disabled, the `around-album` visualizer is hidden as well. `bottom-up` keeps its
-existing gap and radius behavior. Sensitivity affects normalization, while intensity scales the final rendered output. Low-power
-performance mode reduces visualizer bar count, sample usage, and glow; the visualizer does not rotate as a whole.
+changes only the outward extension of radial bars and waveform; it does not move the album edge, and the album ring stays at radius 50. The same
+radius rule applies to bottom-up bars and waveform height without moving the bottom anchor. If album art is hidden or its layout item is disabled,
+the `around-album` visualizer is hidden as well. Sensitivity affects normalization, while intensity scales the final rendered output. The view
+uses `min(1.35, pow(clamp(sample, 0, 1), 0.72) * responseGain)` with gains `0.90`, `1.15`, and `1.35` for low-power, standard, and high-effect.
+Standard and high-effect add SVG glow layers; low-power omits them. The visualizer does not rotate as a whole.
 
 ```js
 localStorage.setItem(
@@ -458,7 +459,7 @@ Wallpaper Engine manual QA before release candidate:
 | `visualizer_position` | Selects `around-album` or `bottom-up`; invalid Wallpaper Engine notifications keep the previous value, while invalid restored shared settings use `around-album`. |
 | `performance_mode` | Accepts `low-power`, `standard`, and `high-effect`; invalid values keep safe defaults. |
 | `debug_enabled` | Toggles the debug panel without exposing token values. |
-| Wallpaper Engine audio listener | Real data uses `wallpaper-engine`; unavailable data falls back to mock or idle visualizer state. |
+| Wallpaper Engine audio listener | Real data uses `wallpaper-engine`; after that source is established, noise-gated or stale input becomes zero and never restarts idle animation. Browser preview keeps mock/idle fallback behavior. |
 
 RC-2 Wallpaper Engine acceptance should be based on UI property editing and applying the wallpaper to an actual display.
 `play-in-window` or other CLI property injection checks are useful diagnostics only and are not required for RC-2 pass/fail.
