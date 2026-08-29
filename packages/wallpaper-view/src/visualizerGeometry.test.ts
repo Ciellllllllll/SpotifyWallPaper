@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { polarPoint, polarSamplePoints, radialBarRectangles } from './visualizerGeometry';
+import {
+  closedPolarSamplePoints,
+  lowFrequencyWeightedSamples,
+  polarPoint,
+  polarSamplePoints,
+  radialBarRectangles
+} from './visualizerGeometry';
 
 describe('visualizer geometry', () => {
   it('places a point at the requested angle around the center', () => {
@@ -37,6 +43,24 @@ describe('visualizer geometry', () => {
     expect(Math.hypot(points[0].x - 50, points[0].y - 50)).toBeCloseTo(20);
     expect(Math.hypot(points[1].x - 50, points[1].y - 50)).toBeCloseTo(20);
     expect(polarSamplePoints([], { centerX: 50, centerY: 50, radius: 20, amplitude: 20 })).toEqual([]);
+  });
+
+  it('closes circular waveforms and gives the low-frequency side a measured lift', () => {
+    const weighted = lowFrequencyWeightedSamples([0.4, 0.4, 0.4, 0.4], 0.35);
+    expect(weighted[0]).toBeCloseTo(0.54);
+    expect(weighted.at(-1)).toBeCloseTo(0.4);
+
+    const points = closedPolarSamplePoints([0.4, 0.2, 0.8], {
+      centerX: 50,
+      centerY: 50,
+      radius: 20,
+      amplitude: 10
+    });
+
+    expect(points).toHaveLength(4);
+    expect(points.at(-1)).toEqual(points[0]);
+    expect(points.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
+    expect(closedPolarSamplePoints([], { centerX: 50, centerY: 50, radius: 20, amplitude: 10 })).toEqual([]);
   });
 
   it('builds four-point bars that touch the album edge and grow outward', () => {

@@ -37,6 +37,26 @@ export const polarSamplePoints = (samples: readonly number[], layout: PolarSampl
   });
 };
 
+/**
+ * Gives the lower-frequency side of the spectrum a small, deterministic lift.
+ * The input order is preserved so the waveform still reflects the source data.
+ */
+export const lowFrequencyWeightedSamples = (samples: readonly number[], boost = 0.35): number[] => {
+  const safeBoost = Number.isFinite(boost) ? Math.max(0, boost) : 0;
+  const denominator = Math.max(1, samples.length - 1);
+
+  return samples.map((sample, index) => {
+    const value = Number.isFinite(sample) ? Math.max(0, sample) : 0;
+    const lowFrequencyFactor = 1 - index / denominator;
+    return value * (1 + lowFrequencyFactor * safeBoost);
+  });
+};
+
+export const closedPolarSamplePoints = (samples: readonly number[], layout: PolarSampleLayout, boost = 0.35): PolarPoint[] => {
+  const points = polarSamplePoints(lowFrequencyWeightedSamples(samples, boost), layout);
+  return points.length > 0 ? [...points, points[0]] : [];
+};
+
 export const radialBarRectangles = (samples: readonly number[], layout: RadialBarLayout): PolarPoint[][] => {
   if (samples.length === 0) {
     return [];

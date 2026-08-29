@@ -50,6 +50,27 @@ describe('wallpaper view visualizer presentation contract', () => {
     });
   });
 
+  it('uses the runtime album color for theme visualizers without changing the theme payload', () => {
+    const preferences = defaultWallpaperPreferences().visualizer;
+    const theme = {
+      primaryColor: '#112233',
+      secondaryColor: '#223344',
+      accentColor: '#aabbcc',
+      mutedColor: '#667788',
+      darkColor: '#000000',
+      lightColor: '#ffffff',
+      readableTextColor: '#ffffff',
+      overlayOpacity: 0.5,
+      shadowStrength: 0.5,
+      source: 'fallback' as const
+    };
+    const config = effectiveVisualizerConfig(defaultWallpaperPreferences());
+
+    const variables = visualizerStyleVariables(preferences, theme, config, '#7bd8ff');
+
+    expect(variables['--visualizer-color']).toBe('#7bd8ff');
+  });
+
   it('reduces presentation work in low-power mode', () => {
     const preferences = defaultWallpaperPreferences();
     const config = effectiveVisualizerConfig({
