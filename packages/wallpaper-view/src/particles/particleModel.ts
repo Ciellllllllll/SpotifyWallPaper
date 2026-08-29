@@ -27,6 +27,7 @@ const DEFAULT_PARTICLE_LIFE_MS = 3500;
 const MAX_PARTICLE_LIFE_MS = 10_000;
 const MAX_FRAME_DELTA_MS = 1000;
 export const PARTICLE_SPEED_TRANSITION_MS = 450;
+export const PARTICLE_MAX_BRIGHTNESS_MULTIPLIER = 1.6;
 const MIN_PARTICLE_SIZE = 1.5;
 const MAX_PARTICLE_SIZE = 4;
 
@@ -105,6 +106,9 @@ export const interpolateParticleSpeedMultiplier = (
   const progress = Number.isFinite(elapsedMs) ? Math.min(1, Math.max(0, elapsedMs / duration)) : 0;
   return safeFrom + (safeTo - safeFrom) * progress;
 };
+
+export const clampParticleBrightness = (value: number): number =>
+  Number.isFinite(value) ? Math.min(PARTICLE_MAX_BRIGHTNESS_MULTIPLIER, Math.max(1, value)) : 1;
 
 const safeDimension = (value: number): number => Number.isFinite(value) && value > 0 ? value : 1;
 

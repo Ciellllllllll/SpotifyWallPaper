@@ -174,6 +174,14 @@ test.describe('visualizer positioning', () => {
               expect(waveformShape.tagName).toBe('polyline');
               expect(waveformShape.fill).toBe('none');
             }
+            if (visualizerMode === 'album-ring') {
+              const waveform = visualizer.locator('.album-ring-waveform');
+              await expect(waveform).toHaveCount(1);
+              const points = (await waveform.getAttribute('points') ?? '').trim().split(/\s+/);
+              expect(points.length).toBeGreaterThan(2);
+              expect(points[0]).toBe(points.at(-1));
+              expect(await visualizer.evaluate((element) => getComputedStyle(element).transitionProperty.split(',').map((value) => value.trim()))).toContain('color');
+            }
           } else {
             const visualizerBox = await visualizer.boundingBox();
             expect(visualizerBox).not.toBeNull();
@@ -196,6 +204,14 @@ test.describe('visualizer positioning', () => {
                 expect(bar.top).toBeLessThan(bar.bottom);
                 expect(Math.abs(bar.bottom - visualizerBottom)).toBeLessThanOrEqual(2);
               }
+            }
+            if (visualizerMode === 'album-ring') {
+              const waveform = visualizer.locator('.bottom-circular-waveform');
+              await expect(waveform).toHaveCount(1);
+              const points = (await waveform.getAttribute('points') ?? '').trim().split(/\s+/);
+              expect(points[0]).toBe(points.at(-1));
+              expect(await visualizer.locator('svg').getAttribute('viewBox')).toBe('0 0 100 100');
+              expect(await visualizer.locator('svg').getAttribute('preserveAspectRatio')).toBe('xMidYMid meet');
             }
           }
         });
@@ -264,11 +280,13 @@ test.describe('glowing object canvas', () => {
     await expect(canvas).toHaveCount(1);
     await expect(page.locator('.visualizer')).toHaveCount(0);
     expect(await canvas.getAttribute('data-enabled')).toBe('true');
-    expect(Number(await canvas.getAttribute('data-speed-multiplier'))).toBeCloseTo(5 / 3, 2);
+    expect(Number(await canvas.getAttribute('data-speed-multiplier'))).toBeCloseTo(1.8, 2);
+    expect(Number(await canvas.getAttribute('data-brightness-multiplier'))).toBeCloseTo(1.48, 2);
+    expect(await canvas.getAttribute('data-color')).toMatch(/^#[0-9a-f]{6}$/i);
     await page.locator('.album-reactive-content').evaluate(async (element) => {
       await Promise.all(element.getAnimations().map((animation) => animation.finished));
     });
-    expect(Number(await page.locator('.album-reactive-content').evaluate((element) => getComputedStyle(element).scale))).toBeCloseTo(1.08, 2);
+    expect(Number(await page.locator('.album-reactive-content').evaluate((element) => getComputedStyle(element).scale))).toBeCloseTo(1.144, 2);
   });
 
   for (const viewCase of [
@@ -315,7 +333,9 @@ test.describe('glowing object canvas', () => {
       await expect.poll(() => reactiveContent.evaluate((element) => Number(getComputedStyle(element).scale))).toBeGreaterThan(1.04);
       const afterContent = await reactiveContent.boundingBox();
       const afterRing = await progressRing.boundingBox();
+      const motionStyle = await reactiveContent.evaluate((element) => getComputedStyle(element).translate);
       expect(afterContent?.width).toBeGreaterThan((beforeContent?.width ?? 0) + 1);
+      expect(motionStyle).not.toBe('none');
       expect(Math.abs((afterRing?.width ?? 0) - (beforeRing?.width ?? 0))).toBeLessThanOrEqual(0.1);
       expect(Math.abs((afterRing?.height ?? 0) - (beforeRing?.height ?? 0))).toBeLessThanOrEqual(0.1);
     });
@@ -784,13 +804,14 @@ test.describe('album visualizer geometry', () => {
       await Promise.all(element.getAnimations().map((animation) => animation.finished));
     });
     const albumBox = await albumFrame.boundingBox();
-    const visualizerBox = await visualizer.boundingBox();
+    const visualizerBox = await visualizer.locator('.visualizer-canvas').boundingBox();
+    const reactiveScale = await visualizer.evaluate((element) => Number(getComputedStyle(element.parentElement ?? element).scale));
     expect(albumBox).not.toBeNull();
     expect(visualizerBox).not.toBeNull();
     expect(albumBox?.width).toBeCloseTo(320, 1);
     expect(albumBox?.height).toBeCloseTo(320, 1);
-    expect(visualizerBox?.width).toBeCloseTo(albumBox?.width ?? 0, 1);
-    expect(visualizerBox?.height).toBeCloseTo(albumBox?.height ?? 0, 1);
+    expect(visualizerBox?.width).toBeCloseTo((albumBox?.width ?? 0) * reactiveScale, 1);
+    expect(visualizerBox?.height).toBeCloseTo((albumBox?.height ?? 0) * reactiveScale, 1);
     expect(await visualizer.locator('.ring-base').getAttribute('r')).toBe('50');
   });
 

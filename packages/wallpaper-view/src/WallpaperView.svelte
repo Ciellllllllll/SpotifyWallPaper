@@ -3,7 +3,7 @@
   import GlowingObjectCanvas from './particles/GlowingObjectCanvas.svelte';
   import AlbumVisualizer from './visualizer/AlbumVisualizer.svelte';
   import BottomVisualizer from './visualizer/BottomVisualizer.svelte';
-  import { effectiveVisualizerConfig, visualizerStyleVariables } from './visualizerStyle';
+  import { effectiveVisualizerConfig, resolveVisualizerColor, visualizerStyleVariables } from './visualizerStyle';
 
   export let model: WallpaperViewModel;
   export let onIntent: (intent: WallpaperViewIntent) => void = () => undefined;
@@ -39,7 +39,8 @@
     .filter((_, index) => index % effectiveVisualizer.sampleStep === 0)
     .slice(0, effectiveVisualizer.barCount);
   $: visualizerImpactLevel = model.visualizerMotion.impactLevel;
-  $: visualizerVariables = Object.entries(visualizerStyleVariables(settings.visualizer, model.theme, effectiveVisualizer))
+  $: visualizerColor = resolveVisualizerColor(settings.visualizer, model.theme, model.visualizerColor);
+  $: visualizerVariables = Object.entries(visualizerStyleVariables(settings.visualizer, model.theme, effectiveVisualizer, model.visualizerColor))
     .map(([key, value]) => `${key}: ${value}`)
     .join('; ');
   $: bottomVisualizerStyle = [
@@ -161,11 +162,8 @@
     glow={effectiveVisualizer.particleGlow}
     glowStrength={effectiveVisualizer.particleGlowStrength}
     speedMultiplier={model.visualizerMotion.particleSpeedMultiplier}
-    color={settings.visualizer.colorMode === 'accent'
-      ? model.theme.accentColor
-      : settings.visualizer.colorMode === 'white'
-        ? '#ffffff'
-        : model.theme.primaryColor}
+    brightnessMultiplier={model.visualizerMotion.particleBrightnessMultiplier}
+    color={visualizerColor}
   />
 
   {#if model.providerConfigurationError}
@@ -201,7 +199,10 @@
       on:focusin={() => (detailHoverUiVisible = true)}
       on:focusout={() => (detailHoverUiVisible = false)}
     >
-      <div class="album-reactive-content" style={`scale: ${model.visualizerMotion.albumScale}`}>
+      <div
+        class="album-reactive-content"
+        style={`translate: ${model.visualizerMotion.albumOffsetX}px ${model.visualizerMotion.albumOffsetY}px; scale: ${model.visualizerMotion.albumScale}`}
+      >
         {#if settings.visualizer.enabled && settings.visualizer.position === 'around-album'}
           <AlbumVisualizer
             mode={settings.visualizer.mode}
