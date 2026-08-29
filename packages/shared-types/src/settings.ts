@@ -44,6 +44,7 @@ export interface WallpaperPreferenceSections {
   };
   visualizer: {
     enabled: boolean;
+    glowingObjectsEnabled: boolean;
     mode: 'album-ring' | 'radial-bars' | 'waveform-line';
     position: VisualizerPosition;
     intensity: number;
@@ -312,6 +313,7 @@ const defaultWallpaperPreferencesValue: WallpaperPreferences = {
   seekbar: { visible: true, style: 'line' },
   visualizer: {
     enabled: true,
+    glowingObjectsEnabled: true,
     mode: 'album-ring',
     position: 'around-album',
     intensity: 0.72,
@@ -435,6 +437,7 @@ export const repairWallpaperPreferences = (input: unknown): RepairedWallpaperPre
     },
     visualizer: {
       enabled: booleanOr(sourceVisualizer?.enabled, true),
+      glowingObjectsEnabled: booleanOr(sourceVisualizer?.glowingObjectsEnabled, true),
       mode: oneOf(sourceVisualizer?.mode, ['album-ring', 'radial-bars', 'waveform-line'] as const, 'album-ring'),
       position: oneOf(sourceVisualizer?.position, ['around-album', 'bottom-up'] as const, 'around-album'),
       intensity: numberInRange(sourceVisualizer?.intensity, 0, 2, 0.72),

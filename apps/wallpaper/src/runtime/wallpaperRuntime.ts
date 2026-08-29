@@ -2,6 +2,7 @@ import type {
   NormalizedPlayback,
   SpotifyPlaybackError,
   VisualizerFrame,
+  VisualizerMotionState,
   WallpaperPreferences,
   WallpaperTheme,
   ProviderResult,
@@ -23,6 +24,7 @@ import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from '../theme/colo
 import { extractAlbumTheme } from '../theme/extractAlbumTheme';
 import { createTransitionState, type TrackTransitionState } from '../transitions/model';
 import { applyVisualizerIntensity, idleVisualizerFrame, isSilentWallpaperFrame, shapeVisualizerFrame } from '../visualizer/model';
+import { calculateVisualizerMotion, neutralVisualizerMotion } from '../visualizer/motion';
 import { createSilentAudioFrame, startAudioBridge, type AudioBridgeSource } from '../wallpaperEngine/audio';
 import type { CredentialUpdate } from '../wallpaperEngine/types';
 
@@ -44,6 +46,7 @@ interface WallpaperRuntimeSnapshot {
   progressNowMs: number;
   visualizerFrame: VisualizerFrame | null;
   previousVisualizerFrame: VisualizerFrame | null;
+  visualizerMotion: VisualizerMotionState;
   theme: WallpaperTheme;
   transitionState: TrackTransitionState | null;
   credentialStatus: { kind: 'none' | 'direct' | 'backend'; present: boolean; revision: number };
@@ -122,6 +125,7 @@ export const createWallpaperRuntime = (
     progressNowMs: Date.now(),
     visualizerFrame: null,
     previousVisualizerFrame: null,
+    visualizerMotion: neutralVisualizerMotion(),
     theme: fallbackThemeFromSeed(mockPlayback.id ?? mockPlayback.title),
     transitionState: null,
     credentialStatus: credentialClosure.status()
@@ -171,8 +175,13 @@ export const createWallpaperRuntime = (
     clockTimeout = window.setTimeout(tick, clockDelay(new Date(snapshot.nowMs)));
   };
 
+  const audioReactionEnabled = (settings: WallpaperPreferences): boolean =>
+    settings.visualizer.enabled
+    || settings.visualizer.glowingObjectsEnabled
+    || (settings.albumArt.visible && settings.layout.items.albumArt.enabled);
+
   const acceptIdleFrame = () => {
-    if (!snapshot.settings.visualizer.enabled) return;
+    if (!audioReactionEnabled(snapshot.settings)) return;
     const nowMs = Date.now();
     const staleAfterMs = snapshot.settings.performance.mode === 'low-power' ? 1600 : 700;
     if (audioBridgeSource === 'wallpaper-engine') {
@@ -194,7 +203,7 @@ export const createWallpaperRuntime = (
   const startVisualizers = () => {
     if (visualizerInterval !== null) window.clearInterval(visualizerInterval);
     visualizerInterval = null;
-    if (!snapshot.settings.visualizer.enabled) return;
+    if (!audioReactionEnabled(snapshot.settings)) return;
     visualizerInterval = window.setInterval(acceptIdleFrame, snapshot.settings.performance.mode === 'low-power' ? 1000 : 500);
     acceptIdleFrame();
   };
@@ -355,6 +364,8 @@ export const createWallpaperRuntime = (
       safetyGateOpen = safetyGateOpen && gateOpen;
       const previousProvider = snapshot.settings.spotify.provider;
       const previousVisualizerEnabled = snapshot.settings.visualizer.enabled;
+      const previousGlowingObjectsEnabled = snapshot.settings.visualizer.glowingObjectsEnabled;
+      const previousAudioReactionEnabled = audioReactionEnabled(snapshot.settings);
       const previousPerformanceMode = snapshot.settings.performance.mode;
       const previousClockShowSeconds = snapshot.settings.clock.showSeconds;
       const previousClockEnabled = snapshot.settings.clock.enabled;
@@ -369,12 +380,20 @@ export const createWallpaperRuntime = (
       )) {
         credentialClosure.clear();
       }
+      const nextAudioReactionEnabled = audioReactionEnabled(settings);
       snapshot = {
         ...snapshot,
         settings: structuredClone(settings),
         progressNowMs: Date.now(),
         ...(previousVisualizerEnabled && !settings.visualizer.enabled
-          ? { visualizerFrame: null, previousVisualizerFrame: null }
+          ? { visualizerFrame: null }
+          : {}),
+        ...(!nextAudioReactionEnabled
+          ? {
+              visualizerFrame: null,
+              previousVisualizerFrame: null,
+              visualizerMotion: neutralVisualizerMotion()
+            }
           : {}),
         ...(!settings.transitions.enabled ? { transitionState: null } : {})
       };
@@ -387,7 +406,9 @@ export const createWallpaperRuntime = (
       }
       if (started && typeof window !== 'undefined' && (
         previousPerformanceMode !== settings.performance.mode ||
-        previousVisualizerEnabled !== settings.visualizer.enabled
+        previousVisualizerEnabled !== settings.visualizer.enabled ||
+        previousGlowingObjectsEnabled !== settings.visualizer.glowingObjectsEnabled ||
+        previousAudioReactionEnabled !== nextAudioReactionEnabled
       )) {
         startVisualizers();
       }
@@ -400,7 +421,7 @@ export const createWallpaperRuntime = (
       emit();
     },
     acceptAudioFrame(frame) {
-      if (disposed || !snapshot.settings.visualizer.enabled) return;
+      if (disposed || !audioReactionEnabled(snapshot.settings)) return;
       const nowMs = Date.now();
       if (frame.source === 'wallpaper-engine' || frame.source === 'mock') {
         audioBridgeSource = frame.source;
@@ -421,7 +442,12 @@ export const createWallpaperRuntime = (
       }
       const normalized = shapeVisualizerFrame(frame, previous, snapshot.settings.visualizer);
       const shaped = applyVisualizerIntensity(normalized, snapshot.settings.visualizer.intensity);
-      snapshot = { ...snapshot, previousVisualizerFrame: normalized, visualizerFrame: shaped };
+      snapshot = {
+        ...snapshot,
+        previousVisualizerFrame: normalized,
+        visualizerFrame: snapshot.settings.visualizer.enabled ? shaped : null,
+        visualizerMotion: calculateVisualizerMotion(normalized)
+      };
       emit();
     },
     async execute(command) {

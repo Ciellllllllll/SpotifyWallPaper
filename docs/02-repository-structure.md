@@ -36,8 +36,11 @@ import the view; apps must not use relative imports across app boundaries.
 
 - `packages/wallpaper-view/`
   Shared presentational wallpaper/Configurator renderer. It accepts props and
-  intent callbacks only; it has no network, storage, timer, host API,
-  credential, or WASM lifecycle.
+  intent callbacks only; it has no network, storage, host API, credential, or
+  WASM lifecycle. Pure presentation-local animation lifecycles are allowed for
+  self-contained Canvas effects (for example, `requestAnimationFrame`, resize
+  observation, and their component cleanup); audio acquisition, polling,
+  settings, and host lifecycle remain outside this package.
 
 - `config/`
   Tracked machine-readable repository contracts, including repository

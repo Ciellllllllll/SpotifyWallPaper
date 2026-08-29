@@ -1,4 +1,4 @@
-import type { VisualizerFrame } from './audio';
+import type { VisualizerFrame, VisualizerMotionState } from './audio';
 import type { NormalizedPlayback } from './playback';
 import type { PlaybackCommand, ProviderSelection } from './provider';
 import type { WallpaperPreferences } from './settings';
@@ -81,6 +81,7 @@ export interface WallpaperViewModel {
   readonly playback: DeepReadonly<NormalizedPlayback>;
   readonly previousPlayback: DeepReadonly<NormalizedPlayback> | null;
   readonly visualizerFrame: DeepReadonly<VisualizerFrame> | null;
+  readonly visualizerMotion: DeepReadonly<VisualizerMotionState>;
   readonly theme: DeepReadonly<WallpaperTheme>;
   readonly transitionState: WallpaperViewTransition | null;
   readonly nowMs: number;

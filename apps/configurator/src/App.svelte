@@ -75,6 +75,12 @@
     playback: { ...previewPlayback, isPlaying: settings.player.controlsEnabled },
     previousPlayback: null,
     visualizerFrame: null,
+    visualizerMotion: {
+      impactLevel: 0,
+      stretchLevel: 0,
+      albumScale: 1,
+      particleSpeedMultiplier: 1
+    },
     theme: previewTheme,
     transitionState: null,
     nowMs: Date.parse('2026-06-14T22:10:36.000Z'),

@@ -15,6 +15,7 @@ export const toWallpaperViewModel = (
   playback: snapshot.playback,
   previousPlayback: snapshot.previousPlayback,
   visualizerFrame: snapshot.visualizerFrame,
+  visualizerMotion: snapshot.visualizerMotion,
   theme: snapshot.theme,
   transitionState: snapshot.transitionState
     ? {

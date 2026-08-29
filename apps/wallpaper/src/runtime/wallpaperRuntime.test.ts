@@ -219,7 +219,7 @@ describe('WallpaperRuntime', () => {
 
     runtime.acceptAudioFrame({
       source: 'wallpaper-engine',
-      samples: [0.5],
+      samples: [0.5, 0.5, 0.5],
       bass: 0.5,
       mid: 0.5,
       treble: 0.5,
@@ -229,8 +229,100 @@ describe('WallpaperRuntime', () => {
 
     const snapshot = runtimeSnapshot(runtime);
     expect(emissions).toBe(before + 1);
-    expect(snapshot.previousVisualizerFrame?.samples).toEqual([0.5]);
-    expect(snapshot.visualizerFrame?.samples).toEqual([0.25]);
+    expect(snapshot.previousVisualizerFrame?.samples).toEqual([0.5, 0.5, 0.5]);
+    expect(snapshot.visualizerFrame?.samples).toEqual([0.25, 0.25, 0.25]);
+    expect(snapshot.visualizerMotion.impactLevel).toBeCloseTo(0.5, 5);
+    expect(snapshot.visualizerMotion.albumScale).toBeCloseTo(1.02, 5);
+    unsubscribe();
+    runtime.dispose();
+  });
+
+  it('keeps album and particle motion reactive when the SVG visualizer is disabled', () => {
+    const runtime = createWallpaperRuntime({
+      ...defaultSettings,
+      visualizer: {
+        ...defaultSettings.visualizer,
+        enabled: false,
+        intensity: 0.5,
+        sensitivity: 1,
+        smoothing: 0,
+        decay: 1,
+        noiseGate: 0,
+        bassWeight: 1,
+        midWeight: 1,
+        trebleWeight: 1
+      }
+    });
+
+    runtime.acceptAudioFrame({
+      source: 'wallpaper-engine',
+      samples: [0.8, 0.8, 0.8],
+      bass: 0.8,
+      mid: 0.8,
+      treble: 0.8,
+      peak: 0.8,
+      timestampMs: 1000
+    });
+
+    const snapshot = runtimeSnapshot(runtime);
+    expect(snapshot.visualizerFrame).toBeNull();
+    expect(snapshot.previousVisualizerFrame?.peak).toBeCloseTo(0.8, 5);
+    expect(snapshot.visualizerMotion.impactLevel).toBeCloseTo(0.8, 5);
+    expect(snapshot.visualizerMotion.stretchLevel).toBeCloseTo(2 / 3, 5);
+    expect(snapshot.visualizerMotion.albumScale).toBeCloseTo(1.08, 5);
+    expect(snapshot.visualizerMotion.particleSpeedMultiplier).toBeCloseTo(5 / 3, 5);
+    runtime.dispose();
+  });
+
+  it('does not process audio when every visual reaction consumer is disabled', () => {
+    const runtime = createWallpaperRuntime();
+    runtime.acceptAudioFrame({
+      source: 'wallpaper-engine',
+      samples: [1, 1, 1],
+      bass: 1,
+      mid: 1,
+      treble: 1,
+      peak: 1,
+      timestampMs: 1000
+    });
+    expect(runtimeSnapshot(runtime).visualizerMotion.albumScale).toBeGreaterThan(1);
+
+    const noVisualReactions = {
+      ...defaultSettings,
+      albumArt: { visible: false },
+      layout: {
+        ...defaultSettings.layout,
+        items: {
+          ...defaultSettings.layout.items,
+          albumArt: { ...defaultSettings.layout.items.albumArt, enabled: false }
+        }
+      },
+      visualizer: {
+        ...defaultSettings.visualizer,
+        enabled: false,
+        glowingObjectsEnabled: false
+      }
+    };
+    let emissions = 0;
+    const unsubscribe = runtime.subscribe(() => { emissions += 1; });
+    runtime.applyConfiguration(noVisualReactions, { kind: 'retain' }, true);
+    const beforeIgnoredFrame = emissions;
+    expect(runtimeSnapshot(runtime).visualizerMotion).toEqual({
+      impactLevel: 0,
+      stretchLevel: 0,
+      albumScale: 1,
+      particleSpeedMultiplier: 1
+    });
+    runtime.acceptAudioFrame({
+      source: 'wallpaper-engine',
+      samples: [1, 1, 1],
+      bass: 1,
+      mid: 1,
+      treble: 1,
+      peak: 1,
+      timestampMs: 1100
+    });
+    expect(emissions).toBe(beforeIgnoredFrame);
     unsubscribe();
     runtime.dispose();
   });
@@ -375,13 +467,14 @@ describe('WallpaperRuntime', () => {
       vi.setSystemTime(1000);
       runtime.acceptAudioFrame({
         source: 'wallpaper-engine',
-        samples: [0.8],
+        samples: [0.8, 0.8, 0.8],
         bass: 0.8,
         mid: 0.8,
         treble: 0.8,
         peak: 0.8,
         timestampMs: 1000
       });
+      expect(runtimeSnapshot(runtime).visualizerMotion.albumScale).toBeGreaterThan(1);
       vi.setSystemTime(1100);
       runtime.acceptAudioFrame({
         source: 'wallpaper-engine',
@@ -405,6 +498,12 @@ describe('WallpaperRuntime', () => {
         timestampMs: 1301
       });
       expect(runtimeSnapshot(runtime).visualizerFrame?.peak).toBe(0);
+      expect(runtimeSnapshot(runtime).visualizerMotion).toEqual({
+        impactLevel: 0,
+        stretchLevel: 0,
+        albumScale: 1,
+        particleSpeedMultiplier: 1
+      });
     } finally {
       runtime.dispose();
       vi.useRealTimers();

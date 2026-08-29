@@ -12,9 +12,12 @@ MVP:
 - radial bars
 - waveform line
 
+Implemented alongside the MVP modes:
+
+- full-screen glowing objects
+
 Planned:
 
-- particles
 - background pulse
 - equalizer bars
 - halo glow
@@ -26,6 +29,7 @@ Planned:
 Support:
 
 - enabled
+- glowing objects enabled
 - mode
 - intensity
 - sensitivity
@@ -113,7 +117,9 @@ timer throttling is introduced. Album ring, radial bars, and waveform line do
 not rotate as a whole. In `around-album`, the visualizer cancels the album
 frame's layout rotation while continuing to share its translation, scale,
 size, transitions, and visibility. Position-specific geometry and anchoring
-are owned by the web view.
+are owned by the web view. The runtime also publishes a separate
+`VisualizerMotionState` for the album and glowing-object layers, even when the
+SVG visualizer is disabled.
 
 ## Response and effects
 
@@ -129,12 +135,33 @@ response = min(1.35, pow(clamp(sample, 0, 1), 0.72) * responseGain)
 only. Standard and high-effect modes add thin glow layers: the album ring
 pulses in thickness and opacity, while radial bars and both waveform views
 receive a back-glow. Low-power keeps the main geometry but omits these extra
-layers.
+layers. The motion coupling applies a threshold of `impactLevel > 0.40` after
+normalization. Above the threshold, `stretchLevel` maps to album scale
+`1.0..1.12` and particle speed multiplier `1.0..2.0`; the view eases release
+over about 450ms.
+
+## Glowing objects
+
+The glowing-object layer is one full-screen Canvas with no per-particle DOM
+nodes. Particles spawn inside a small disk near the viewport center, travel in
+a random outward direction, and are removed when they leave the viewport or
+reach their lifetime. Each object draws as a small theme-colored light with a
+short trail. Spawn timing has jitter, while audio changes speed only and does
+not change the spawn rate. The layer uses a dedicated seeded pseudo-random
+sequence so the particle model can be tested reproducibly.
+
+`glowingObjectsEnabled` stops the Canvas animation loop and clears all active
+particles immediately. It is independent of album-art visibility and SVG
+visualizer visibility. The album image and around-album SVG visualizer share an
+inner reactive layer for audio scale; the progress ring remains outside that
+layer and keeps its original size and position.
 
 ## Performance
 
-Low-power mode must reduce samples, particles, blur, and draw frequency.
-Standard mode uses the stronger response curve with restrained glow. High-effect
-mode uses the strongest response and the same SVG-only glow layers with the
-larger sample budget. No continuous decoration timer is used; effects change
-only when a visualizer frame changes.
+Low-power mode reduces samples, particle density, Canvas resolution, blur, and
+particle glow. Its automatic particle count is 24. Standard uses 48 particles
+and restrained glow; high-effect uses 96 particles and the strongest glow.
+Particle life defaults to 3.5 seconds. The Canvas uses `requestAnimationFrame`
+only while enabled for particle movement; Spotify APIs, audio acquisition, and
+album color extraction are never called per frame. No continuous SVG decoration
+timer is used; SVG effects change only when a visualizer frame changes.
