@@ -15,7 +15,12 @@ three performance profiles, three MVP modes, and two positions. It verifies that
 geometry, while `bottom-up` is anchored to the viewport bottom and grows radial
 bars upward. Display-mode coverage checks the track-panel `text-enter` animation
 and album-frame transition, and reduced motion verifies that both are stopped.
-These contract checks do not alter the existing default screenshot set.
+Glowing-object coverage verifies the shared motion state with the SVG visualizer
+disabled, the 450ms album release scale, the fixed progress ring, automatic
+particle density for all three performance profiles, and immediate Canvas loop
+shutdown. Fixed-time visual fixtures still cover 1920×1080 and 3440×1440 for
+both display modes; these contract checks do not alter the existing default
+screenshot set.
 
 ## Unit tests
 
@@ -38,6 +43,10 @@ TypeScript:
 - error classification
 - settings load fallback
 - mock mode initialization
+- Visualizer motion threshold, maximum album scale, maximum particle speed,
+  silence release, and non-finite input handling
+- Glowing-particle outward movement, speed multiplier, lifetime, viewport cull,
+  and finite-state safety
 - Worker OAuth state expiry and replay
 - Pairing Token parsing and HMAC verification
 - D1 application-layer encryption
@@ -74,6 +83,13 @@ Confirm:
 - Track change transition runs.
 - Layout coordinates move parts.
 - Visualizer intensity changes output.
+- Glowing objects start near the viewport center, travel outward, and remain
+  visible independently of album art and the SVG visualizer.
+- Impact above 0.40 expands the album content and accelerates particles; silence
+  returns both to their neutral state.
+- The album progress ring remains fixed while the inner album content scales.
+- Zero particle count/life use the automatic performance-mode values, and the
+  disabled toggle stops and clears the Canvas loop.
 - `around-album` centers circular visualizer geometry on the album art.
 - `bottom-up` stays at the lower edge and grows radial bars upward.
 - Switching between `album-only` and `album-details` enables the track-panel

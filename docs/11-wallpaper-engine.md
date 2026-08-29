@@ -13,7 +13,7 @@ The display target is a Wallpaper Engine Web Wallpaper. The same app must also o
 The native property panel exposes only:
 
 - one Spotify Token field
-- visualizer enabled, mode, and position
+- visualizer enabled, glowing objects enabled, mode, and position
 - visualizer intensity, sensitivity, smoothing, and decay speed
 - clock enabled, 12-hour display, and date display
 - performance mode
@@ -60,6 +60,15 @@ upward. Invalid position notifications from Wallpaper Engine are ignored so the
 existing position is retained. Missing or invalid values while restoring shared
 settings are repaired to `around-album`.
 
+The runtime also derives one audio-coupled motion state from the normalized
+visualizer frame. Its weighted impact is `peak * 0.45 + bass * 0.30 + mid *
+0.15 + treble * 0.10`. Only values strictly above `0.40` stretch the state:
+album content scales from `1.0` to `1.12`, and glowing-object speed scales from
+`1.0` to `2.0`. This state is calculated even when the SVG visualizer is
+disabled, so the album and glowing-object layers remain independent consumers.
+Silence, stopped playback, and stale callbacks return it through the existing
+zero-frame path.
+
 Fallback modes:
 
 - mock waveform in browser preview
@@ -67,7 +76,8 @@ Fallback modes:
   mock callback is waiting/stale
 - after the Wallpaper Engine source is established, noise-gated silence and a
   stale callback produce a zero frame instead of restarting idle animation
-- static low-power state if visualizer disabled
+- hidden/static SVG visualizer when it is disabled; album and glowing-object
+  motion consumers remain independent when enabled
 
 ## Output
 

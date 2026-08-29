@@ -14,7 +14,7 @@ Use this checklist before release or when changing settings, Spotify, Wallpaper 
 - `cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml`
 - `npm audit --audit-level=moderate`
 - `git diff --check`
-- `npx playwright test tests/playwright/wallpaper-characterization.spec.ts --grep "visualizer positioning|display mode animations"`
+- `npx playwright test tests/playwright/wallpaper-characterization.spec.ts --grep "visualizer positioning|glowing object canvas|display mode animations"`
 
 Resource-intensive commands should run through `h5i capture run`.
 
@@ -24,6 +24,10 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm mock album art or placeholder is visible.
 - Confirm title, artists, progress, seekbar, and clock are visible.
 - Confirm visualizer renders from mock or idle audio data.
+- Confirm the full-screen glowing-object Canvas starts near the center, moves
+  outward, and remains visible when the SVG visualizer is disabled.
+- Confirm album-only and album-details both scale album content above the audio
+  threshold while the album progress ring stays fixed.
 - Confirm malformed settings JSON falls back safely.
 - Confirm no Wallpaper Engine object is required.
 
@@ -50,6 +54,7 @@ Resource-intensive commands should run through `h5i capture run`.
   - `settings_json`
   - `selected_preset`
   - `visualizer_enabled`
+  - `glowing_objects_enabled`
   - `visualizer_position`
   - `performance_mode`
   - `debug_enabled`
@@ -117,6 +122,12 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm long title and many-artist fixtures do not break text layout.
 - Confirm very bright and very dark theme cases keep text readable.
 - Confirm low-power mode reduces visualizer work and blur.
+- Confirm automatic glowing-object density is 24/48/96 for low-power/standard/high-effect,
+  and that high-effect glow is stronger than standard while low-power disables
+  particle shadow blur.
+- Confirm the Canvas uses the lower logical backing resolution in low-power on
+  a HiDPI display, and that disabling the property after particles appear
+  clears particles and stops the animation loop.
 - Confirm `around-album` centers circular visualizer geometry on the album art.
 - Confirm `bottom-up` is anchored to the lower edge and radial bars grow upward.
 - Confirm `album-only`/`album-details` changes enable track-panel `text-enter`

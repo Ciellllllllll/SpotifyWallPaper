@@ -53,9 +53,17 @@ position transitions also run in reverse when details are hidden; the track
 panel is removed after details are hidden. The current and previous track state
 must remain safe while a track-change transition is active.
 
+The album image and around-album visualizer are contained by an inner reactive
+layer. Audio motion scales that layer from 1.0 to 1.12 over the active impact,
+with approximately 450ms easing on release. The album progress ring remains a
+sibling outside the reactive layer, so it does not scale or move with the
+audio response.
+
 ## Reduce motion
 
 When `transitions.reduceMotion` is enabled, aggressive effects should resolve to
 fade/crossfade behavior and display-mode animations and transitions must stop.
 The same stop behavior applies when the user agent reports
-`prefers-reduced-motion: reduce`.
+`prefers-reduced-motion: reduce`. These existing settings do not automatically
+disable the new glowing-object Canvas or its audio-coupled album scale; the
+separate `visualizer.glowingObjectsEnabled` setting controls that layer.

@@ -77,6 +77,16 @@ accepted only by the migration DTO and is never emitted.
 Missing, malformed, and unsupported values are repaired to the safe default
 `around-album`.
 
+`visualizer.glowingObjectsEnabled` is a separate boolean display toggle and
+defaults to `true`. It is also exposed as the Wallpaper Engine property
+`glowing_objects_enabled`; non-boolean property values are ignored. The v2
+schema version remains unchanged.
+
+`visualizer.particleCount` and `visualizer.particleLife` use zero as an
+automatic value, not as an off switch. Automatic particle counts are 24 in
+`low-power`, 48 in `standard`, and 96 in `high-effect`; automatic life is 3.5
+seconds. Disable the effect with `glowingObjectsEnabled`.
+
 ## Validation policy
 
 Validate ranges for:

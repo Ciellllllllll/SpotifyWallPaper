@@ -175,6 +175,7 @@ Visible user property keys:
 
 - `spotify_refresh_token`
 - `visualizer_enabled`
+- `glowing_objects_enabled`
 - `visualizer_mode`
 - `visualizer_position`
 - `visualizer_intensity`
@@ -216,6 +217,17 @@ size. Set Visualizer Position to `around-album` to keep circular geometry
 centered on the album art, or to `bottom-up` to anchor the visualizer at the
 bottom of the screen and grow radial bars upward. The position is independent
 of the selected mode, and the visualizer does not rotate as a whole.
+
+### Glowing objects
+
+Glowing Objects Enabled controls a full-screen field of small lights that begin
+near the center and move outward. The effect is independent of album-art and
+SVG visualizer visibility. When the normalized audio impact exceeds 0.40, the
+album content grows up to 12% and the lights move up to twice their normal
+speed; after the sound stops, both ease back in about 450ms. Reduce Motion does
+not disable this effect. A particle count or lifetime of 0 selects the
+performance-aware automatic value; use the toggle when the effect should be
+off.
 
 ### Display mode animation
 
