@@ -14,5 +14,8 @@ export interface VisualizerMotionState {
   impactLevel: number;
   stretchLevel: number;
   albumScale: number;
+  albumOffsetX: number;
+  albumOffsetY: number;
   particleSpeedMultiplier: number;
+  particleBrightnessMultiplier: number;
 }

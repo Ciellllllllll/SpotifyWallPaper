@@ -82,6 +82,7 @@ export interface WallpaperViewModel {
   readonly previousPlayback: DeepReadonly<NormalizedPlayback> | null;
   readonly visualizerFrame: DeepReadonly<VisualizerFrame> | null;
   readonly visualizerMotion: DeepReadonly<VisualizerMotionState>;
+  readonly visualizerColor: string;
   readonly theme: DeepReadonly<WallpaperTheme>;
   readonly transitionState: WallpaperViewTransition | null;
   readonly nowMs: number;

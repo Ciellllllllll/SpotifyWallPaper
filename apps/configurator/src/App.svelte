@@ -79,8 +79,12 @@
       impactLevel: 0,
       stretchLevel: 0,
       albumScale: 1,
+      albumOffsetX: 0,
+      albumOffsetY: 0,
+      particleBrightnessMultiplier: 1,
       particleSpeedMultiplier: 1
     },
+    visualizerColor: '#ffffff',
     theme: previewTheme,
     transitionState: null,
     nowMs: Date.parse('2026-06-14T22:10:36.000Z'),
