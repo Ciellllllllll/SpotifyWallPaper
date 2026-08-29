@@ -192,7 +192,7 @@ export const parseWallpaperProperties = (
     patch.seekbar = {
       ...patch.seekbar,
       ...(seekbarVisible !== undefined ? { visible: seekbarVisible } : {}),
-      ...(seekbarStyle === 'line' || seekbarStyle === 'album-ring' ? { style: seekbarStyle } : {})
+      ...(seekbarStyle === 'line' || seekbarStyle === 'album-ring' ? { style: 'line' } : {})
     };
   }
 

@@ -15,6 +15,12 @@ export interface RadialBarLayout extends PolarSampleLayout {
   minSample: number;
 }
 
+export const visualizerAudioAmplitude = (baseAmplitude: number, radius: number): number => {
+  const safeBaseAmplitude = Number.isFinite(baseAmplitude) ? Math.max(0, baseAmplitude) : 0;
+  const safeRadius = Number.isFinite(radius) ? Math.max(0, radius) : 0;
+  return safeBaseAmplitude * 3 * safeRadius;
+};
+
 export const polarPoint = (centerX: number, centerY: number, radius: number, angleRadians: number): PolarPoint => ({
   x: centerX + Math.cos(angleRadians) * radius,
   y: centerY + Math.sin(angleRadians) * radius

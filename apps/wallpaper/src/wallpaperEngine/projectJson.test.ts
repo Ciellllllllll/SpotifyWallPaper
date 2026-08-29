@@ -250,7 +250,7 @@ describe('Wallpaper Engine project.json', () => {
   it('exposes live visualizer tuning as conditional fractional sliders', () => {
     const properties = loadProjectJson().general?.properties ?? {};
     const expected = {
-      visualizer_intensity: ['Visualizer Intensity', 0.72, 0, 2],
+      visualizer_intensity: ['Visualizer Intensity', 2.16, 0, 6],
       visualizer_sensitivity: ['Visualizer Sensitivity', 1, 0, 3],
       visualizer_smoothing: ['Visualizer Smoothing', 0.35, 0, 0.95],
       visualizer_decay: ['Visualizer Decay Speed', 0.22, 0, 1]

@@ -206,7 +206,7 @@ describe('Wallpaper Engine property adapter', () => {
     });
   });
 
-  it('keeps credentials outside the v2 preference patch', () => {
+  it('keeps credentials outside the v3 preference patch', () => {
     const merged = applyWallpaperPreferencesPatch(defaultSettings, { debug: { enabled: true }, spotify: { provider: 'mock' } });
 
     expect(merged.debug.enabled).toBe(true);
@@ -228,6 +228,14 @@ describe('Wallpaper Engine property adapter', () => {
       smoothing: 0.2,
       decay: 0.8
     });
+  });
+
+  it('retains existing Wallpaper Engine slider values without JSON migration', () => {
+    const result = parseWallpaperProperties({
+      visualizer_intensity: { value: 0.72 }
+    });
+
+    expect(result.patch.visualizer?.intensity).toBe(0.72);
   });
 
   it('parses the visualizer position property and ignores unsupported values', () => {

@@ -9,6 +9,7 @@
   } from './particleModel';
 
   const COLOR_TRANSITION_MS = 450;
+  const MAX_PARTICLE_COUNT = 192;
 
   export let enabled = true;
   export let particleCount = 48;
@@ -200,7 +201,9 @@
     if (activeParticleCount !== count) activeParticleCount = count;
   };
 
-  const safeParticleCount = (value: number): number => Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+  const safeParticleCount = (value: number): number => Number.isFinite(value)
+    ? Math.min(MAX_PARTICLE_COUNT, Math.max(0, Math.round(value)))
+    : 0;
   const safeLife = (value: number): number => Number.isFinite(value) && value > 0 ? Math.min(10_000, value) : 3500;
   const safeDimension = (value: number): number => Number.isFinite(value) && value > 0 ? value : 1;
   const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
@@ -249,7 +252,7 @@
     class="glowing-object-canvas"
     aria-hidden="true"
     data-enabled={enabled}
-    data-particle-count={particleCount}
+    data-particle-count={safeParticleCount(particleCount)}
     data-active-particles={activeParticleCount}
     data-speed-multiplier={speedMultiplier}
     data-brightness-multiplier={brightnessMultiplier}

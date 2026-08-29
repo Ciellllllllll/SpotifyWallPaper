@@ -1,4 +1,12 @@
+import {
+  visualizerResponseGainForPerformance
+} from '@spotify-wallpaper/shared-types';
 import type { WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
+
+export {
+  visualizerResponsePeak,
+  visualizerResponseSample
+} from '@spotify-wallpaper/shared-types';
 
 export interface EffectiveVisualizerConfig {
   barCount: number;
@@ -12,22 +20,6 @@ export interface EffectiveVisualizerConfig {
   particleGlow: boolean;
   particleGlowStrength: number;
 }
-
-const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
-
-const safeSignal = (value: number): number => (Number.isFinite(value) ? Math.max(0, value) : 0);
-
-export const visualizerResponseSample = (sample: number, responseGain: number): number => {
-  const normalized = clamp(safeSignal(sample), 0, 1);
-  const gain = Number.isFinite(responseGain) ? Math.max(0, responseGain) : 1;
-  return Math.min(1.35, normalized ** 0.72 * gain);
-};
-
-export const visualizerResponsePeak = (peak: number, intensity: number, responseGain: number): number => {
-  const safeIntensity = Number.isFinite(intensity) ? Math.max(0, intensity) : 0;
-  if (safeIntensity === 0) return 0;
-  return visualizerResponseSample(safeSignal(peak) / safeIntensity, responseGain) * safeIntensity;
-};
 
 export const resolveVisualizerColor = (
   settings: WallpaperPreferences['visualizer'],
@@ -45,7 +37,7 @@ export const effectiveVisualizerConfig = (settings: WallpaperPreferences): Effec
   const maxBars = performanceMode === 'low-power' ? 24 : performanceMode === 'high-effect' ? 120 : 72;
   const sampleStep = settings.performance.mode === 'low-power' ? 2 : 1;
   const glowScale = settings.performance.mode === 'low-power' ? 0.45 : settings.performance.mode === 'high-effect' ? 1.2 : 1;
-  const responseGain = settings.performance.mode === 'low-power' ? 0.9 : settings.performance.mode === 'high-effect' ? 1.35 : 1.15;
+  const responseGain = visualizerResponseGainForPerformance(performanceMode);
   const automaticParticleCount = performanceMode === 'low-power' ? 24 : performanceMode === 'high-effect' ? 96 : 48;
   const maximumParticleCount = performanceMode === 'low-power' ? 24 : performanceMode === 'high-effect' ? 192 : 96;
   const requestedParticleCount = Number.isFinite(settings.visualizer.particleCount)

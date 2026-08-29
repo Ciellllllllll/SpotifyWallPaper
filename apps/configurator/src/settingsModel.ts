@@ -4,7 +4,7 @@ import {
   defaultLayoutPreset,
   defaultWallpaperPreferences,
   layoutPresetNames,
-  migrateWallpaperSettingsToV2,
+  migrateWallpaperSettingsToV3,
   type LayoutPresetName,
   type PlaybackProviderKind,
   type WallpaperPreferences,
@@ -73,10 +73,10 @@ export const buildSettings = (draft: ConfiguratorDraft): WallpaperPreferences =>
       mode: draft.backgroundMode
     },
     player: { controlsEnabled: draft.playerControlsEnabled },
-    seekbar: { style: layoutChanged ? (draft.preset === 'Album Ring' ? 'album-ring' : 'line') : defaults.seekbar.style },
+    seekbar: { style: 'line' },
     visualizer: {
       enabled: draft.visualizerEnabled,
-      intensity: performanceChanged && draft.performanceMode === 'high-effect' ? 1.05 : defaults.visualizer.intensity,
+      intensity: performanceChanged && draft.performanceMode === 'high-effect' ? 3.15 : defaults.visualizer.intensity,
       barCount: performanceChanged && draft.performanceMode === 'low-power' ? 32 : defaults.visualizer.barCount,
       rotationSpeed: performanceChanged && draft.performanceMode === 'low-power' ? 0.06 : defaults.visualizer.rotationSpeed,
       glowStrength: performanceChanged && draft.performanceMode === 'low-power' ? 0.36 : defaults.visualizer.glowStrength
@@ -95,7 +95,7 @@ export const exportSettingsJson = (draft: ConfiguratorDraft): string => JSON.str
 export const importSettingsJson = (source: string): { draft: ConfiguratorDraft; warning: string | null } => {
   try {
     const parsed = JSON.parse(source) as Record<string, unknown>;
-    const migrated = migrateWallpaperSettingsToV2(parsed);
+    const migrated = migrateWallpaperSettingsToV3(parsed);
     return {
       draft: {
         ...defaultDraft,

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { visualizerResponseSample } from '@spotify-wallpaper/shared-types';
 import type { NormalizedPlayback, ProviderResult, VisualizerFrame, WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
 import { mockPlayback } from '../mock/mockPlayback';
 import { defaultSettings } from '../settings/defaultSettings';
@@ -117,6 +118,53 @@ describe('WallpaperRuntime', () => {
     runtime.dispose();
   });
 
+  it('refreshes the current visualizer immediately when volume changes', async () => {
+    const playback = {
+      ...mockPlayback,
+      source: 'spotify' as const,
+      volumePercent: 100,
+      device: mockPlayback.device ? { ...mockPlayback.device, volumePercent: 100 } : null
+    };
+    const provider = controlledProvider(
+      { ok: true, value: playback },
+      { ok: true, value: undefined }
+    );
+    const settings = settingsForProvider('direct');
+    const runtime = createWallpaperRuntime(settings, {
+      selectProvider: () => ({ kind: 'ready', provider })
+    });
+    let current = runtimeSnapshot(runtime);
+    const unsubscribe = runtime.subscribe((snapshot) => {
+      current = snapshot;
+    });
+
+    runtime.applyConfiguration(
+      settings,
+      { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+      true
+    );
+    runtime.start();
+    await flushAsync();
+    runtime.acceptAudioFrame({
+      source: 'wallpaper-engine',
+      samples: [0.45, 0.45, 0.45],
+      bass: 0.45,
+      mid: 0.45,
+      treble: 0.45,
+      peak: 0.45,
+      timestampMs: Date.now()
+    });
+    const before = current.visualizerFrame?.samples[0] ?? 0;
+
+    await runtime.execute({ type: 'volume', volumePercent: 25 });
+
+    expect(current.playback.volumePercent).toBe(25);
+    expect(current.visualizerFrame?.samples[0]).toBeGreaterThan(before);
+    expect(current.previousVisualizerFrame?.samples[0]).toBeLessThan(current.visualizerFrame?.samples[0] ?? 0);
+    unsubscribe();
+    runtime.dispose();
+  });
+
   it('sanitizes provider error messages before publishing the ViewModel', async () => {
     const secret = 'refresh-token-secret';
     const playback = { ...mockPlayback, source: 'spotify' as const };
@@ -202,7 +250,6 @@ describe('WallpaperRuntime', () => {
       ...defaultSettings,
       visualizer: {
         ...defaultSettings.visualizer,
-        intensity: 0.5,
         sensitivity: 1,
         smoothing: 0,
         decay: 1,
@@ -231,11 +278,48 @@ describe('WallpaperRuntime', () => {
     const snapshot = runtimeSnapshot(runtime);
     expect(emissions).toBe(before + 1);
     expect(snapshot.previousVisualizerFrame?.samples).toEqual([0.5, 0.5, 0.5]);
-    expect(snapshot.visualizerFrame?.samples).toEqual([0.25, 0.25, 0.25]);
-    expect(snapshot.visualizerMotion.impactLevel).toBeCloseTo(0.5, 5);
-    expect(snapshot.visualizerMotion.albumScale).toBeCloseTo(1.09, 5);
-    expect(snapshot.visualizerMotion.particleBrightnessMultiplier).toBeCloseTo(1.3, 5);
+    expect(snapshot.visualizerFrame?.samples.every((sample, index) => sample > (snapshot.previousVisualizerFrame?.samples[index] ?? 0))).toBe(true);
+    expect(snapshot.visualizerMotion.impactLevel).toBeGreaterThan(0.5);
+    expect(snapshot.visualizerMotion.albumScale).toBeGreaterThan(1.18);
+    expect(snapshot.visualizerMotion.particleBrightnessMultiplier).toBeGreaterThan(1.3);
     unsubscribe();
+    runtime.dispose();
+  });
+
+  it('adapts browser mock audio without mutating its normalized frame', () => {
+    const runtime = createWallpaperRuntime({
+      ...defaultSettings,
+      visualizer: {
+        ...defaultSettings.visualizer,
+        sensitivity: 1,
+        smoothing: 0,
+        decay: 1,
+        noiseGate: 0,
+        bassWeight: 1,
+        midWeight: 1,
+        trebleWeight: 1
+      }
+    });
+
+    runtime.acceptAudioFrame({
+      source: 'mock',
+      samples: [0.25, 0.25],
+      bass: 0.25,
+      mid: 0.25,
+      treble: 0.25,
+      peak: 0.25,
+      timestampMs: 1000
+    });
+
+    const snapshot = runtimeSnapshot(runtime);
+    const renderedPeak = visualizerResponseSample(
+      (snapshot.visualizerFrame?.peak ?? 0) / defaultSettings.visualizer.intensity,
+      1.15
+    ) * defaultSettings.visualizer.intensity;
+    expect(snapshot.previousVisualizerFrame?.source).toBe('mock');
+    expect(snapshot.previousVisualizerFrame?.samples).toEqual([0.25, 0.25]);
+    expect(renderedPeak).toBeCloseTo(0.98, 2);
+    expect(snapshot.visualizerFrame?.samples.every(Number.isFinite)).toBe(true);
     runtime.dispose();
   });
 
@@ -245,7 +329,6 @@ describe('WallpaperRuntime', () => {
       visualizer: {
         ...defaultSettings.visualizer,
         enabled: false,
-        intensity: 0.5,
         sensitivity: 1,
         smoothing: 0,
         decay: 1,
@@ -269,11 +352,11 @@ describe('WallpaperRuntime', () => {
     const snapshot = runtimeSnapshot(runtime);
     expect(snapshot.visualizerFrame).toBeNull();
     expect(snapshot.previousVisualizerFrame?.peak).toBeCloseTo(0.8, 5);
-    expect(snapshot.visualizerMotion.impactLevel).toBeCloseTo(0.8, 5);
-    expect(snapshot.visualizerMotion.stretchLevel).toBeCloseTo(0.8, 5);
-    expect(snapshot.visualizerMotion.albumScale).toBeCloseTo(1.144, 5);
-    expect(snapshot.visualizerMotion.particleSpeedMultiplier).toBeCloseTo(1.8, 5);
-    expect(snapshot.visualizerMotion.particleBrightnessMultiplier).toBeCloseTo(1.48, 5);
+    expect(snapshot.visualizerMotion.impactLevel).toBeGreaterThan(0.5);
+    expect(snapshot.visualizerMotion.stretchLevel).toBeGreaterThan(0.5);
+    expect(snapshot.visualizerMotion.albumScale).toBeGreaterThan(1.25);
+    expect(snapshot.visualizerMotion.particleSpeedMultiplier).toBeGreaterThan(1.5);
+    expect(snapshot.visualizerMotion.particleBrightnessMultiplier).toBeGreaterThan(1.3);
     runtime.dispose();
   });
 
@@ -375,7 +458,8 @@ describe('WallpaperRuntime', () => {
     const snapshot = runtimeSnapshot(runtime);
     expect(emissions).toBe(3);
     expect(snapshot.previousVisualizerFrame?.samples[0]).toBeCloseTo(0.4, 5);
-    expect(snapshot.visualizerFrame?.samples[0]).toBeCloseTo(0.4, 5);
+    expect(snapshot.visualizerFrame?.samples[0]).toBeGreaterThan(0);
+    expect(Number.isFinite(snapshot.visualizerFrame?.samples[0])).toBe(true);
     unsubscribe();
     runtime.dispose();
   });

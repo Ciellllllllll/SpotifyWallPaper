@@ -17,7 +17,7 @@ bars upward. Display-mode coverage checks the track-panel `text-enter` animation
 and album-frame transition, and reduced motion verifies that both are stopped.
 Glowing-object coverage verifies the shared motion state with the SVG visualizer
 disabled, continuous album scale and capped offset, synchronized speed and
-brightness, the fixed progress ring, automatic particle density for all three
+brightness, the straight seekbar, automatic particle density for all three
 performance profiles, and immediate Canvas loop shutdown. Circular waveform
 coverage verifies closed album and bottom paths and the visualizer-only color
 transition contract. Fixed-time visual fixtures still cover 1920×1080 and
@@ -49,6 +49,11 @@ TypeScript:
 - mock mode initialization
 - Visualizer motion continuity, maximum album scale, maximum particle speed and
   brightness, capped album offset, silence release, and non-finite input handling
+- Visualizer response inversion, volume compensation at 100/50/25/0 percent,
+  per-track high-water decay, pause retention, track-change smoothing, and the
+  combined 4× gain cap
+- Settings v3 migration, one-time legacy intensity conversion, and legacy
+  seekbar migration to the straight line style
 - Glowing-particle outward movement, speed multiplier, lifetime, viewport cull,
   and finite-state safety
 - Worker OAuth state expiry and replay
@@ -92,8 +97,11 @@ Confirm:
 - Continuous impact expands the album content and accelerates/brightens
   particles; low-frequency impact moves the content by at most 8px and silence
   returns all values to neutral.
-- The album progress ring remains fixed while the inner album content scales
-  and moves.
+- The straight seekbar remains independent while the inner album content scales
+  and moves; no progress-ring element is rendered.
+- Audio peaks at normal, half, quarter, zero, and unavailable Spotify volume
+  remain visible through the common automatic adaptation path, with no more than
+  4× combined correction.
 - Zero particle count/life use the automatic performance-mode values, and the
   disabled toggle stops and clears the Canvas loop.
 - `around-album` centers circular visualizer geometry on the album art.

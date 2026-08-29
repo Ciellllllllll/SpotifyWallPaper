@@ -9,6 +9,7 @@ import type {
   PlaybackCommand,
   PlaybackProvider
 } from '@spotify-wallpaper/shared-types';
+import { visualizerResponseGainForPerformance } from '@spotify-wallpaper/shared-types';
 import { mockPlayback } from '../mock/mockPlayback';
 import {
   createProcessMemoryCredentialClosure,
@@ -24,6 +25,11 @@ import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from '../theme/colo
 import { extractAlbumTheme, type AlbumThemeExtraction } from '../theme/extractAlbumTheme';
 import { createTransitionState, type TrackTransitionState } from '../transitions/model';
 import { applyVisualizerIntensity, idleVisualizerFrame, isSilentWallpaperFrame, shapeVisualizerFrame } from '../visualizer/model';
+import {
+  adaptVisualizerFrame,
+  createVisualizerAdaptationState,
+  setVisualizerAdaptationPlaybackState
+} from '../visualizer/adaptation';
 import { calculateVisualizerMotion, neutralVisualizerMotion, releaseVisualizerMotion } from '../visualizer/motion';
 import { createSilentAudioFrame, startAudioBridge, type AudioBridgeSource } from '../wallpaperEngine/audio';
 import type { CredentialUpdate } from '../wallpaperEngine/types';
@@ -113,6 +119,7 @@ export const createWallpaperRuntime = (
   let silentSinceMs: number | null = null;
   let motionReleaseSource: VisualizerMotionState | null = null;
   let motionReleaseStartedAtMs: number | null = null;
+  let visualizerAdaptation = createVisualizerAdaptationState(mockPlayback.isPlaying);
 
   let snapshot: WallpaperRuntimeSnapshot = {
     settings: structuredClone(initialSettings),
@@ -316,6 +323,38 @@ export const createWallpaperRuntime = (
     emit();
   };
 
+  const renderAdaptedVisualizerFrame = (
+    normalized: VisualizerFrame,
+    nowMs: number,
+    hasValidAudio: boolean
+  ): VisualizerFrame => {
+    const adaptation = adaptVisualizerFrame(
+      visualizerAdaptation,
+      normalized,
+      snapshot.playback,
+      visualizerResponseGainForPerformance(snapshot.settings.performance.mode),
+      nowMs,
+      hasValidAudio
+    );
+    visualizerAdaptation = adaptation.state;
+    return applyVisualizerIntensity(normalized, adaptation.totalGain * snapshot.settings.visualizer.intensity);
+  };
+
+  const refreshCurrentVisualizer = (hasValidAudio: boolean): void => {
+    const normalized = snapshot.previousVisualizerFrame;
+    if (!normalized || (normalized.source !== 'wallpaper-engine' && normalized.source !== 'mock')) return;
+    const silent = normalized.source === 'wallpaper-engine' && silentSinceMs !== null;
+    const shaped = renderAdaptedVisualizerFrame(normalized, Date.now(), hasValidAudio && !silent);
+    const targetMotion = silent ? neutralVisualizerMotion() : calculateVisualizerMotion(shaped);
+    snapshot = {
+      ...snapshot,
+      visualizerFrame: snapshot.settings.visualizer.enabled ? shaped : null,
+      visualizerMotion: targetMotion
+    };
+    motionReleaseSource = null;
+    motionReleaseStartedAtMs = null;
+  };
+
   const poll = async (runId: number, currentProvider: PlaybackProvider, signal: AbortSignal) => {
     let result: ProviderResult<NormalizedPlayback>;
     try {
@@ -334,6 +373,14 @@ export const createWallpaperRuntime = (
     const history = playbackHistoryAfterPoll(previous, result);
     if (result.ok && history.previousPlayback === previous.playback) startTransition(previous.playback, history.playback);
     snapshot = { ...snapshot, playback: history.playback, previousPlayback: history.previousPlayback };
+    visualizerAdaptation = setVisualizerAdaptationPlaybackState(
+      visualizerAdaptation,
+      history.playback.isPlaying,
+      Date.now()
+    );
+    if (result.ok && history.playback.volumePercent !== previous.playback.volumePercent) {
+      refreshCurrentVisualizer(false);
+    }
     if (result.ok) {
       snapshot = { ...snapshot, spotifyError: null, consecutiveErrors: 0 };
       updateTheme(history.playback);
@@ -460,6 +507,7 @@ export const createWallpaperRuntime = (
         themeGeneration += 1;
         motionReleaseSource = null;
         motionReleaseStartedAtMs = null;
+        visualizerAdaptation = createVisualizerAdaptationState(snapshot.playback.isPlaying);
       }
       if (!settings.transitions.enabled && transitionTimeout !== null && typeof window !== 'undefined') {
         window.clearTimeout(transitionTimeout);
@@ -506,8 +554,8 @@ export const createWallpaperRuntime = (
         }
       }
       const normalized = shapeVisualizerFrame({ ...frame, timestampMs: safeTimestampMs }, previous, snapshot.settings.visualizer);
-      const shaped = applyVisualizerIntensity(normalized, snapshot.settings.visualizer.intensity);
-      const targetMotion = isSilent ? neutralVisualizerMotion() : calculateVisualizerMotion(normalized);
+      const shaped = renderAdaptedVisualizerFrame(normalized, nowMs, !isSilent);
+      const targetMotion = isSilent ? neutralVisualizerMotion() : calculateVisualizerMotion(shaped);
       const targetEnergy = Math.max(targetMotion.stretchLevel, Math.hypot(targetMotion.albumOffsetX, targetMotion.albumOffsetY) / 8);
       const currentEnergy = Math.max(snapshot.visualizerMotion.stretchLevel, Math.hypot(snapshot.visualizerMotion.albumOffsetX, snapshot.visualizerMotion.albumOffsetY) / 8);
       let visualizerMotion = targetMotion;
@@ -573,6 +621,7 @@ export const createWallpaperRuntime = (
                 device: snapshot.playback.device ? { ...snapshot.playback.device, volumePercent } : snapshot.playback.device
               }
             };
+            refreshCurrentVisualizer(false);
             break;
           }
           case 'shuffle': snapshot = { ...snapshot, playback: { ...snapshot.playback, shuffleState: command.state } }; break;
@@ -580,6 +629,11 @@ export const createWallpaperRuntime = (
           case 'next':
           case 'previous': break;
         }
+        visualizerAdaptation = setVisualizerAdaptationPlaybackState(
+          visualizerAdaptation,
+          snapshot.playback.isPlaying,
+          Date.now()
+        );
       }
       emit();
     },
@@ -605,6 +659,7 @@ export const createWallpaperRuntime = (
       silentSinceMs = null;
       motionReleaseSource = null;
       motionReleaseStartedAtMs = null;
+      visualizerAdaptation = createVisualizerAdaptationState(false);
       credentialClosure.clear();
       listeners.clear();
     }

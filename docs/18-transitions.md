@@ -54,13 +54,13 @@ panel is removed after details are hidden. The current and previous track state
 must remain safe while a track-change transition is active.
 
 The album image and around-album visualizer are contained by an inner reactive
-layer. Continuous audio motion scales that layer from 1.0 to 1.18 and can move
+layer. Continuous adapted audio motion scales that layer from 1.0 to 1.54 and can move
 it along a capped outward vector of at most 8px. The visualizer-only color
 follows the album image with approximately 450ms interpolation. The view
 follows the runtime motion state with a short 90ms display transition while
-the runtime owns the approximately 450ms neutral release. The album progress
-ring remains a sibling outside the reactive layer, so it does not scale or
-move with the audio response.
+the runtime owns the approximately 450ms neutral release. The straight
+seekbar remains outside the reactive layer, so it does not scale or move with
+the audio response.
 
 ## Reduce motion
 

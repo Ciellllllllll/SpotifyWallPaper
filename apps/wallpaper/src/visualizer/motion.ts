@@ -1,6 +1,6 @@
 import type { VisualizerFrame, VisualizerMotionState } from '@spotify-wallpaper/shared-types';
 
-const ALBUM_MAX_SCALE = 0.18;
+const ALBUM_MAX_SCALE = 0.54;
 const ALBUM_MAX_OFFSET_PX = 8;
 const PARTICLE_MAX_BRIGHTNESS = 1.6;
 const MOTION_RELEASE_MS = 450;

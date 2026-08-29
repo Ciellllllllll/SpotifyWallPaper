@@ -113,7 +113,7 @@
       }
     )
   );
-  $: exportSummary = 'settings v2 export is secret-free';
+  $: exportSummary = 'settings v3 export is secret-free';
   $: rainmeterSummary = settings.rainmeter.enabled ? 'Rainmeter JSON enabled' : 'Rainmeter off';
 
   const update = <K extends keyof ConfiguratorDraft>(key: K, value: ConfiguratorDraft[K]) => {

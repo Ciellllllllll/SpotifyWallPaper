@@ -43,10 +43,10 @@ export const loadSettings = (
   if (sourceResult.fromStorage && storageTarget) {
     try {
       // The legacy settings document may contain embedded credentials. Remove it
-      // and only write back the allowlisted, secret-free v2 preferences.
+      // and only write back the allowlisted, secret-free v3 preferences.
       storageTarget.localStorage.removeItem(SETTINGS_STORAGE_KEY);
       if (loaded.storageRewriteAllowed) {
-        // `loaded.preferences` has already passed the shared v2 repair/migration
+        // `loaded.preferences` has already passed the shared v3 repair/migration
         // boundary, so serializing this object cannot reintroduce legacy fields.
         storageTarget.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(loaded.preferences));
       }

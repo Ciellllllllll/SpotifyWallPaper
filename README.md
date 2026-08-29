@@ -177,13 +177,13 @@ Artwork, link, and attribution requirements are documented in Spotify's
 [Developer Policy](https://developer.spotify.com/policy) and
 [Design Guidelines](https://developer.spotify.com/documentation/design).
 
-For local browser testing, keep the browser path credential-free and use the v2 mock provider:
+For local browser testing, keep the browser path credential-free and use the v3 mock provider:
 
 ```js
 localStorage.setItem(
   'spotify-wallpaper-settings',
   JSON.stringify({
-    schemaVersion: 2,
+    schemaVersion: 3,
     spotify: {
       provider: 'mock'
     }
@@ -283,7 +283,7 @@ Rust/TypeScript runtime boundary:
 | Visualizer smoothing, decay, and normalized peak | Rust/WASM visual core | TypeScript normalizer | Rendering-specific bar/path generation stays in TypeScript. |
 | Theme readability and contrast | Rust/WASM visual core | TypeScript contrast helper | Browser album pixel extraction stays in TypeScript because it uses Image and Canvas APIs. |
 | Layout and safe-area semantics | TypeScript settings/view contracts | TypeScript repair/defaults | The retired Rust layout ABI and config-schema crate are not runtime authorities. |
-| Full nested settings validation | TypeScript shared-types | Safe v2 repair/defaults | Settings migration, repair, presets, and secret-free serialization remain TypeScript-owned. |
+| Full nested settings validation | TypeScript shared-types | Safe v3 repair/defaults | Settings migration, repair, presets, and secret-free serialization remain TypeScript-owned. |
 
 Visualizer settings support the Phase 6 MVP modes: `album-ring`, `radial-bars`, and `waveform-line`. The `position` can
 be `around-album` for a circular visualizer centered on the album art or `bottom-up` for a bottom-anchored visualizer
@@ -293,14 +293,23 @@ a 2×2-unit square base; their inner edge touches the album edge, they add audio
 are checked before intensity, keep their slot but are hidden, and `gap` is ignored in favor of equal placement by sample count. `visualizer.radius`
 changes only the outward extension of radial bars and waveform; it does not move the album edge, and the album ring stays at radius 50. The same
 radius rule applies to bottom-up bars and waveform height without moving the bottom anchor. If album art is hidden or its layout item is disabled,
-the `around-album` visualizer is hidden as well. Sensitivity affects normalization, while intensity scales the final rendered output. The view
-uses `min(1.35, pow(clamp(sample, 0, 1), 0.72) * responseGain)` with gains `0.90`, `1.15`, and `1.35` for low-power, standard, and high-effect.
-Standard and high-effect add SVG glow layers; low-power omits them. The visualizer does not rotate as a whole.
+the `around-album` visualizer is hidden as well. Sensitivity affects normalization, while intensity scales the final rendered output.
+Audio-derived radial extension, bottom bars, and waveform amplitude use the 3× tuning in all three modes and both positions.
+The runtime continuously adapts a playing track's high-water level (about 12 seconds of decay) and applies inverse Spotify
+volume compensation, capped at a combined 4× gain. Its fixed reference is about 98% at the default `2.16` intensity, while
+the configured intensity remains the final display multiplier and the normalized frame stays unchanged. The album motion
+scale ranges from `1.0` to `1.54`; particle speed and brightness retain
+their existing `2.0` and `1.6` caps. The view uses `min(1.35, pow(clamp(sample, 0, 1), 0.72) * responseGain)` with gains
+`0.90`, `1.15`, and `1.35` for low-power, standard, and high-effect. Standard and high-effect add SVG glow layers;
+low-power omits them. Around-album SVG geometry may extend outside the album frame and is clipped only at the wallpaper
+viewport; bottom-up geometry remains clipped to its panel. The seekbar is always a straight line; the `album-ring`
+visualizer mode remains available. The visualizer does not rotate as a whole.
 
 ```js
 localStorage.setItem(
   'spotify-wallpaper-settings',
   JSON.stringify({
+    schemaVersion: 3,
     visualizer: {
       enabled: true,
       mode: 'radial-bars',
@@ -499,7 +508,7 @@ Run the Tauri shell:
 npm run tauri:dev -w @spotify-wallpaper/configurator
 ```
 
-The configurator edits the complete v2 preferences object, previews the shared mock renderer, and imports/exports
+The configurator edits the complete v3 preferences object, previews the shared mock renderer, and imports/exports
 secret-free Wallpaper Engine settings JSON. Spotify authorization is a single native Tauri command: verifier, state,
 callback URL, authorization code, and Refresh Token stay in Rust locals; after native confirmation, the approved `swpt1.`
 bundle is copied to the clipboard once. The WebView receives only status or fixed error codes and never stores or exports
