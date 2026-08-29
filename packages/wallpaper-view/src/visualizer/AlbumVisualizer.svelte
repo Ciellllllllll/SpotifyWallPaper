@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { WallpaperPreferences } from '@spotify-wallpaper/shared-types';
-  import { closedPolarSamplePoints, polarSamplePoints, radialBarRectangles } from '../visualizerGeometry';
+  import { closedPolarSamplePoints, polarSamplePoints, radialBarRectangles, visualizerAudioAmplitude } from '../visualizerGeometry';
   import { visualizerResponsePeak, visualizerResponseSample } from '../visualizerStyle';
 
   export let mode: WallpaperPreferences['visualizer']['mode'];
@@ -25,7 +25,7 @@
   $: displayPeak = Number.isFinite(peak) ? Math.max(0, peak) : 0;
   $: visualizerRadius = Number.isFinite(radius) ? Math.min(2.2, Math.max(0.6, radius)) : 1;
   $: counterRotation = Number.isFinite(rotation) ? -rotation : 0;
-  $: visualizerIntensity = Number.isFinite(intensity) ? Math.min(2, Math.max(0, intensity)) : 1;
+  $: visualizerIntensity = Number.isFinite(intensity) ? Math.min(6, Math.max(0, intensity)) : 1;
   $: sourceSamples = visualizerIntensity > 0
     ? safeSamples.map((sample) => sample / visualizerIntensity)
     : safeSamples.map(() => 0);
@@ -41,7 +41,7 @@
         centerX: 50,
         centerY: 50,
         radius: circularBaseRadius,
-        amplitude: 18 * visualizerRadius,
+        amplitude: visualizerAudioAmplitude(18, visualizerRadius),
         side: radialBarSide,
         minSample: visualizerIntensity > 0 ? radialBarMinSample * visualizerIntensity : Number.MAX_VALUE
       })
@@ -51,7 +51,7 @@
         centerX: 50,
         centerY: 50,
         radius: circularBaseRadius,
-        amplitude: 13 * visualizerRadius
+        amplitude: visualizerAudioAmplitude(13, visualizerRadius)
       })
     : [];
   $: albumRingWaveformPoints = mode === 'album-ring'
@@ -59,7 +59,7 @@
         centerX: 50,
         centerY: 50,
         radius: circularBaseRadius,
-        amplitude: (16 + impactLevel * 6) * visualizerRadius
+        amplitude: visualizerAudioAmplitude(16 + impactLevel * 6, visualizerRadius)
       })
     : [];
   $: radialBarSvgPoints = radialBarPolygons

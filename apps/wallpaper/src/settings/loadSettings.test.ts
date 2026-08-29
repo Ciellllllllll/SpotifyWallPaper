@@ -24,11 +24,11 @@ const storageTarget = (values: Record<string, string> = {}) => {
 };
 
 describe('loadSettings', () => {
-  it('falls back to secret-free v2 defaults for malformed settings JSON', () => {
+  it('falls back to secret-free v3 defaults for malformed settings JSON', () => {
     const loaded = loadSettings('{not json');
 
     expect(loaded.warning).toContain('malformed');
-    expect(loaded.settings.schemaVersion).toBe(2);
+    expect(loaded.settings.schemaVersion).toBe(3);
     expect(loaded.settings.spotify.provider).toBe('mock');
     expect(loaded.safetyGateOpen).toBe(false);
   });
@@ -38,7 +38,7 @@ describe('loadSettings', () => {
       spotify: { clientId: 'client-id', refreshToken: 'secret-refresh-token', hasRefreshToken: true }
     }));
 
-    expect(loaded.settings.schemaVersion).toBe(2);
+    expect(loaded.settings.schemaVersion).toBe(3);
     expect(JSON.stringify(loaded.settings)).not.toMatch(/client-id|secret-refresh-token|hasRefreshToken/i);
   });
 
@@ -73,7 +73,7 @@ describe('loadSettings', () => {
     expect(JSON.stringify(loaded.settings)).not.toMatch(/cached-client|cached-refresh-token/i);
   });
 
-  it('rewrites browser settings storage to an allowlisted v2 document', () => {
+  it('rewrites browser settings storage to an allowlisted v3 document', () => {
     const { target, store } = storageTarget({
       'spotify-wallpaper-settings': JSON.stringify({
         spotify: { playbackProvider: 'direct', clientId: 'legacy-client', refreshToken: 'legacy-refresh' },
@@ -86,7 +86,7 @@ describe('loadSettings', () => {
     expect(loaded.settings.player.displayMode).toBe('album-details');
     expect(stored).toBeDefined();
     expect(stored).not.toMatch(/legacy-client|legacy-refresh|clientId|refreshToken/i);
-    expect(JSON.parse(stored as string).schemaVersion).toBe(2);
+    expect(JSON.parse(stored as string).schemaVersion).toBe(3);
   });
 
   it('removes future browser settings without writing them back and closes the safety gate', () => {
@@ -134,7 +134,7 @@ describe('loadSettings', () => {
     expect(loaded.safetyGateOpen).toBe(false);
   });
 
-  it('applies preset coordinates while preserving all v2 categories', () => {
+  it('applies preset coordinates while preserving all v3 categories', () => {
     const loaded = loadSettings(JSON.stringify({
       layout: { preset: 'Bottom Player' },
       albumArt: { visible: false },

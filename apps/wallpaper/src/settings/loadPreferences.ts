@@ -1,6 +1,6 @@
 import {
   defaultWallpaperPreferences,
-  migrateWallpaperSettingsToV2,
+  migrateWallpaperSettingsToV3,
   type WallpaperPreferences
 } from '@spotify-wallpaper/shared-types';
 
@@ -18,7 +18,7 @@ export interface LoadedWallpaperPreferences {
   networkAllowed: boolean;
   /** Monotonic safety decision: malformed/future input or failed cleanup cannot re-enable network. */
   safetyGateOpen: boolean;
-  /** Whether the source may be replaced with the sanitized v2 document. */
+  /** Whether the source may be replaced with the sanitized v3 document. */
   storageRewriteAllowed: boolean;
   cleanup: LegacyCredentialCleanupResult;
 }
@@ -42,7 +42,7 @@ export const loadWallpaperPreferences = (
     };
   }
 
-  const migrated = migrateWallpaperSettingsToV2(
+  const migrated = migrateWallpaperSettingsToV3(
     source === undefined || source === null || source === '' ? defaultWallpaperPreferences() : source
   );
   const networkAllowed =

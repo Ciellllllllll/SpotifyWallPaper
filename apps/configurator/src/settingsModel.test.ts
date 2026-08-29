@@ -2,19 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { buildSettings, defaultDraft, exportSettingsJson, importSettingsJson } from './settingsModel';
 
 describe('configurator settings model', () => {
-  it('builds secret-free v2 preferences regardless of draft credentials', () => {
+  it('builds secret-free v3 preferences regardless of draft credentials', () => {
     const settings = buildSettings({
       ...defaultDraft,
       spotifyClientId: 'client-id'
     });
 
-    expect(settings.schemaVersion).toBe(2);
+    expect(settings.schemaVersion).toBe(3);
     expect(settings.spotify.provider).toBe('mock');
     expect('clientId' in settings.spotify).toBe(false);
     expect(exportSettingsJson(defaultDraft)).not.toMatch(/refreshToken|accessToken|clientSecret/i);
   });
 
-  it('does not include refresh tokens in the v2 export', () => {
+  it('does not include refresh tokens in the v3 export', () => {
     const settings = buildSettings({
       ...defaultDraft
     });
@@ -60,10 +60,19 @@ describe('configurator settings model', () => {
     });
 
     expect(settings.layout.preset).toBe('Album Ring');
-    expect(settings.seekbar.style).toBe('album-ring');
+    expect(settings.seekbar.style).toBe('line');
     expect(settings.background.blurPx).toBe(12);
     expect(settings.visualizer).toMatchObject({ barCount: 32, rotationSpeed: 0.06, glowStrength: 0.36 });
     expect(settings.theme.textColor).toBe('#123456');
+  });
+
+  it('uses the v3-equivalent intensity for high-effect mode', () => {
+    const settings = buildSettings({
+      ...defaultDraft,
+      performanceMode: 'high-effect'
+    });
+
+    expect(settings.visualizer.intensity).toBe(3.15);
   });
 
   it('ignores credentials in imported settings and keeps export secret-free', () => {

@@ -40,7 +40,7 @@ export interface WallpaperPreferenceSections {
   player: ExistingPlayerPreferences;
   seekbar: {
     visible: boolean;
-    style: 'line' | 'album-ring';
+    style: 'line';
   };
   visualizer: {
     enabled: boolean;
@@ -107,7 +107,7 @@ export interface WallpaperPreferenceSections {
 }
 
 export interface WallpaperPreferences extends WallpaperPreferenceSections {
-  schemaVersion: 2;
+  schemaVersion: 3;
   spotify: {
     provider: PlaybackProviderKind;
     backendOrigin?: string;
@@ -279,7 +279,7 @@ export const isLayoutPresetName = (value: unknown): value is LayoutPresetName =>
   typeof value === 'string' && value in layoutPresets;
 
 const defaultWallpaperPreferencesValue: WallpaperPreferences = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   spotify: {
     provider: 'mock',
     pollIntervalPlayingMs: 1000,
@@ -316,7 +316,7 @@ const defaultWallpaperPreferencesValue: WallpaperPreferences = {
     glowingObjectsEnabled: true,
     mode: 'album-ring',
     position: 'around-album',
-    intensity: 0.72,
+    intensity: 2.16,
     sensitivity: 1,
     smoothing: 0.35,
     decay: 0.22,
@@ -393,7 +393,7 @@ export const repairWallpaperPreferences = (input: unknown): RepairedWallpaperPre
   const sourceItems = asRecord(sourceLayout?.items);
 
   const preferences: WallpaperPreferences = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     spotify: {
       provider: oneOf(sourceSpotify?.provider, ['mock', 'direct', 'backend'] as const, 'mock'),
       ...(nonEmptyString(sourceSpotify?.backendOrigin) ? { backendOrigin: sourceSpotify?.backendOrigin } : {}),
@@ -433,14 +433,14 @@ export const repairWallpaperPreferences = (input: unknown): RepairedWallpaperPre
     },
     seekbar: {
       visible: booleanOr(sourceSeekbar?.visible, true),
-      style: oneOf(sourceSeekbar?.style, ['line', 'album-ring'] as const, 'line')
+      style: 'line'
     },
     visualizer: {
       enabled: booleanOr(sourceVisualizer?.enabled, true),
       glowingObjectsEnabled: booleanOr(sourceVisualizer?.glowingObjectsEnabled, true),
       mode: oneOf(sourceVisualizer?.mode, ['album-ring', 'radial-bars', 'waveform-line'] as const, 'album-ring'),
       position: oneOf(sourceVisualizer?.position, ['around-album', 'bottom-up'] as const, 'around-album'),
-      intensity: numberInRange(sourceVisualizer?.intensity, 0, 2, 0.72),
+      intensity: numberInRange(sourceVisualizer?.intensity, 0, 6, 2.16),
       sensitivity: numberInRange(sourceVisualizer?.sensitivity, 0, 3, 1),
       smoothing: numberInRange(sourceVisualizer?.smoothing, 0, 1, 0.35),
       decay: numberInRange(sourceVisualizer?.decay, 0, 1, 0.22),
@@ -501,7 +501,7 @@ export const repairWallpaperPreferences = (input: unknown): RepairedWallpaperPre
   return {
     preferences,
     repaired,
-    warning: repaired ? 'Invalid settings were repaired; safe v2 defaults are active.' : null
+    warning: repaired ? 'Invalid settings were repaired; safe v3 defaults are active.' : null
   };
 };
 
@@ -509,7 +509,7 @@ export const applyWallpaperPreferencesPatch = (
   base: WallpaperPreferences,
   patch: WallpaperPreferencesPatch
 ): WallpaperPreferences => repairWallpaperPreferences({
-  schemaVersion: 2,
+  schemaVersion: 3,
   spotify: { ...base.spotify, ...patch.spotify },
   layout: { ...base.layout, ...patch.layout },
   theme: { ...base.theme, ...patch.theme },
@@ -526,13 +526,13 @@ export const applyWallpaperPreferencesPatch = (
   debug: { ...base.debug, ...patch.debug }
 }).preferences;
 
-export const migrateWallpaperSettingsToV2 = (input: unknown): WallpaperSettingsMigrationResult => {
+export const migrateWallpaperSettingsToV3 = (input: unknown): WallpaperSettingsMigrationResult => {
   const parsed = parseSettingsInput(input);
   if (!parsed) {
     return {
       preferences: defaultWallpaperPreferences(),
       status: 'malformed',
-      warning: 'Settings input was malformed; safe v2 defaults are active.',
+      warning: 'Settings input was malformed; safe v3 defaults are active.',
       reauthorizationRequired: false
     };
   }
@@ -543,7 +543,7 @@ export const migrateWallpaperSettingsToV2 = (input: unknown): WallpaperSettingsM
     return {
       preferences: defaultWallpaperPreferences(),
       status: 'future',
-      warning: 'Settings schema is newer than supported v2; safe defaults are active.',
+      warning: 'Settings schema is newer than supported v3; safe defaults are active.',
       reauthorizationRequired: false
     };
   }
@@ -551,20 +551,25 @@ export const migrateWallpaperSettingsToV2 = (input: unknown): WallpaperSettingsM
     return {
       preferences: defaultWallpaperPreferences(),
       status: 'malformed',
-      warning: 'Settings schema version was invalid; safe v2 defaults are active.',
+      warning: 'Settings schema version was invalid; safe v3 defaults are active.',
       reauthorizationRequired: false
     };
   }
 
   const sourceSpotify = asRecord(parsed.spotify);
   const legacyProvider = sourceSpotify?.playbackProvider;
+  const isLegacy = versionKind === 'unversioned' || versionKind === 'v1' || versionKind === 'v2';
   const isV1 = versionKind === 'unversioned' || versionKind === 'v1';
   const explicitProvider: PlaybackProviderKind = isV1
     ? oneOf(legacyProvider, ['direct', 'backend'] as const, 'mock')
     : oneOf(sourceSpotify?.provider, ['mock', 'direct', 'backend'] as const, 'mock');
+  const sourceVisualizer = asRecord(parsed.visualizer);
+  const sourceIntensity = isLegacy
+    ? Math.round(numberInRange(sourceVisualizer?.intensity, 0, 2, 0.72) * 3_000_000) / 1_000_000
+    : sourceVisualizer?.intensity;
   const source: Record<string, unknown> = {
     ...parsed,
-    schemaVersion: 2,
+    schemaVersion: 3,
     spotify: {
       provider: explicitProvider,
       ...(isV1 && nonEmptyString(sourceSpotify?.backendUrl)
@@ -574,16 +579,20 @@ export const migrateWallpaperSettingsToV2 = (input: unknown): WallpaperSettingsM
           : {}),
       pollIntervalPlayingMs: sourceSpotify?.pollIntervalPlayingMs,
       pollIntervalPausedMs: sourceSpotify?.pollIntervalPausedMs
+    },
+    visualizer: {
+      ...sourceVisualizer,
+      ...(sourceIntensity === undefined ? {} : { intensity: sourceIntensity })
     }
   };
 
   const repaired = repairWallpaperPreferences(source);
   const reauthorizationRequired = explicitProvider === 'direct' || explicitProvider === 'backend';
-  if (isV1) {
+  if (isLegacy) {
     return {
       preferences: repaired.preferences,
       status: 'migrated',
-      warning: reauthorizationRequired ? 'Legacy settings were migrated to v2; Spotify authorization is required.' : repaired.warning,
+      warning: reauthorizationRequired ? 'Legacy settings were migrated to v3; Spotify authorization is required.' : repaired.warning,
       reauthorizationRequired
     };
   }
@@ -597,9 +606,9 @@ export const migrateWallpaperSettingsToV2 = (input: unknown): WallpaperSettingsM
 };
 
 export const serializeWallpaperPreferences = (input: unknown): string => {
-  const migrated = migrateWallpaperSettingsToV2(input);
+  const migrated = migrateWallpaperSettingsToV3(input);
   if (migrated.status !== 'valid' && migrated.status !== 'repaired') {
-    throw new Error('Only supported v2 preferences can be serialized.');
+    throw new Error('Only supported v3 preferences can be serialized.');
   }
   return JSON.stringify(migrated.preferences);
 };
@@ -615,7 +624,7 @@ const parseSettingsInput = (input: unknown): Record<string, unknown> | null => {
   return asRecord(input);
 };
 
-type SchemaVersionKind = 'unversioned' | 'v1' | 'v2' | 'future' | 'malformed';
+type SchemaVersionKind = 'unversioned' | 'v1' | 'v2' | 'v3' | 'future' | 'malformed';
 
 const classifySchemaVersion = (value: unknown): SchemaVersionKind => {
   if (value === undefined) {
@@ -627,7 +636,10 @@ const classifySchemaVersion = (value: unknown): SchemaVersionKind => {
   if (value === 2) {
     return 'v2';
   }
-  if (typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value > 2) {
+  if (value === 3) {
+    return 'v3';
+  }
+  if (typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value) && value > 3) {
     return 'future';
   }
   return 'malformed';

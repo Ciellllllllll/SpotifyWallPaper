@@ -27,7 +27,7 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm the full-screen glowing-object Canvas starts near the center, moves
   outward, and remains visible when the SVG visualizer is disabled.
 - Confirm album-only and album-details both scale album content above the audio
-  threshold while the album progress ring stays fixed.
+  threshold while the straight seekbar stays fixed.
 - Confirm malformed settings JSON falls back safely.
 - Confirm no Wallpaper Engine object is required.
 
@@ -139,7 +139,9 @@ Resource-intensive commands should run through `h5i capture run`.
 ## Optional Configurator
 
 - Open `http://127.0.0.1:1420/`.
-- Confirm generated settings JSON is `schemaVersion: 2` and excludes all credential fields and values.
+- Confirm generated settings JSON is `schemaVersion: 3` and excludes all credential fields and values.
+- Confirm v1, v2, and unversioned settings migrate intensity once from the old 0–2 range to 0–6, while v3 settings are not multiplied again.
+- Confirm legacy `seekbar.style: "album-ring"` is repaired to the straight `line` seekbar and no progress-ring element is rendered.
 - Confirm the single native auth command starts PKCE without a Client Secret and returns only status/fixed error codes to the WebView.
 - Confirm verifier, state, callback URL, authorization code, and Refresh Token never enter the WebView draft, logs, settings JSON, or export.
 - Confirm native confirmation copies an approved `swpt1.` bundle to the clipboard once and does not expose it in app state.

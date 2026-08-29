@@ -31,7 +31,7 @@ Support:
 - enabled
 - glowing objects enabled
 - mode
-- intensity
+- intensity (`0–6`, default `2.16`)
 - sensitivity
 - smoothing
 - decay
@@ -114,16 +114,26 @@ If the Wallpaper Engine callback stops, the performance-mode timeout injects a
 zero frame instead of restarting idle animation.
 
 The shaping order is safe input, sensitivity and band weighting, one
-Rust/WASM-or-fallback normalization pass, then rendered intensity. Do not
-normalize each frame to its own peak because that would erase absolute
-loudness. Audio callbacks are rendered as received; no additional polling or
-timer throttling is introduced. Album ring, radial bars, and waveform line do
-not rotate as a whole. In `around-album`, the visualizer cancels the album
-frame's layout rotation while continuing to share its translation, scale,
-size, transitions, and visibility. Position-specific geometry and anchoring
-are owned by the web view. The runtime also publishes a separate
-`VisualizerMotionState` for the album and glowing-object layers, even when the
-SVG visualizer is disabled.
+Rust/WASM-or-fallback normalization pass, live high-water and volume
+adaptation, then rendered intensity. Do not normalize each frame to its own
+peak because that would erase absolute loudness. While playing, the runtime
+updates a per-track high-water level continuously, decays it on an approximately
+12-second timescale, and uses inverse Spotify volume compensation. Automatic
+and volume gain together are capped at 4×. The fixed reference target is about
+98% after the response curve at the default `2.16` intensity; configured
+intensity remains the final display multiplier. Paused playback holds the
+high-water and decay clock; volume-only refreshes reuse the corrected high-water
+without recording the previous audio frame as a new peak; track changes carry
+the prior level and smooth the new gain over about 450ms. The normalized state
+is never overwritten by these display corrections.
+Audio callbacks are rendered as received; no additional polling or timer
+throttling is introduced. Album ring, radial bars, and waveform line do not
+rotate as a whole. In `around-album`, the visualizer cancels the album frame's
+layout rotation while continuing to share its translation, scale, size,
+transitions, and visibility. Position-specific geometry and anchoring are owned
+by the web view. The runtime also publishes a separate `VisualizerMotionState`
+for the album and glowing-object layers, even when the SVG visualizer is
+disabled.
 
 ## Response and effects
 
@@ -136,15 +146,19 @@ response = min(1.35, pow(clamp(sample, 0, 1), 0.72) * responseGain)
 
 `responseGain` is `0.90` in `low-power`, `1.15` in `standard`, and `1.35` in
 `high-effect`. The final `intensity` setting still scales the rendered output
-only. Standard and high-effect modes add thin glow layers: the album ring
+only. The sample-derived outward extension, bottom bar height, and waveform
+amplitude are three times their previous values in all three modes and both
+positions. Standard and high-effect modes add thin glow layers: the album ring
 pulses in thickness and opacity, while radial bars and both waveform views
 receive a back-glow. Low-power keeps the main geometry but omits these extra
-layers. The separate motion state uses the weighted normalized impact
+layers. The separate motion state uses the weighted adapted impact
 continuously; it is not gated at a visible threshold. `stretchLevel` maps to
-album scale `1.0..1.18`, particle speed `1.0..2.0`, and particle brightness
+album scale `1.0..1.54`, particle speed `1.0..2.0`, and particle brightness
 `1.0..1.6`. Low-frequency impact also moves the album content along a stable
-outward vector, capped at 8px. Silence releases all of these values toward
-neutral over about 450ms.
+outward vector, capped at 8px. Around-album SVG geometry stays circular while
+extending outside the album frame and is clipped only by the wallpaper
+viewport; bottom-up geometry remains clipped to its panel. Silence releases
+all values toward neutral over about 450ms.
 
 ## Glowing objects
 
@@ -166,8 +180,9 @@ are not replaced by this visualizer-only color.
 `glowingObjectsEnabled` stops the Canvas animation loop and clears all active
 particles immediately. It is independent of album-art visibility and SVG
 visualizer visibility. The album image and around-album SVG visualizer share an
-inner reactive layer for audio scale and capped outward movement; the progress
-ring remains outside that layer and keeps its original size and position.
+inner reactive layer for audio scale and capped outward movement. Playback
+progress is rendered only as the straight seekbar; the visualizer's
+`album-ring` mode remains available independently.
 
 ## Performance
 

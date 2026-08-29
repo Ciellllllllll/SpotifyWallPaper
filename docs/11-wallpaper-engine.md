@@ -48,7 +48,7 @@ TypeScript fallback, remains the sole authority for clamping, noise gating,
 smoothing, and decay.
 
 The native Wallpaper Engine property panel exposes 0.01-step fractional sliders for
-intensity (0–2), sensitivity (0–3), smoothing (0–0.95), and decay speed
+intensity (0–6, default 2.16), sensitivity (0–3), smoothing (0–0.95), and decay speed
 (0–1). They are shown only while the visualizer is enabled and apply without
 reloading the wallpaper. Invalid or non-finite property values are ignored and
 the shared settings repair boundary remains authoritative.
@@ -60,16 +60,22 @@ upward. Invalid position notifications from Wallpaper Engine are ignored so the
 existing position is retained. Missing or invalid values while restoring shared
 settings are repaired to `around-album`.
 
-The runtime also derives one audio-coupled motion state from the normalized
+The runtime also derives one audio-coupled motion state from the adapted
 visualizer frame. Its weighted impact is `peak * 0.45 + bass * 0.30 + mid *
 0.15 + treble * 0.10`. The resulting impact is applied continuously: album
-content scales from `1.0` to `1.18`, glowing-object speed scales from `1.0` to
+content scales from `1.0` to `1.54`, glowing-object speed scales from `1.0` to
 `2.0`, and brightness scales from `1.0` to `1.6`. Low-frequency impact also
 gives the album a deterministic outward offset capped at 8px. This state is
 calculated even when the SVG visualizer is disabled, so the album and
 glowing-object layers remain independent consumers. Silence, stopped playback,
 and stale callbacks release it toward neutral over about 450ms through the
-existing zero-frame path.
+existing zero-frame path. While playing, the runtime tracks a per-song high-water
+level with about 12 seconds of decay, compensates for Spotify volume inversely,
+and caps automatic plus volume gain at 4×. The fixed reference target is
+approximately 98% at the default `2.16` intensity; the configured intensity
+remains the final display multiplier and the normalized state is never
+overwritten. A volume-only refresh does not treat the previous audio frame as
+a newly observed peak.
 
 Fallback modes:
 

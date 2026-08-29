@@ -7,7 +7,7 @@ import {
   defaultWallpaperPreferences,
   layoutPresets,
   layoutPresetNames,
-  migrateWallpaperSettingsToV2,
+  migrateWallpaperSettingsToV3,
   repairWallpaperPreferences,
   serializeWallpaperPreferences,
   type WallpaperPreferencesPatch
@@ -15,7 +15,7 @@ import {
 
 const forbiddenKeys = /(clientId|clientSecret|refreshToken|pairingToken|hasRefreshToken|accessToken|authorizationCode|oauthState|pkceVerifier)/i;
 
-describe('WallpaperPreferences v2', () => {
+describe('WallpaperPreferences v3', () => {
   it('applies category patches without losing unchanged preferences', () => {
     const base = defaultWallpaperPreferences();
     base.theme.textColor = '#123456';
@@ -51,7 +51,7 @@ describe('WallpaperPreferences v2', () => {
 
     const patched = applyWallpaperPreferencesPatch(base, patch);
 
-    expect(patched.schemaVersion).toBe(2);
+    expect(patched.schemaVersion).toBe(3);
     expect(patched.spotify.backendOrigin).toBeUndefined();
     expect(patched.layout.items.albumArt.x).toBe(17);
     expect(patched.layout.items.trackText.width).toBe(replacementItems.trackText.width);
@@ -63,7 +63,7 @@ describe('WallpaperPreferences v2', () => {
   it('has mock and album-only defaults without credential fields', () => {
     const preferences = defaultWallpaperPreferences();
 
-    expect(preferences.schemaVersion).toBe(2);
+    expect(preferences.schemaVersion).toBe(3);
     expect(preferences.spotify).toMatchObject({
       provider: 'mock',
       pollIntervalPlayingMs: 1000,
@@ -85,7 +85,7 @@ describe('WallpaperPreferences v2', () => {
   });
 
   it('migrates v1 display preferences and drops all credential fields', () => {
-    const result = migrateWallpaperSettingsToV2({
+    const result = migrateWallpaperSettingsToV3({
       schemaVersion: 1,
       spotify: {
         playbackProvider: 'backend',
@@ -106,7 +106,7 @@ describe('WallpaperPreferences v2', () => {
 
     expect(result.status).toBe('migrated');
     expect(result.reauthorizationRequired).toBe(true);
-    expect(result.preferences.schemaVersion).toBe(2);
+    expect(result.preferences.schemaVersion).toBe(3);
     expect(result.preferences.spotify).toMatchObject({
       provider: 'backend',
       backendOrigin: 'https://backend.example.test/',
@@ -118,7 +118,7 @@ describe('WallpaperPreferences v2', () => {
   });
 
   it('preserves every display preference category during v1 migration', () => {
-    const result = migrateWallpaperSettingsToV2({
+    const result = migrateWallpaperSettingsToV3({
       schemaVersion: 1,
       layout: { preset: 'Minimal' },
       theme: { mode: 'custom', textColor: '#112233', autoReadability: false },
@@ -126,7 +126,7 @@ describe('WallpaperPreferences v2', () => {
       albumArt: { visible: false },
       text: { visible: false },
       player: { visible: false, controlsEnabled: false, showDevice: false, showVolume: false, showShuffleRepeat: false },
-      seekbar: { visible: false, style: 'album-ring' },
+       seekbar: { visible: false, style: 'album-ring' },
       visualizer: { enabled: false, mode: 'waveform-line', intensity: 0.4 },
       clock: { enabled: false, hour12: true, showSeconds: true },
       transitions: { enabled: true, preset: 'slide-left', durationMs: 1200 },
@@ -142,8 +142,8 @@ describe('WallpaperPreferences v2', () => {
       albumArt: { visible: false },
       text: { visible: false },
       player: { visible: false, controlsEnabled: false, displayMode: 'album-only' },
-      seekbar: { visible: false, style: 'album-ring' },
-      visualizer: { enabled: false, mode: 'waveform-line', intensity: 0.4 },
+       seekbar: { visible: false, style: 'line' },
+       visualizer: { enabled: false, mode: 'waveform-line', intensity: 1.2 },
       clock: { enabled: false, hour12: true, showSeconds: true },
       transitions: { enabled: true, preset: 'slide-left', durationMs: 1200 },
       performance: { mode: 'low-power' },
@@ -153,34 +153,34 @@ describe('WallpaperPreferences v2', () => {
   });
 
   it('uses safe defaults for malformed and future input without downgrade', () => {
-    const malformed = migrateWallpaperSettingsToV2('{not-json');
-    const future = migrateWallpaperSettingsToV2({ schemaVersion: 99, player: { visible: false } });
+    const malformed = migrateWallpaperSettingsToV3('{not-json');
+    const future = migrateWallpaperSettingsToV3({ schemaVersion: 99, player: { visible: false } });
 
     expect(malformed.status).toBe('malformed');
     expect(malformed.preferences).toEqual(defaultWallpaperPreferences());
-    expect(malformed.warning).toBe('Settings input was malformed; safe v2 defaults are active.');
+    expect(malformed.warning).toBe('Settings input was malformed; safe v3 defaults are active.');
     expect(future.status).toBe('future');
     expect(future.preferences).toEqual(defaultWallpaperPreferences());
-    expect(future.warning).toBe('Settings schema is newer than supported v2; safe defaults are active.');
+    expect(future.warning).toBe('Settings schema is newer than supported v3; safe defaults are active.');
   });
 
   it('rejects invalid explicit schema versions instead of treating them as v1', () => {
-    for (const schemaVersion of ['2', null, -1, 1.5, Number.NaN]) {
-      const result = migrateWallpaperSettingsToV2({ schemaVersion });
+    for (const schemaVersion of ['2', '3', null, -1, 1.5, Number.NaN]) {
+      const result = migrateWallpaperSettingsToV3({ schemaVersion });
 
       expect(result.status, String(schemaVersion)).toBe('malformed');
       expect(result.preferences).toEqual(defaultWallpaperPreferences());
-      expect(result.warning).toBe('Settings schema version was invalid; safe v2 defaults are active.');
+      expect(result.warning).toBe('Settings schema version was invalid; safe v3 defaults are active.');
     }
   });
 
   it('repairs ranges and preserves a preference-only round trip', () => {
     const repaired = repairWallpaperPreferences({
-      schemaVersion: 2,
+      schemaVersion: 3,
       spotify: { provider: 'mock', pollIntervalPlayingMs: 1, pollIntervalPausedMs: 99_999 },
       player: { displayMode: 'album-details', visible: true },
       background: { opacity: 2, blurPx: -10 },
-      visualizer: { intensity: 4, barCount: 500, position: 'bottom-up' },
+      visualizer: { intensity: 7, barCount: 500, position: 'bottom-up' },
       transitions: { durationMs: 10_000 },
       lyrics: { enabled: true },
       clientId: 'secret-client-id',
@@ -194,7 +194,7 @@ describe('WallpaperPreferences v2', () => {
     });
     expect(repaired.preferences.player.displayMode).toBe('album-details');
     expect(repaired.preferences.background).toMatchObject({ opacity: 1, blurPx: 0 });
-    expect(repaired.preferences.visualizer).toMatchObject({ intensity: 2, barCount: 160, position: 'bottom-up' });
+    expect(repaired.preferences.visualizer).toMatchObject({ intensity: 6, barCount: 160, position: 'bottom-up' });
     expect(repaired.preferences.transitions.durationMs).toBe(5000);
     expect(JSON.stringify(repaired.preferences)).not.toMatch(forbiddenKeys);
 
@@ -202,7 +202,7 @@ describe('WallpaperPreferences v2', () => {
     expect(roundTrip).toEqual(repaired.preferences);
     expect(JSON.stringify(roundTrip)).not.toMatch(forbiddenKeys);
     expect(() => serializeWallpaperPreferences({ schemaVersion: 99 })).toThrow(
-      'Only supported v2 preferences can be serialized.'
+      'Only supported v3 preferences can be serialized.'
     );
   });
 
@@ -213,12 +213,27 @@ describe('WallpaperPreferences v2', () => {
     ).toBe('around-album');
   });
 
-  it('does not report a valid v2 object as repaired only because key order differs', () => {
+  it('does not report a valid v3 object as repaired only because key order differs', () => {
     const defaults = defaultWallpaperPreferences();
     const { debug, ...withoutDebug } = defaults;
     const reordered = { debug, ...withoutDebug };
 
     expect(repairWallpaperPreferences(reordered).repaired).toBe(false);
+  });
+
+  it('multiplies legacy intensity once and leaves v3 intensity unchanged', () => {
+    const legacy = migrateWallpaperSettingsToV3({
+      schemaVersion: 2,
+      visualizer: { intensity: 0.8 },
+      seekbar: { style: 'album-ring' }
+    });
+    const migrated = migrateWallpaperSettingsToV3(legacy.preferences);
+
+    expect(legacy.status).toBe('migrated');
+    expect(legacy.preferences.visualizer.intensity).toBe(2.4);
+    expect(legacy.preferences.seekbar.style).toBe('line');
+    expect(migrated.preferences.visualizer.intensity).toBe(2.4);
+    expect(migrated.status).toBe('valid');
   });
 
   it('returns independent copies of preset items', () => {

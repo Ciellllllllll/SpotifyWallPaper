@@ -220,12 +220,6 @@
           <img src={playback.albumImageUrl} alt={playback.albumName} class="album-art" />
         </div>
       </div>
-      {#if settings.seekbar.visible && settings.seekbar.style === 'album-ring'}
-        <svg class="album-progress-ring" viewBox="0 0 100 100" aria-hidden="true">
-          <circle class="album-progress-track" cx="50" cy="50" r="47"></circle>
-          <circle class="album-progress-fill" cx="50" cy="50" r="47" style={`stroke-dashoffset: ${295.31 - (295.31 * progressPercent) / 100}`}></circle>
-        </svg>
-      {/if}
     </div>
   {/if}
 
@@ -335,10 +329,6 @@
   .album-disc { position: relative; z-index: 1; width: 100%; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / 20%); border-radius: 50%; background: rgb(255 255 255 / 8%); box-shadow: 0 28px 80px rgb(0 0 0 / 42%); transform-origin: center; transition: filter 420ms ease, scale 420ms cubic-bezier(.22, 1, .36, 1); will-change: transform; }
   .album-art { display: block; width: 100%; height: 100%; object-fit: cover; }
   .album-spinning { animation: album-spin 22s linear infinite; }
-  .album-progress-ring { position: absolute; inset: -5%; z-index: 2; width: 110%; height: 110%; transform: rotate(-90deg); }
-  .album-progress-track, .album-progress-fill { fill: none; stroke-linecap: round; stroke-width: 2.2; }
-  .album-progress-track { stroke: rgb(255 255 255 / 20%); }
-  .album-progress-fill { stroke: var(--theme-accent, #96d0b4); stroke-dasharray: 295.31; transition: stroke-dashoffset 240ms ease; }
   .track-panel { position: relative; display: flex; min-width: 0; flex-direction: column; justify-content: center; overflow: visible; text-shadow: 0 2px 18px rgb(0 0 0 / 48%); animation: text-enter 680ms 90ms cubic-bezier(.22, 1, .36, 1) both; transition: opacity 360ms ease, transform 520ms var(--ease-out-circ); }
   .track-panel h1 { margin: 0; display: block; width: 100%; max-width: min(100%, 680px); max-height: 3.05em; overflow: hidden; overflow-wrap: anywhere; font-size: clamp(2.2rem, 4.7cqw, 4.6rem); line-height: 1.04; }
   .track-panel p { margin: 0; overflow-wrap: anywhere; }

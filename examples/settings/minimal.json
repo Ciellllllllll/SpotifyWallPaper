@@ -1,8 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "spotify": {
-    "clientId": "",
-    "hasRefreshToken": false,
+    "provider": "mock",
     "pollIntervalPlayingMs": 1000,
     "pollIntervalPausedMs": 3000
   },
@@ -40,7 +39,7 @@
   "visualizer": {
     "enabled": false,
     "mode": "album-ring",
-    "intensity": 0.5,
+    "intensity": 1.5,
     "sensitivity": 1,
     "smoothing": 0.35,
     "decay": 0.22,

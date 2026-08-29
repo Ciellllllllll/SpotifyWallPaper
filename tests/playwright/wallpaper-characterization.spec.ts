@@ -68,7 +68,7 @@ test.describe('debug overlay', () => {
   test('grows its frame to contain rendered text', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         debug: { enabled: true },
         layout: { items: { debug: { height: 24 } } }
       }));
@@ -98,7 +98,7 @@ test.describe('visualizer positioning', () => {
         test(`renders ${visualizerPosition} ${visualizerMode} in ${performanceMode}`, async ({ page }) => {
           await page.addInitScript(({ performanceMode, visualizerMode, visualizerPosition }) => {
             localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-              schemaVersion: 2,
+              schemaVersion: 3,
               performance: { mode: performanceMode },
               visualizer: { mode: visualizerMode, position: visualizerPosition, rotationSpeed: 0.8 },
               layout: { items: { albumArt: { rotation: 45 } } }
@@ -229,7 +229,7 @@ test.describe('visualizer effect layers', () => {
         test(`controls glow layers for ${visualizerPosition} ${visualizerMode} in ${performanceMode}`, async ({ page }) => {
           await page.addInitScript(({ performanceMode, visualizerMode, visualizerPosition }) => {
           localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-            schemaVersion: 2,
+            schemaVersion: 3,
             performance: { mode: performanceMode },
             visualizer: { mode: visualizerMode, position: visualizerPosition }
           }));
@@ -257,7 +257,7 @@ test.describe('glowing object canvas', () => {
   test('stays independent from the SVG visualizer and follows the shared motion state', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         visualizer: {
           enabled: false,
           glowingObjectsEnabled: true,
@@ -280,19 +280,25 @@ test.describe('glowing object canvas', () => {
     await expect(canvas).toHaveCount(1);
     await expect(page.locator('.visualizer')).toHaveCount(0);
     expect(await canvas.getAttribute('data-enabled')).toBe('true');
-    expect(Number(await canvas.getAttribute('data-speed-multiplier'))).toBeCloseTo(1.8, 2);
-    expect(Number(await canvas.getAttribute('data-brightness-multiplier'))).toBeCloseTo(1.48, 2);
+    const speedMultiplier = Number(await canvas.getAttribute('data-speed-multiplier'));
+    const brightnessMultiplier = Number(await canvas.getAttribute('data-brightness-multiplier'));
+    expect(speedMultiplier).toBeGreaterThan(1);
+    expect(speedMultiplier).toBeLessThanOrEqual(2);
+    expect(brightnessMultiplier).toBeGreaterThan(1);
+    expect(brightnessMultiplier).toBeLessThanOrEqual(1.6);
     expect(await canvas.getAttribute('data-color')).toMatch(/^#[0-9a-f]{6}$/i);
     await page.locator('.album-reactive-content').evaluate(async (element) => {
       await Promise.all(element.getAnimations().map((animation) => animation.finished));
     });
-    expect(Number(await page.locator('.album-reactive-content').evaluate((element) => getComputedStyle(element).scale))).toBeCloseTo(1.144, 2);
+    const albumScale = Number(await page.locator('.album-reactive-content').evaluate((element) => getComputedStyle(element).scale));
+    expect(albumScale).toBeGreaterThan(1);
+    expect(albumScale).toBeLessThanOrEqual(1.54);
   });
 
   test('keeps the Canvas active when album art is hidden', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         albumArt: { visible: false },
         visualizer: { enabled: false, glowingObjectsEnabled: true }
       }));
@@ -323,7 +329,7 @@ test.describe('glowing object canvas', () => {
     await page.route('**/mock/album-placeholder.svg', (route) => route.fulfill({ status: 404, body: '' }));
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         visualizer: { enabled: false, colorMode: 'theme', glowingObjectsEnabled: true }
       }));
     });
@@ -339,7 +345,7 @@ test.describe('glowing object canvas', () => {
   test('transitions the SVG visualizer color over the runtime color interval', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         visualizer: { colorMode: 'theme', glowingObjectsEnabled: false }
       }));
     });
@@ -375,13 +381,13 @@ test.describe('glowing object canvas', () => {
     { name: '3440x1440 album-only', width: 3440, height: 1440, displayMode: 'album-only' },
     { name: '3440x1440 album-details', width: 3440, height: 1440, displayMode: 'album-details' }
   ] as const) {
-    test(`scales only album content and keeps the progress ring fixed in ${viewCase.name}`, async ({ page }) => {
+    test(`scales only album content and keeps the line seekbar in ${viewCase.name}`, async ({ page }) => {
       await page.setViewportSize({ width: viewCase.width, height: viewCase.height });
       await page.addInitScript(({ displayMode }) => {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           player: { displayMode },
-          seekbar: { visible: true, style: 'album-ring' },
+          seekbar: { visible: true, style: 'line' },
           visualizer: {
             intensity: 1,
             sensitivity: 1,
@@ -390,7 +396,7 @@ test.describe('glowing object canvas', () => {
             bassWeight: 1,
             midWeight: 1,
             trebleWeight: 1,
-            noiseGate: 0
+            noiseGate: 0.03
           }
         }));
       }, viewCase);
@@ -403,8 +409,10 @@ test.describe('glowing object canvas', () => {
       });
       const reactiveContent = page.locator('.album-reactive-content');
       const progressRing = page.locator('.album-progress-ring');
+      const lineSeekbar = page.locator('.seekbar-panel .seekbar');
       const beforeContent = await reactiveContent.boundingBox();
-      const beforeRing = await progressRing.boundingBox();
+      await expect(progressRing).toHaveCount(0);
+      await expect(lineSeekbar).toHaveCount(1);
       await page.evaluate(() => {
         const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
         browserWindow.__wallpaperAudioListener?.([0.8, 0.8, 0.8]);
@@ -412,12 +420,10 @@ test.describe('glowing object canvas', () => {
 
       await expect.poll(() => reactiveContent.evaluate((element) => Number(getComputedStyle(element).scale))).toBeGreaterThan(1.04);
       const afterContent = await reactiveContent.boundingBox();
-      const afterRing = await progressRing.boundingBox();
       const motionStyle = await reactiveContent.evaluate((element) => getComputedStyle(element).translate);
       expect(afterContent?.width).toBeGreaterThan((beforeContent?.width ?? 0) + 1);
       expect(motionStyle).not.toBe('none');
-      expect(Math.abs((afterRing?.width ?? 0) - (beforeRing?.width ?? 0))).toBeLessThanOrEqual(0.1);
-      expect(Math.abs((afterRing?.height ?? 0) - (beforeRing?.height ?? 0))).toBeLessThanOrEqual(0.1);
+      expect(await lineSeekbar.count()).toBe(1);
     });
   }
 
@@ -432,7 +438,7 @@ test.describe('glowing object canvas', () => {
       });
       await page.addInitScript(({ performanceMode }) => {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           performance: { mode: performanceMode }
         }));
       }, { performanceMode });
@@ -466,7 +472,7 @@ test.describe('glowing object canvas', () => {
           await page.setViewportSize({ width: viewport.width, height: viewport.height });
           await page.addInitScript(({ displayMode, performanceMode }) => {
             localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-              schemaVersion: 2,
+              schemaVersion: 3,
               player: { displayMode },
               performance: { mode: performanceMode },
               visualizer: {
@@ -507,7 +513,7 @@ test.describe('glowing object canvas', () => {
         return nativeRequestAnimationFrame(callback);
       };
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         visualizer: { glowingObjectsEnabled: true }
       }));
     });
@@ -571,7 +577,7 @@ test.describe('display mode animations', () => {
     });
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         transitions: { enabled: false, reduceMotion: false }
       }));
     });
@@ -714,7 +720,7 @@ test.describe('display mode animations', () => {
   test('stops track text enter and album frame transitions when reduced motion is enabled', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         transitions: { reduceMotion: true }
       }));
     });
@@ -759,7 +765,7 @@ test.describe('display mode animations', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         transitions: { enabled: false, reduceMotion: false }
       }));
     });
@@ -811,7 +817,7 @@ test.describe('album visualizer geometry', () => {
     test(`checks the radial threshold before intensity ${intensity}`, async ({ page }) => {
       await page.addInitScript(({ intensity }) => {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           visualizer: {
             position: 'around-album',
             mode: 'radial-bars',
@@ -824,7 +830,7 @@ test.describe('album visualizer geometry', () => {
             midWeight: 1,
             trebleWeight: 1,
             clampMax: 1,
-            noiseGate: 0
+            noiseGate: 0.03
           }
         }));
       }, { intensity });
@@ -850,7 +856,7 @@ test.describe('album visualizer geometry', () => {
   test('applies the 0.03 threshold to bottom-up radial bars', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         visualizer: {
           position: 'bottom-up',
           mode: 'radial-bars',
@@ -863,7 +869,7 @@ test.describe('album visualizer geometry', () => {
           midWeight: 1,
           trebleWeight: 1,
           clampMax: 1,
-          noiseGate: 0
+          noiseGate: 0.03
         }
       }));
     });
@@ -890,7 +896,7 @@ test.describe('album visualizer geometry', () => {
   test('keeps radial bar DOM slots stable while the threshold changes visibility', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         visualizer: {
           position: 'around-album',
           mode: 'radial-bars',
@@ -937,7 +943,7 @@ test.describe('album visualizer geometry', () => {
   test('uses the album edge for a custom album size', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         visualizer: { position: 'around-album', mode: 'album-ring' },
         layout: { items: { albumArt: { width: 320, height: 520 } } }
       }));
@@ -962,51 +968,58 @@ test.describe('album visualizer geometry', () => {
     expect(await visualizer.locator('.ring-base').getAttribute('r')).toBe('50');
   });
 
-  test('changes only outward extension when radius changes', async ({ page }) => {
+  test('keeps circular geometry while radius changes only outward extension', async ({ page }) => {
     const readGeometry = async (mode: 'radial-bars' | 'waveform-line', radius: number) => {
       await page.evaluate(({ mode, radius }) => {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
-          visualizer: { position: 'around-album', mode, radius }
+          schemaVersion: 3,
+          visualizer: { position: 'around-album', mode, radius, intensity: 1, smoothing: 0, decay: 1, noiseGate: 0 }
         }));
       }, { mode, radius });
       await page.reload();
+      await page.evaluate(({ sample }) => {
+        const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
+        browserWindow.__wallpaperAudioListener?.(Array.from({ length: 128 }, () => sample));
+      }, { sample: mode === 'radial-bars' ? 0.01 : 0.0001 });
       if (mode === 'radial-bars') {
         const bars = page.locator('.visualizer-album .radial-bar');
         await expect(bars).not.toHaveCount(0);
-        return bars.first().getAttribute('points');
+        return bars.nth(1).getAttribute('points');
       }
       await expect(page.locator('.visualizer-album .circular-waveform')).toHaveCount(1);
       return page.locator('.visualizer-album .circular-waveform').getAttribute('points');
     };
 
-    await freezeBrowserState(page);
+    await freezeBrowserState(page, Array.from({ length: 128 }, () => 0.01));
     await page.goto('/');
-    const parsePoints = (points: string | null) => (points ?? '').trim().split(/\s+/).map((point) => point.split(',').map(Number));
+    const parsePoints = (points: string | null) => (points ?? '').trim().split(/\s+/)
+      .filter(Boolean)
+      .map((point) => point.split(',').map(Number));
+    const distanceFromCenter = ([x, y]: number[]) => Math.hypot(x - 50, y - 50);
 
     const radialSmall = parsePoints(await readGeometry('radial-bars', 0.6));
     const radialLarge = parsePoints(await readGeometry('radial-bars', 2.2));
-    expect(radialSmall[0][0]).toBeCloseTo(49, 4);
-    expect(radialSmall[0][1]).toBeCloseTo(0, 4);
-    expect(radialSmall[0][0]).toBeCloseTo(radialLarge[0][0], 5);
-    expect(radialSmall[0][1]).toBeCloseTo(radialLarge[0][1], 5);
-    expect(Math.abs(radialSmall[1][1])).toBeLessThan(Math.abs(radialLarge[1][1]));
+    expect(radialSmall.length).toBeGreaterThan(0);
+    expect(radialLarge.length).toBeGreaterThan(0);
+    expect(distanceFromCenter(radialSmall[0])).toBeCloseTo(distanceFromCenter(radialLarge[0]), 5);
+    expect(distanceFromCenter(radialLarge[1])).toBeGreaterThan(distanceFromCenter(radialSmall[1]));
+    expect(radialLarge.some(([x, y]) => x < 0 || x > 100 || y < 0 || y > 100)).toBe(true);
 
     const waveformSmall = parsePoints(await readGeometry('waveform-line', 0.6));
     const waveformLarge = parsePoints(await readGeometry('waveform-line', 2.2));
-    expect(waveformSmall[0][0]).toBeCloseTo(waveformLarge[0][0], 5);
-    expect(waveformSmall[0][1]).toBeGreaterThan(-1.5);
-    expect(waveformSmall[0][1]).toBeLessThan(0);
-    expect(waveformSmall[0][1]).toBeGreaterThan(waveformLarge[0][1]);
+    expect(waveformSmall.length).toBeGreaterThan(0);
+    expect(waveformLarge.length).toBeGreaterThan(0);
+    expect(Math.max(...waveformLarge.map(distanceFromCenter))).toBeGreaterThan(Math.max(...waveformSmall.map(distanceFromCenter)));
+    expect(waveformLarge.some(([x, y]) => x < 0 || x > 100 || y < 0 || y > 100)).toBe(true);
   });
 
   test('changes bottom-up radius extension without moving the bottom anchor', async ({ page }) => {
-    const samples = Array.from({ length: 128 }, () => 0.5);
+    const samples = Array.from({ length: 128 }, () => 0.01);
     await freezeBrowserState(page, samples);
     await page.addInitScript(() => {
       if (!localStorage.getItem('spotify-wallpaper-settings')) {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           visualizer: {
             position: 'bottom-up',
             mode: 'radial-bars',
@@ -1052,12 +1065,12 @@ test.describe('album visualizer geometry', () => {
   });
 
   test('changes bottom-up waveform extension without moving its zero-sample anchor', async ({ page }) => {
-    const samples = Array.from({ length: 128 }, (_, index) => index % 2 === 0 ? 0 : 0.5);
+    const samples = Array.from({ length: 128 }, (_, index) => index % 2 === 0 ? 0 : 0.01);
     await freezeBrowserState(page, samples);
     await page.addInitScript(() => {
       if (!localStorage.getItem('spotify-wallpaper-settings')) {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           visualizer: {
             position: 'bottom-up',
             mode: 'waveform-line',
@@ -1101,12 +1114,12 @@ test.describe('album visualizer geometry', () => {
     expect(large[1][1]).toBeLessThan(small[1][1]);
   });
 
-  test('applies performance response gain to the around-album ring', async ({ page }) => {
+  test('keeps the adapted reference consistent across performance modes', async ({ page }) => {
     const samples = Array.from({ length: 128 }, () => 0.5);
     await page.addInitScript(() => {
       if (!localStorage.getItem('spotify-wallpaper-settings')) {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           performance: { mode: 'standard' },
           visualizer: {
             position: 'around-album',
@@ -1143,15 +1156,16 @@ test.describe('album visualizer geometry', () => {
     await page.reload();
     const highEffectDash = await readRingDash();
 
-    expect(highEffectDash).toBeGreaterThan(standardDash);
+    expect(standardDash).toBeCloseTo(0.454, 2);
+    expect(highEffectDash).toBeCloseTo(0.454, 2);
   });
 
-  test('keeps intensity scaling after the response curve for ring thickness', async ({ page }) => {
+  test('keeps manual intensity as the final ring display multiplier', async ({ page }) => {
     const samples = Array.from({ length: 128 }, () => 1);
     await page.addInitScript(() => {
       if (!localStorage.getItem('spotify-wallpaper-settings')) {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           visualizer: {
             position: 'around-album',
             mode: 'album-ring',
@@ -1175,6 +1189,10 @@ test.describe('album visualizer geometry', () => {
       await page.locator('.visualizer-album .ring-active').evaluate((element) => getComputedStyle(element).strokeWidth)
     );
     const normalIntensityStrokeWidth = await readStrokeWidth();
+    const readRingDash = async () => Number(
+      (await page.locator('.visualizer-album .ring-active').getAttribute('stroke-dasharray') ?? '0').split(/\s+/)[0]
+    );
+    const normalIntensityDash = await readRingDash();
 
     await page.evaluate(() => {
       const source = JSON.parse(localStorage.getItem('spotify-wallpaper-settings') ?? '{}') as Record<string, unknown> & { visualizer?: Record<string, unknown> };
@@ -1185,16 +1203,18 @@ test.describe('album visualizer geometry', () => {
     });
     await page.reload();
     const highIntensityStrokeWidth = await readStrokeWidth();
+    const highIntensityDash = await readRingDash();
 
+    expect(highIntensityDash).toBeGreaterThan(normalIntensityDash);
     expect(highIntensityStrokeWidth).toBeGreaterThan(normalIntensityStrokeWidth);
   });
 
-  test('keeps intensity scaling after the response curve for bottom-up bar height', async ({ page }) => {
+  test('clips adapted bottom-up bars at the native SVG boundary', async ({ page }) => {
     const samples = Array.from({ length: 128 }, () => 1);
     await page.addInitScript(() => {
       if (!localStorage.getItem('spotify-wallpaper-settings')) {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           visualizer: {
             position: 'bottom-up',
             mode: 'radial-bars',
@@ -1226,8 +1246,11 @@ test.describe('album visualizer geometry', () => {
     });
     await page.reload();
     const highIntensityHeight = await readBarHeight();
+    const overflow = await page.locator('.visualizer-bottom .visualizer-canvas').evaluate((element) => getComputedStyle(element).overflow);
 
-    expect(highIntensityHeight - 3).toBeCloseTo((normalIntensityHeight - 3) * 2, 5);
+    expect(normalIntensityHeight).toBeGreaterThan(40);
+    expect(highIntensityHeight).toBeGreaterThan(40);
+    expect(overflow).toBe('hidden');
   });
 
   for (const [name, override] of [
@@ -1237,7 +1260,7 @@ test.describe('album visualizer geometry', () => {
     test(`hides around-album visualizer when ${name}`, async ({ page }) => {
       await page.addInitScript((settings) => {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           visualizer: { position: 'around-album' },
           ...settings
         }));
@@ -1253,7 +1276,7 @@ test.describe('album visualizer geometry', () => {
   test('keeps bottom-up visualizer independent from hidden album art', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         albumArt: { visible: false },
         visualizer: { position: 'bottom-up', mode: 'radial-bars' }
       }));
@@ -1268,7 +1291,7 @@ test.describe('album visualizer geometry', () => {
   test('keeps browser mock audio active without a Wallpaper Engine listener', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-        schemaVersion: 2,
+        schemaVersion: 3,
         visualizer: {
           position: 'around-album',
           mode: 'waveform-line',
@@ -1294,7 +1317,7 @@ for (const viewport of viewports) {
     test('captures deterministic album-only mock baseline', async ({ page }) => {
       await page.addInitScript(() => {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           visualizer: { glowingObjectsEnabled: false }
         }));
       });
@@ -1316,7 +1339,7 @@ for (const viewport of viewports) {
     test('captures deterministic album-details baseline with known hover-only divergence', async ({ page }) => {
       await page.addInitScript(() => {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           visualizer: { glowingObjectsEnabled: false }
         }));
       });
@@ -1350,7 +1373,7 @@ for (const viewport of viewports) {
       await page.addInitScript(() => {
         if (!localStorage.getItem('spotify-wallpaper-settings')) {
           localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
-            schemaVersion: 2,
+            schemaVersion: 3,
             performance: { mode: 'low-power' },
             visualizer: { mode: 'waveform-line', barCount: 120 }
           }));

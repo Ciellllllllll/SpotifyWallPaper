@@ -1,8 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "spotify": {
-    "clientId": "",
-    "hasRefreshToken": false,
+    "provider": "mock",
     "pollIntervalPlayingMs": 1000,
     "pollIntervalPausedMs": 3000
   },
@@ -35,12 +34,12 @@
   },
   "seekbar": {
     "visible": true,
-    "style": "album-ring"
+    "style": "line"
   },
   "visualizer": {
     "enabled": true,
     "mode": "album-ring",
-    "intensity": 0.72,
+    "intensity": 2.16,
     "sensitivity": 1,
     "smoothing": 0.35,
     "decay": 0.22,

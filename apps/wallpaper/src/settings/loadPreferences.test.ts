@@ -25,7 +25,7 @@ describe('loadWallpaperPreferences', () => {
     );
 
     expect(removed).toHaveLength(1);
-    expect(loaded.preferences.schemaVersion).toBe(2);
+    expect(loaded.preferences.schemaVersion).toBe(3);
     expect(loaded.preferences.spotify.provider).toBe('direct');
     expect(loaded.preferences.debug.enabled).toBe(true);
     expect(loaded.reauthorizationRequired).toBe(true);
@@ -46,7 +46,7 @@ describe('loadWallpaperPreferences', () => {
 
   it('fails closed to mock mode when legacy cleanup fails', () => {
     const loaded = loadWallpaperPreferences(
-      JSON.stringify({ schemaVersion: 2, spotify: { provider: 'mock' } }),
+      JSON.stringify({ schemaVersion: 3, spotify: { provider: 'mock' } }),
       storageTarget(() => {
         throw new Error('storage unavailable');
       })
@@ -57,7 +57,7 @@ describe('loadWallpaperPreferences', () => {
     expect(loaded.warning).toBe('Legacy credential cleanup failed; Spotify network is disabled.');
   });
 
-  it('allows the v2 mock default to run without Spotify', () => {
+  it('allows the v3 mock default to run without Spotify', () => {
     const loaded = loadWallpaperPreferences(undefined, storageTarget(() => undefined));
 
     expect(loaded.preferences.spotify.provider).toBe('mock');

@@ -4,10 +4,17 @@ import {
   lowFrequencyWeightedSamples,
   polarPoint,
   polarSamplePoints,
-  radialBarRectangles
+  radialBarRectangles,
+  visualizerAudioAmplitude
 } from './visualizerGeometry';
 
 describe('visualizer geometry', () => {
+  it('applies the threefold audio extension to each base amplitude', () => {
+    expect(visualizerAudioAmplitude(18, 1)).toBe(54);
+    expect(visualizerAudioAmplitude(13, 1)).toBe(39);
+    expect(visualizerAudioAmplitude(30, 2.2)).toBeCloseTo(198, 10);
+  });
+
   it('places a point at the requested angle around the center', () => {
     expect(polarPoint(50, 40, 10, 0)).toEqual({ x: 60, y: 40 });
 
@@ -142,4 +149,5 @@ describe('visualizer geometry', () => {
     expect(bars.map((points) => points.length)).toEqual([0, 0, 4]);
     expect(bars[2].every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
   });
+
 });

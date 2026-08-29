@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { WallpaperPreferences } from '@spotify-wallpaper/shared-types';
-  import { closedPolarSamplePoints } from '../visualizerGeometry';
+  import { closedPolarSamplePoints, visualizerAudioAmplitude } from '../visualizerGeometry';
   import { visualizerResponseSample } from '../visualizerStyle';
 
   export let mode: WallpaperPreferences['visualizer']['mode'];
@@ -20,7 +20,7 @@
     ? samples.map((sample) => Number.isFinite(sample) ? Math.max(0, sample) : 0)
     : [];
   $: visualizerRadius = Number.isFinite(radius) ? Math.min(2.2, Math.max(0.6, radius)) : 1;
-  $: visualizerIntensity = Number.isFinite(intensity) ? Math.min(2, Math.max(0, intensity)) : 1;
+  $: visualizerIntensity = Number.isFinite(intensity) ? Math.min(6, Math.max(0, intensity)) : 1;
   $: sourceSamples = visualizerIntensity > 0
     ? safeSamples.map((sample) => sample / visualizerIntensity)
     : safeSamples.map(() => 0);
@@ -38,7 +38,7 @@
     ? responseSamples
         .map((sample, index) => {
           const x = 5 + (index / Math.max(1, safeSamples.length - 1)) * 90;
-          const y = 39 - sample * 25 * visualizerRadius;
+          const y = 39 - sample * visualizerAudioAmplitude(25, visualizerRadius);
           return `${x},${y}`;
         })
         .join(' ')
@@ -48,7 +48,7 @@
         centerX: 50,
         centerY: 50,
         radius: 26,
-        amplitude: (12 + impactLevel * 4) * visualizerRadius
+        amplitude: visualizerAudioAmplitude(12 + impactLevel * 4, visualizerRadius)
       })
     : [];
   $: circularWaveformSvgPoints = circularWaveformPoints.map(({ x, y }) => `${x},${y}`).join(' ');
@@ -62,14 +62,14 @@
   >
     {#if mode === 'radial-bars'}
       {#each radialResponseSamples as sample, index}
-        {@const height = 3 + sample * 30 * visualizerRadius}
+        {@const height = 3 + sample * visualizerAudioAmplitude(30, visualizerRadius)}
         {@const x = 5 + ((index + 0.5) / sampleCount) * 90 - barWidth / 2}
         {#if decorativeLayers}
           <rect
             class="visualizer-glow bottom-bar-glow"
             class:bottom-bar-hidden={sample <= 0}
             x={x - 1}
-            y={38 - height}
+            y={36 - height}
             width={barWidth + 2}
             height={height + 4}
           />
@@ -110,7 +110,7 @@
 <style>
   .visualizer { position: absolute; display: grid; width: 100%; height: 100%; place-items: center; overflow: visible; pointer-events: none; color: var(--visualizer-color, #ffffff); opacity: .84; filter: drop-shadow(0 0 calc(18px * var(--visualizer-glow, 0)) var(--visualizer-color, #ffffff)); transition: color 450ms ease, filter 450ms ease; }
   .visualizer-low-power { filter: none; transition: color 450ms ease; }
-  .visualizer-canvas { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .visualizer-canvas { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
   .bottom-bar { fill: currentColor; }
   .bottom-bar-glow { fill: currentColor; opacity: .28; filter: blur(1px); }
   .bottom-bar-hidden { display: none; }

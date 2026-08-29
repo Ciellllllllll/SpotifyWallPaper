@@ -105,13 +105,13 @@ is a local developer-only legacy tool, not the Workshop default or a managed
 public authorization path. The repository workflow checks/builds it manually
 but no longer has GitHub Pages deployment permission.
 
-For local browser preview, keep the settings credential-free and select the v2 mock provider:
+For local browser preview, keep the settings credential-free and select the v3 mock provider:
 
 ```js
 localStorage.setItem(
   'spotify-wallpaper-settings',
   JSON.stringify({
-    schemaVersion: 2,
+    schemaVersion: 3,
     spotify: {
       provider: 'mock'
     }
@@ -223,7 +223,7 @@ of the selected mode, and the visualizer does not rotate as a whole.
 Glowing Objects Enabled controls a full-screen field of small lights that begin
 near the center and move outward. The effect is independent of album-art and
 SVG visualizer visibility. Normalized audio continuously grows the album
-content up to 18%, moves it outward by at most 8px, and raises particle speed
+content up to 54%, moves it outward by at most 8px, and raises particle speed
 up to twice normal with a brightness increase; after the sound stops, these
 values ease back in about 450ms. In theme color mode, the album's quantized
 dominant color is applied to the SVG visualizer and lights only, with white as
@@ -265,7 +265,7 @@ Run the Tauri shell:
 npm run tauri:dev -w @spotify-wallpaper/configurator
 ```
 
-The configurator edits the complete v2 preferences object, previews the shared mock renderer, imports/exports secret-free
+The configurator edits the complete v3 preferences object, previews the shared mock renderer, imports/exports secret-free
 settings JSON, and writes optional Rainmeter JSON. Spotify authorization uses the single native
 `authorize_spotify_and_copy_swpt1` command. Verifier, state, callback URL, authorization code, and Refresh Token stay in
 Rust locals; after native confirmation, the approved `swpt1.` bundle is copied to the clipboard once. The WebView receives
@@ -275,7 +275,7 @@ The configurator is optional. The wallpaper runtime must keep working without it
 
 ## Settings Reference
 
-Every preferences object uses `schemaVersion: 2` and these top-level categories:
+Every preferences object uses `schemaVersion: 3` and these top-level categories:
 
 - `spotify`
 - `layout`
