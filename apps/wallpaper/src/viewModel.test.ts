@@ -19,13 +19,15 @@ describe('toWallpaperViewModel', () => {
     }, { kind: 'retain' }, true);
     runtime.start();
 
-    const model = toWallpaperViewModel(runtimeSnapshot(runtime), host);
+    const snapshot = runtimeSnapshot(runtime);
+    const model = toWallpaperViewModel(snapshot, host);
 
     expect(model.providerSelection).toBe('invalid');
     expect(model.spotifyStatusText).toBe('Spotify direct credentials are not configured.');
     expect(model.settingsWarning).toBe('Settings were repaired.');
     expect(model.settingsSource).toBe('wallpaper-engine properties');
     expect(model.visualCoreStatus).toBe('wasm');
+    expect(model.visualizerMotion).toEqual(snapshot.visualizerMotion);
     runtime.dispose();
   });
 

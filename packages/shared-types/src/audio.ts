@@ -9,3 +9,10 @@ export interface VisualizerFrame {
   peak: number;
   timestampMs: number;
 }
+
+export interface VisualizerMotionState {
+  impactLevel: number;
+  stretchLevel: number;
+  albumScale: number;
+  particleSpeedMultiplier: number;
+}

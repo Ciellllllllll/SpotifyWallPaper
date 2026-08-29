@@ -237,6 +237,16 @@ describe('Wallpaper Engine property adapter', () => {
     expect(parseWallpaperProperties({ visualizer_position: { value: 'sideways' } }).patch.visualizer).toBeUndefined();
   });
 
+  it('parses the glowing object toggle and ignores invalid values', () => {
+    expect(parseWallpaperProperties({ glowing_objects_enabled: { value: false } }).patch.visualizer).toEqual({
+      glowingObjectsEnabled: false
+    });
+    expect(parseWallpaperProperties({ glowing_objects_enabled: { value: true } }).patch.visualizer).toEqual({
+      glowingObjectsEnabled: true
+    });
+    expect(parseWallpaperProperties({ glowing_objects_enabled: { value: 'false' } }).patch.visualizer).toBeUndefined();
+  });
+
   it('ignores non-finite and non-numeric visualizer slider values', () => {
     const result = parseWallpaperProperties({
       visualizer_intensity: { value: Number.NaN },

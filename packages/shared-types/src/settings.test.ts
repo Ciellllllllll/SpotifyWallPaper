@@ -75,6 +75,15 @@ describe('WallpaperPreferences v2', () => {
     expect(preferences.layout.preset).toBe(defaultLayoutPreset);
   });
 
+  it('enables glowing objects by default and repairs invalid values to on', () => {
+    const defaults = defaultWallpaperPreferences();
+
+    expect(defaults.visualizer.glowingObjectsEnabled).toBe(true);
+    expect(repairWallpaperPreferences({ visualizer: { glowingObjectsEnabled: false } }).preferences.visualizer.glowingObjectsEnabled).toBe(false);
+    expect(repairWallpaperPreferences({ visualizer: { glowingObjectsEnabled: 'yes' } }).preferences.visualizer.glowingObjectsEnabled).toBe(true);
+    expect(repairWallpaperPreferences({ visualizer: {} }).preferences.visualizer.glowingObjectsEnabled).toBe(true);
+  });
+
   it('migrates v1 display preferences and drops all credential fields', () => {
     const result = migrateWallpaperSettingsToV2({
       schemaVersion: 1,

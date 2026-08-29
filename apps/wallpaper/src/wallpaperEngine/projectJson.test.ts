@@ -60,6 +60,7 @@ describe('Wallpaper Engine project.json', () => {
     expect(Object.keys(properties)).toEqual([
       'spotify_refresh_token',
       'visualizer_enabled',
+      'glowing_objects_enabled',
       'visualizer_mode',
       'visualizer_position',
       'visualizer_intensity',
@@ -76,6 +77,11 @@ describe('Wallpaper Engine project.json', () => {
       text: 'Spotify Token',
       type: 'textinput',
       value: ''
+    });
+    expect(properties.glowing_objects_enabled).toMatchObject({
+      text: 'Glowing Objects Enabled',
+      type: 'bool',
+      value: true
     });
   });
 
