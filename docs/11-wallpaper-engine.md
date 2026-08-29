@@ -62,12 +62,14 @@ settings are repaired to `around-album`.
 
 The runtime also derives one audio-coupled motion state from the normalized
 visualizer frame. Its weighted impact is `peak * 0.45 + bass * 0.30 + mid *
-0.15 + treble * 0.10`. Only values strictly above `0.40` stretch the state:
-album content scales from `1.0` to `1.12`, and glowing-object speed scales from
-`1.0` to `2.0`. This state is calculated even when the SVG visualizer is
-disabled, so the album and glowing-object layers remain independent consumers.
-Silence, stopped playback, and stale callbacks return it through the existing
-zero-frame path.
+0.15 + treble * 0.10`. The resulting impact is applied continuously: album
+content scales from `1.0` to `1.18`, glowing-object speed scales from `1.0` to
+`2.0`, and brightness scales from `1.0` to `1.6`. Low-frequency impact also
+gives the album a deterministic outward offset capped at 8px. This state is
+calculated even when the SVG visualizer is disabled, so the album and
+glowing-object layers remain independent consumers. Silence, stopped playback,
+and stale callbacks release it toward neutral over about 450ms through the
+existing zero-frame path.
 
 Fallback modes:
 

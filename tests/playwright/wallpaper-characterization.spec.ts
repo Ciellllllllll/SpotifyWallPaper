@@ -110,7 +110,7 @@ test.describe('visualizer positioning', () => {
           const visualizer = page.locator('.visualizer');
           await expect(visualizer).toBeVisible();
           const geometrySelector = {
-            'album-ring': '.ring-base, .ring-active, .peak-band-base, .peak-band-active',
+            'album-ring': '.ring-base, .ring-active, .album-ring-waveform, .bottom-circular-waveform',
             'radial-bars': '.radial-bar, .bottom-bar',
             'waveform-line': '.circular-waveform, .horizontal-waveform'
           }[visualizerMode];
@@ -174,6 +174,14 @@ test.describe('visualizer positioning', () => {
               expect(waveformShape.tagName).toBe('polyline');
               expect(waveformShape.fill).toBe('none');
             }
+            if (visualizerMode === 'album-ring') {
+              const waveform = visualizer.locator('.album-ring-waveform');
+              await expect(waveform).toHaveCount(1);
+              const points = (await waveform.getAttribute('points') ?? '').trim().split(/\s+/);
+              expect(points.length).toBeGreaterThan(2);
+              expect(points[0]).toBe(points.at(-1));
+              expect(await visualizer.evaluate((element) => getComputedStyle(element).transitionProperty.split(',').map((value) => value.trim()))).toContain('color');
+            }
           } else {
             const visualizerBox = await visualizer.boundingBox();
             expect(visualizerBox).not.toBeNull();
@@ -196,6 +204,14 @@ test.describe('visualizer positioning', () => {
                 expect(bar.top).toBeLessThan(bar.bottom);
                 expect(Math.abs(bar.bottom - visualizerBottom)).toBeLessThanOrEqual(2);
               }
+            }
+            if (visualizerMode === 'album-ring') {
+              const waveform = visualizer.locator('.bottom-circular-waveform');
+              await expect(waveform).toHaveCount(1);
+              const points = (await waveform.getAttribute('points') ?? '').trim().split(/\s+/);
+              expect(points[0]).toBe(points.at(-1));
+              expect(await visualizer.locator('svg').getAttribute('viewBox')).toBe('0 0 100 100');
+              expect(await visualizer.locator('svg').getAttribute('preserveAspectRatio')).toBe('xMidYMid meet');
             }
           }
         });
@@ -264,11 +280,93 @@ test.describe('glowing object canvas', () => {
     await expect(canvas).toHaveCount(1);
     await expect(page.locator('.visualizer')).toHaveCount(0);
     expect(await canvas.getAttribute('data-enabled')).toBe('true');
-    expect(Number(await canvas.getAttribute('data-speed-multiplier'))).toBeCloseTo(5 / 3, 2);
+    expect(Number(await canvas.getAttribute('data-speed-multiplier'))).toBeCloseTo(1.8, 2);
+    expect(Number(await canvas.getAttribute('data-brightness-multiplier'))).toBeCloseTo(1.48, 2);
+    expect(await canvas.getAttribute('data-color')).toMatch(/^#[0-9a-f]{6}$/i);
     await page.locator('.album-reactive-content').evaluate(async (element) => {
       await Promise.all(element.getAnimations().map((animation) => animation.finished));
     });
-    expect(Number(await page.locator('.album-reactive-content').evaluate((element) => getComputedStyle(element).scale))).toBeCloseTo(1.08, 2);
+    expect(Number(await page.locator('.album-reactive-content').evaluate((element) => getComputedStyle(element).scale))).toBeCloseTo(1.144, 2);
+  });
+
+  test('keeps the Canvas active when album art is hidden', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        albumArt: { visible: false },
+        visualizer: { enabled: false, glowingObjectsEnabled: true }
+      }));
+    });
+    await freezeBrowserState(page, [0.8, 0.8, 0.8]);
+    await page.goto('/');
+
+    await expect(page.locator('.album-frame')).toHaveCount(0);
+    const canvas = page.locator('.glowing-object-canvas');
+    await expect(canvas).toBeVisible();
+    await expect.poll(async () => Number(await canvas.getAttribute('data-active-particles'))).toBeGreaterThan(0);
+    expect(Number(await canvas.getAttribute('data-speed-multiplier'))).toBeGreaterThan(1);
+  });
+
+  test('falls back safely for malformed settings', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', '{malformed settings');
+    });
+    await freezeBrowserState(page, [0.4, 0.4, 0.4]);
+    await page.goto('/');
+
+    await expect(page.locator('.wallpaper')).toBeVisible();
+    await expect(page.locator('.album-art')).toBeVisible();
+    await expect(page.locator('.glowing-object-canvas')).toHaveAttribute('data-enabled', 'true');
+  });
+
+  test('uses the white visualizer fallback when album art cannot load', async ({ page }) => {
+    await page.route('**/mock/album-placeholder.svg', (route) => route.fulfill({ status: 404, body: '' }));
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        visualizer: { enabled: false, colorMode: 'theme', glowingObjectsEnabled: true }
+      }));
+    });
+    await freezeBrowserState(page, [0.4, 0.4, 0.4]);
+    await page.goto('/');
+
+    await expect.poll(async () => page.locator('.album-art').evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBe(0);
+    const canvas = page.locator('.glowing-object-canvas');
+    await expect(canvas).toHaveAttribute('data-color', '#ffffff');
+    await expect(canvas).toBeVisible();
+  });
+
+  test('transitions the SVG visualizer color over the runtime color interval', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+        schemaVersion: 2,
+        visualizer: { colorMode: 'theme', glowingObjectsEnabled: false }
+      }));
+    });
+    await freezeBrowserState(page, [0, 0, 0]);
+    await page.goto('/');
+
+    const visualizer = page.locator('.visualizer-album');
+    await expect(visualizer).toBeVisible();
+    const transition = await visualizer.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        color: style.color,
+        properties: style.transitionProperty.split(',').map((value) => value.trim()),
+        durations: style.transitionDuration.split(',').map((value) => value.trim())
+      };
+    });
+    expect(transition.properties).toContain('color');
+    expect(transition.durations).toContain('0.45s');
+
+    await visualizer.evaluate((element) => element.style.setProperty('--visualizer-color', '#ff0000'));
+    await page.waitForTimeout(80);
+    const midColor = await visualizer.evaluate((element) => getComputedStyle(element).color);
+    await page.waitForTimeout(500);
+    const finalColor = await visualizer.evaluate((element) => getComputedStyle(element).color);
+    expect(midColor).not.toBe(transition.color);
+    expect(midColor).not.toBe(finalColor);
+    expect(finalColor).toBe('rgb(255, 0, 0)');
   });
 
   for (const viewCase of [
@@ -315,7 +413,9 @@ test.describe('glowing object canvas', () => {
       await expect.poll(() => reactiveContent.evaluate((element) => Number(getComputedStyle(element).scale))).toBeGreaterThan(1.04);
       const afterContent = await reactiveContent.boundingBox();
       const afterRing = await progressRing.boundingBox();
+      const motionStyle = await reactiveContent.evaluate((element) => getComputedStyle(element).translate);
       expect(afterContent?.width).toBeGreaterThan((beforeContent?.width ?? 0) + 1);
+      expect(motionStyle).not.toBe('none');
       expect(Math.abs((afterRing?.width ?? 0) - (beforeRing?.width ?? 0))).toBeLessThanOrEqual(0.1);
       expect(Math.abs((afterRing?.height ?? 0) - (beforeRing?.height ?? 0))).toBeLessThanOrEqual(0.1);
     });
@@ -357,6 +457,44 @@ test.describe('glowing object canvas', () => {
         clientHeight: 1080
       });
     });
+  }
+
+  for (const viewport of viewports) {
+    for (const displayMode of ['album-only', 'album-details'] as const) {
+      for (const performanceMode of ['low-power', 'standard', 'high-effect'] as const) {
+        test(`covers ${viewport.name} ${displayMode} Canvas motion in ${performanceMode}`, async ({ page }) => {
+          await page.setViewportSize({ width: viewport.width, height: viewport.height });
+          await page.addInitScript(({ displayMode, performanceMode }) => {
+            localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+              schemaVersion: 2,
+              player: { displayMode },
+              performance: { mode: performanceMode },
+              visualizer: {
+                enabled: false,
+                glowingObjectsEnabled: true,
+                colorMode: 'theme'
+              }
+            }));
+          }, { displayMode, performanceMode });
+          await freezeBrowserState(page, [0.7, 0.7, 0.7]);
+          await page.goto('/');
+
+          const canvas = page.locator('.glowing-object-canvas');
+          await expect(canvas).toBeVisible();
+          await expect(canvas).toHaveAttribute('data-enabled', 'true');
+          await expect(canvas).toHaveAttribute(
+            'data-particle-count',
+            String(performanceMode === 'low-power' ? 24 : performanceMode === 'high-effect' ? 96 : 48)
+          );
+          await expect(page.locator('.album-frame')).toBeVisible();
+          if (displayMode === 'album-details') {
+            await expect(page.getByRole('group', { name: 'Track details' })).toBeVisible();
+          } else {
+            await expect(page.getByRole('group', { name: 'Track details' })).toHaveCount(0);
+          }
+        });
+      }
+    }
   }
 
   test('stops the canvas loop and clears its field when disabled', async ({ page }) => {
@@ -530,14 +668,17 @@ test.describe('display mode animations', () => {
     const detailsVisualizerStyle = await albumVisualizer.evaluate((element) => ({
       top: element.style.top,
       left: element.style.left,
+      transitionProperty: getComputedStyle(element).transitionProperty.split(',').map((value) => value.trim()),
       transitionDurations: getComputedStyle(element).transitionDuration.split(',').map((value) => value.trim())
     }));
     expect(albumOnlyVisualizerStyle.top).toBe('');
     expect(albumOnlyVisualizerStyle.left).toBe('');
     expect(detailsVisualizerStyle.top).toBe('');
     expect(detailsVisualizerStyle.left).toBe('');
-    expect(albumOnlyVisualizerStyle.transitionDuration.every((duration) => duration === '0s')).toBe(true);
-    expect(detailsVisualizerStyle.transitionDurations.every((duration) => duration === '0s')).toBe(true);
+    expect(albumOnlyVisualizerStyle.transitionProperty).toContain('color');
+    expect(albumOnlyVisualizerStyle.transitionDuration.some((duration) => duration !== '0s')).toBe(true);
+    expect(detailsVisualizerStyle.transitionProperty).toContain('color');
+    expect(detailsVisualizerStyle.transitionDurations.some((duration) => duration !== '0s')).toBe(true);
     const albumFrameMotion = await albumFrame.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -586,7 +727,7 @@ test.describe('display mode animations', () => {
     const trackPanel = page.locator('.track-panel');
     await expect(trackPanel).toBeVisible();
 
-    for (const element of [albumFrame, trackPanel, albumVisualizer, seekbarPanel]) {
+    for (const element of [albumFrame, trackPanel, seekbarPanel]) {
       const motion = await element.evaluate((node) => {
         const style = getComputedStyle(node);
         return {
@@ -599,6 +740,19 @@ test.describe('display mode animations', () => {
       expect(motion.animationDurations.every((duration) => duration === '0s')).toBe(true);
       expect(motion.transitionDurations.every((duration) => duration === '0s')).toBe(true);
     }
+    const visualizerMotion = await albumVisualizer.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return {
+        animationName: style.animationName,
+        animationDurations: style.animationDuration.split(',').map((value) => value.trim()),
+        transitionProperty: style.transitionProperty.split(',').map((value) => value.trim()),
+        transitionDurations: style.transitionDuration.split(',').map((value) => value.trim())
+      };
+    });
+    expect(visualizerMotion.animationName).toBe('none');
+    expect(visualizerMotion.animationDurations.every((duration) => duration === '0s')).toBe(true);
+    expect(visualizerMotion.transitionProperty).toContain('color');
+    expect(visualizerMotion.transitionDurations.some((duration) => duration !== '0s')).toBe(true);
   });
 
   test('stops display mode animations when the user agent requests reduced motion', async ({ page }) => {
@@ -618,7 +772,7 @@ test.describe('display mode animations', () => {
     const trackPanel = page.locator('.track-panel');
     await expect(trackPanel).toBeVisible();
 
-    for (const element of [albumFrame, trackPanel, albumVisualizer, seekbarPanel]) {
+    for (const element of [albumFrame, trackPanel, seekbarPanel]) {
       const motion = await element.evaluate((node) => {
         const style = getComputedStyle(node);
         return {
@@ -631,6 +785,19 @@ test.describe('display mode animations', () => {
       expect(motion.animationDurations.every((duration) => duration === '0s')).toBe(true);
       expect(motion.transitionDurations.every((duration) => duration === '0s')).toBe(true);
     }
+    const visualizerMotion = await albumVisualizer.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return {
+        animationName: style.animationName,
+        animationDurations: style.animationDuration.split(',').map((value) => value.trim()),
+        transitionProperty: style.transitionProperty.split(',').map((value) => value.trim()),
+        transitionDurations: style.transitionDuration.split(',').map((value) => value.trim())
+      };
+    });
+    expect(visualizerMotion.animationName).toBe('none');
+    expect(visualizerMotion.animationDurations.every((duration) => duration === '0s')).toBe(true);
+    expect(visualizerMotion.transitionProperty).toContain('color');
+    expect(visualizerMotion.transitionDurations.some((duration) => duration !== '0s')).toBe(true);
   });
 });
 
@@ -784,13 +951,14 @@ test.describe('album visualizer geometry', () => {
       await Promise.all(element.getAnimations().map((animation) => animation.finished));
     });
     const albumBox = await albumFrame.boundingBox();
-    const visualizerBox = await visualizer.boundingBox();
+    const visualizerBox = await visualizer.locator('.visualizer-canvas').boundingBox();
+    const reactiveScale = await visualizer.evaluate((element) => Number(getComputedStyle(element.parentElement ?? element).scale));
     expect(albumBox).not.toBeNull();
     expect(visualizerBox).not.toBeNull();
     expect(albumBox?.width).toBeCloseTo(320, 1);
     expect(albumBox?.height).toBeCloseTo(320, 1);
-    expect(visualizerBox?.width).toBeCloseTo(albumBox?.width ?? 0, 1);
-    expect(visualizerBox?.height).toBeCloseTo(albumBox?.height ?? 0, 1);
+    expect(visualizerBox?.width).toBeCloseTo((albumBox?.width ?? 0) * reactiveScale, 1);
+    expect(visualizerBox?.height).toBeCloseTo((albumBox?.height ?? 0) * reactiveScale, 1);
     expect(await visualizer.locator('.ring-base').getAttribute('r')).toBe('50');
   });
 
@@ -1124,6 +1292,12 @@ for (const viewport of viewports) {
     test.use({ viewport });
 
     test('captures deterministic album-only mock baseline', async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          visualizer: { glowingObjectsEnabled: false }
+        }));
+      });
       await freezeBrowserState(page);
       await page.goto('/');
       await disableMotionAndCaret(page);
@@ -1140,6 +1314,12 @@ for (const viewport of viewports) {
     });
 
     test('captures deterministic album-details baseline with known hover-only divergence', async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
+          schemaVersion: 2,
+          visualizer: { glowingObjectsEnabled: false }
+        }));
+      });
       await freezeBrowserState(page);
       await page.goto('/');
       await disableMotionAndCaret(page);

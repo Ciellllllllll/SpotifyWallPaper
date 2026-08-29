@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { NormalizedPlayback, ProviderResult, VisualizerFrame, WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
 import { mockPlayback } from '../mock/mockPlayback';
 import { defaultSettings } from '../settings/defaultSettings';
+import { neutralVisualizerMotion } from '../visualizer/motion';
 import { createWallpaperRuntime } from './wallpaperRuntime';
 
 const settingsForProvider = (provider: WallpaperPreferences['spotify']['provider']): WallpaperPreferences => ({
@@ -232,7 +233,8 @@ describe('WallpaperRuntime', () => {
     expect(snapshot.previousVisualizerFrame?.samples).toEqual([0.5, 0.5, 0.5]);
     expect(snapshot.visualizerFrame?.samples).toEqual([0.25, 0.25, 0.25]);
     expect(snapshot.visualizerMotion.impactLevel).toBeCloseTo(0.5, 5);
-    expect(snapshot.visualizerMotion.albumScale).toBeCloseTo(1.02, 5);
+    expect(snapshot.visualizerMotion.albumScale).toBeCloseTo(1.09, 5);
+    expect(snapshot.visualizerMotion.particleBrightnessMultiplier).toBeCloseTo(1.3, 5);
     unsubscribe();
     runtime.dispose();
   });
@@ -268,9 +270,10 @@ describe('WallpaperRuntime', () => {
     expect(snapshot.visualizerFrame).toBeNull();
     expect(snapshot.previousVisualizerFrame?.peak).toBeCloseTo(0.8, 5);
     expect(snapshot.visualizerMotion.impactLevel).toBeCloseTo(0.8, 5);
-    expect(snapshot.visualizerMotion.stretchLevel).toBeCloseTo(2 / 3, 5);
-    expect(snapshot.visualizerMotion.albumScale).toBeCloseTo(1.08, 5);
-    expect(snapshot.visualizerMotion.particleSpeedMultiplier).toBeCloseTo(5 / 3, 5);
+    expect(snapshot.visualizerMotion.stretchLevel).toBeCloseTo(0.8, 5);
+    expect(snapshot.visualizerMotion.albumScale).toBeCloseTo(1.144, 5);
+    expect(snapshot.visualizerMotion.particleSpeedMultiplier).toBeCloseTo(1.8, 5);
+    expect(snapshot.visualizerMotion.particleBrightnessMultiplier).toBeCloseTo(1.48, 5);
     runtime.dispose();
   });
 
@@ -311,7 +314,10 @@ describe('WallpaperRuntime', () => {
       impactLevel: 0,
       stretchLevel: 0,
       albumScale: 1,
-      particleSpeedMultiplier: 1
+      particleSpeedMultiplier: 1,
+      albumOffsetX: 0,
+      albumOffsetY: 0,
+      particleBrightnessMultiplier: 1
     });
     runtime.acceptAudioFrame({
       source: 'wallpaper-engine',
@@ -497,13 +503,122 @@ describe('WallpaperRuntime', () => {
         peak: 0,
         timestampMs: 1301
       });
-      expect(runtimeSnapshot(runtime).visualizerFrame?.peak).toBe(0);
+      expect(runtimeSnapshot(runtime).visualizerFrame?.peak).toBeGreaterThan(0);
+      const released = runtimeSnapshot(runtime).visualizerMotion;
+      expect(released.albumScale).toBeGreaterThan(1);
+      expect(released.particleSpeedMultiplier).toBeGreaterThan(1);
+      expect(released.particleBrightnessMultiplier).toBeGreaterThan(1);
+      expect(Math.hypot(released.albumOffsetX, released.albumOffsetY)).toBeGreaterThan(0);
+
+      vi.setSystemTime(1551);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0],
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        peak: 0,
+        timestampMs: 1551
+      });
       expect(runtimeSnapshot(runtime).visualizerMotion).toEqual({
         impactLevel: 0,
         stretchLevel: 0,
         albumScale: 1,
-        particleSpeedMultiplier: 1
+        particleSpeedMultiplier: 1,
+        albumOffsetX: 0,
+        albumOffsetY: 0,
+        particleBrightnessMultiplier: 1
       });
+    } finally {
+      runtime.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('uses the receive time when an audio frame has an invalid timestamp', () => {
+    vi.useFakeTimers();
+    const runtime = createWallpaperRuntime(defaultSettings);
+    try {
+      vi.setSystemTime(1000);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0.8],
+        bass: 0.8,
+        mid: 0.8,
+        treble: 0.8,
+        peak: 0.8,
+        timestampMs: Number.NaN
+      });
+      vi.setSystemTime(1200);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0],
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        peak: 0,
+        timestampMs: Number.NaN
+      });
+
+      const snapshot = runtimeSnapshot(runtime);
+      expect(snapshot.previousVisualizerFrame?.timestampMs).toBe(1200);
+      expect(Object.values(snapshot.visualizerMotion).every((value) => Number.isFinite(value))).toBe(true);
+      expect(snapshot.visualizerMotion.albumScale).toBeGreaterThan(1);
+    } finally {
+      runtime.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('releases motion from silence start even when visualizer smoothing holds the frame', () => {
+    vi.useFakeTimers();
+    const runtime = createWallpaperRuntime({
+      ...defaultSettings,
+      visualizer: {
+        ...defaultSettings.visualizer,
+        smoothing: 0.95,
+        decay: 0,
+        noiseGate: 0,
+        sensitivity: 1,
+        bassWeight: 1,
+        midWeight: 1,
+        trebleWeight: 1
+      }
+    });
+    try {
+      vi.setSystemTime(1000);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0.8],
+        bass: 0.8,
+        mid: 0.8,
+        treble: 0.8,
+        peak: 0.8,
+        timestampMs: 1000
+      });
+      vi.setSystemTime(1100);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0],
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        peak: 0,
+        timestampMs: 1100
+      });
+      expect(runtimeSnapshot(runtime).visualizerMotion.albumScale).toBeGreaterThan(1);
+
+      vi.setSystemTime(1550);
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [0],
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        peak: 0,
+        timestampMs: 1550
+      });
+      expect(runtimeSnapshot(runtime).visualizerMotion).toEqual(neutralVisualizerMotion());
     } finally {
       runtime.dispose();
       vi.useRealTimers();
@@ -618,6 +733,71 @@ describe('WallpaperRuntime', () => {
     runtime.dispose();
   });
 
+  it('keeps a visualizer-only album color even when the text/background theme stays custom', async () => {
+    const extractTheme = vi.fn(async () => ({
+      ...themeFixture,
+      dominantColor: '#123456'
+    }));
+    const settings = {
+      ...defaultSettings,
+      theme: {
+        ...defaultSettings.theme,
+        mode: 'custom' as const,
+        customPrimaryColor: '#abcdef'
+      }
+    };
+    const runtime = createWallpaperRuntime(settings, { extractTheme });
+
+    runtime.applyConfiguration(settings, { kind: 'retain' }, true);
+    await flushAsync();
+
+    const snapshot = runtimeSnapshot(runtime) as ReturnType<typeof runtimeSnapshot> & { visualizerColor?: string };
+    expect(extractTheme).toHaveBeenCalledTimes(1);
+    expect(snapshot.theme.primaryColor).toBe('#abcdef');
+    expect(snapshot.visualizerColor).toBe('#123456');
+    runtime.dispose();
+  });
+
+  it('restores a cached album visualizer color when only glowing objects are re-enabled', async () => {
+    const extractTheme = vi.fn(async () => ({
+      ...themeFixture,
+      dominantColor: '#123456'
+    }));
+    const noVisualReactions = {
+      ...defaultSettings,
+      albumArt: { visible: false },
+      layout: {
+        ...defaultSettings.layout,
+        items: {
+          ...defaultSettings.layout.items,
+          albumArt: { ...defaultSettings.layout.items.albumArt, enabled: false }
+        }
+      },
+      visualizer: {
+        ...defaultSettings.visualizer,
+        enabled: false,
+        glowingObjectsEnabled: false
+      }
+    };
+    const runtime = createWallpaperRuntime(defaultSettings, { extractTheme });
+
+    runtime.applyConfiguration({
+      ...noVisualReactions,
+      visualizer: { ...noVisualReactions.visualizer, glowingObjectsEnabled: true }
+    }, { kind: 'retain' }, true);
+    await flushAsync();
+    expect(runtimeSnapshot(runtime).visualizerColor).toBe('#123456');
+
+    runtime.applyConfiguration(noVisualReactions, { kind: 'retain' }, true);
+    expect(runtimeSnapshot(runtime).visualizerColor).toBe('#ffffff');
+
+    runtime.applyConfiguration(defaultSettings, { kind: 'retain' }, true);
+    await flushAsync();
+    expect(runtimeSnapshot(runtime).visualizerColor).toBe('#123456');
+    expect(extractTheme).toHaveBeenCalledTimes(1);
+    runtime.dispose();
+  });
+
   it('does not re-extract an album theme when polling returns the same artwork', async () => {
     const extractTheme = vi.fn(async () => themeFixture);
     const provider = controlledProvider(
@@ -649,24 +829,31 @@ describe('WallpaperRuntime', () => {
 
   it('keeps only the newest async album theme result', async () => {
     const themeRequests: Array<ReturnType<typeof deferred<WallpaperTheme>>> = [];
-    const runtime = createWallpaperRuntime(defaultSettings, {
+    const provider = deferredProvider(Promise.resolve({
+      ok: true as const,
+      value: { ...mockPlayback, id: 'next-track', albumImageUrl: 'mock/album-next.svg' }
+    }));
+    const settings = settingsForProvider('direct');
+    const runtime = createWallpaperRuntime(settings, {
       extractTheme: async () => {
         const request = deferred<WallpaperTheme>();
         themeRequests.push(request);
         return request.promise;
-      }
+      },
+      selectProvider: () => ({ kind: 'ready', provider })
     });
     let current = runtimeSnapshot(runtime);
     const unsubscribe = runtime.subscribe((snapshot) => {
       current = snapshot;
     });
 
-    runtime.applyConfiguration(defaultSettings, { kind: 'retain' }, true);
-    runtime.applyConfiguration({
-      ...defaultSettings,
-      theme: { ...defaultSettings.theme, mode: 'fallback' }
-    }, { kind: 'retain' }, true);
-    runtime.applyConfiguration(defaultSettings, { kind: 'retain' }, true);
+    runtime.applyConfiguration(
+      settings,
+      { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+      true
+    );
+    runtime.start();
+    await flushAsync();
     expect(themeRequests.length).toBe(2);
     const olderTheme = { ...themeFixture, source: 'extracted' as const };
     const newerTheme = { ...themeFixture, readableTextColor: '#000000' };

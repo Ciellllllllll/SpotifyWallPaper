@@ -87,6 +87,12 @@ automatic value, not as an off switch. Automatic particle counts are 24 in
 `low-power`, 48 in `standard`, and 96 in `high-effect`; automatic life is 3.5
 seconds. Disable the effect with `glowingObjectsEnabled`.
 
+Audio-coupled album scale, capped outward offset, particle speed/brightness,
+and album-art dominant color are runtime view values. They are not added to the
+serialized settings object and do not change the v2 schema version. The
+visualizer-only color also does not replace the persisted background or text
+theme.
+
 ## Validation policy
 
 Validate ranges for:

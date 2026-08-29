@@ -21,15 +21,15 @@ import {
 } from '../spotify/polling';
 import { selectPlaybackProvider } from '../spotify/providers/factory';
 import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from '../theme/colors';
-import { extractAlbumTheme } from '../theme/extractAlbumTheme';
+import { extractAlbumTheme, type AlbumThemeExtraction } from '../theme/extractAlbumTheme';
 import { createTransitionState, type TrackTransitionState } from '../transitions/model';
 import { applyVisualizerIntensity, idleVisualizerFrame, isSilentWallpaperFrame, shapeVisualizerFrame } from '../visualizer/model';
-import { calculateVisualizerMotion, neutralVisualizerMotion } from '../visualizer/motion';
+import { calculateVisualizerMotion, neutralVisualizerMotion, releaseVisualizerMotion } from '../visualizer/motion';
 import { createSilentAudioFrame, startAudioBridge, type AudioBridgeSource } from '../wallpaperEngine/audio';
 import type { CredentialUpdate } from '../wallpaperEngine/types';
 
-const SILENCE_RELEASE_MS = 200;
-
+const SILENCE_RELEASE_MS = 450;
+const FALLBACK_VISUALIZER_COLOR = '#ffffff';
 interface WallpaperRuntimeSnapshot {
   settings: WallpaperPreferences;
   playback: NormalizedPlayback;
@@ -47,6 +47,7 @@ interface WallpaperRuntimeSnapshot {
   visualizerFrame: VisualizerFrame | null;
   previousVisualizerFrame: VisualizerFrame | null;
   visualizerMotion: VisualizerMotionState;
+  visualizerColor: string;
   theme: WallpaperTheme;
   transitionState: TrackTransitionState | null;
   credentialStatus: { kind: 'none' | 'direct' | 'backend'; present: boolean; revision: number };
@@ -99,6 +100,8 @@ export const createWallpaperRuntime = (
   let stopAudio: (() => void) | null = null;
   let pollingRunId = 0;
   let themeGeneration = 0;
+  let activeVisualizerColorKey = '';
+  let albumExtractionCache: { key: string; theme: AlbumThemeExtraction } | null = null;
   let started = false;
   let disposed = false;
   let safetyGateOpen = true;
@@ -108,6 +111,8 @@ export const createWallpaperRuntime = (
   let lastWallpaperFrameAtMs = 0;
   let lastMockFrameAtMs = 0;
   let silentSinceMs: number | null = null;
+  let motionReleaseSource: VisualizerMotionState | null = null;
+  let motionReleaseStartedAtMs: number | null = null;
 
   let snapshot: WallpaperRuntimeSnapshot = {
     settings: structuredClone(initialSettings),
@@ -126,6 +131,7 @@ export const createWallpaperRuntime = (
     visualizerFrame: null,
     previousVisualizerFrame: null,
     visualizerMotion: neutralVisualizerMotion(),
+    visualizerColor: FALLBACK_VISUALIZER_COLOR,
     theme: fallbackThemeFromSeed(mockPlayback.id ?? mockPlayback.title),
     transitionState: null,
     credentialStatus: credentialClosure.status()
@@ -211,31 +217,82 @@ export const createWallpaperRuntime = (
   const updateTheme = (playback: NormalizedPlayback) => {
     const imageUrl = playback.albumImageUrl;
     const seed = playback.id ?? playback.albumName ?? playback.title;
+    const artworkKey = imageUrl ? JSON.stringify(['album-art', imageUrl]) : 'no-album-art';
+    const albumThemeKey = JSON.stringify(['album', imageUrl || seed]);
     const customColor = snapshot.settings.theme.customPrimaryColor ? hexToRgb(snapshot.settings.theme.customPrimaryColor) : null;
     const themeKey = snapshot.settings.theme.mode === 'custom' && customColor
       ? JSON.stringify(['custom', customColor.r, customColor.g, customColor.b])
       : snapshot.settings.theme.mode === 'fallback'
         ? JSON.stringify(['fallback', seed])
-        : JSON.stringify(['album', imageUrl || seed]);
-    if (themeKey === activeThemeKey) return;
+        : albumThemeKey;
+
+    const cachedVisualizerColor = albumExtractionCache?.key === artworkKey
+      ? albumExtractionCache.theme.dominantColor ?? FALLBACK_VISUALIZER_COLOR
+      : null;
+    const needsCachedVisualizerColor = audioReactionEnabled(snapshot.settings)
+      && cachedVisualizerColor !== null
+      && snapshot.visualizerColor !== cachedVisualizerColor;
+    if (themeKey === activeThemeKey && artworkKey === activeVisualizerColorKey && !needsCachedVisualizerColor) return;
+
+    const requestAlbumExtraction = () => {
+      if (!imageUrl) {
+        activeVisualizerColorKey = artworkKey;
+        themeGeneration += 1;
+        snapshot = { ...snapshot, visualizerColor: FALLBACK_VISUALIZER_COLOR };
+        if (snapshot.settings.theme.mode === 'album') {
+          snapshot = { ...snapshot, theme: fallbackThemeFromSeed(seed) };
+        }
+        emit();
+        return;
+      }
+
+      if (albumExtractionCache?.key === artworkKey) {
+        const visualizerColor = albumExtractionCache.theme.dominantColor ?? FALLBACK_VISUALIZER_COLOR;
+        const shouldApplyTheme = snapshot.settings.theme.mode === 'album' && snapshot.theme !== albumExtractionCache.theme;
+        const shouldApplyVisualizerColor = audioReactionEnabled(snapshot.settings);
+        if ((!shouldApplyVisualizerColor || snapshot.visualizerColor === visualizerColor) && !shouldApplyTheme) return;
+        snapshot = {
+          ...snapshot,
+          ...(shouldApplyVisualizerColor ? { visualizerColor } : {}),
+          ...(shouldApplyTheme ? { theme: albumExtractionCache.theme } : {})
+        };
+        emit();
+        return;
+      }
+      if (activeVisualizerColorKey === artworkKey) return;
+      activeVisualizerColorKey = artworkKey;
+      const generation = ++themeGeneration;
+      void extractTheme(imageUrl, seed)
+        .catch((): AlbumThemeExtraction => fallbackThemeFromSeed(seed))
+        .then((theme) => {
+          const extractedTheme = theme;
+          if (disposed || generation !== themeGeneration) return;
+          albumExtractionCache = { key: artworkKey, theme: extractedTheme };
+          snapshot = {
+            ...snapshot,
+            ...(audioReactionEnabled(snapshot.settings)
+              ? { visualizerColor: extractedTheme.dominantColor ?? FALLBACK_VISUALIZER_COLOR }
+              : {}),
+            ...(snapshot.settings.theme.mode === 'album' && activeThemeKey === albumThemeKey ? { theme: extractedTheme } : {})
+          };
+          emit();
+        });
+    };
+
     activeThemeKey = themeKey;
-    const generation = ++themeGeneration;
     if (snapshot.settings.theme.mode === 'custom' && customColor) {
       snapshot = { ...snapshot, theme: themeFromPrimary(customColor, 'fallback') };
       emit();
+      requestAlbumExtraction();
       return;
     }
     if (snapshot.settings.theme.mode === 'fallback') {
       snapshot = { ...snapshot, theme: fallbackThemeFromSeed(seed) };
       emit();
+      requestAlbumExtraction();
       return;
     }
-    void extractTheme(imageUrl, seed).then((theme) => {
-      if (!disposed && generation === themeGeneration) {
-        snapshot = { ...snapshot, theme };
-        emit();
-      }
-    });
+    requestAlbumExtraction();
   };
 
   const startTransition = (previous: NormalizedPlayback, current: NormalizedPlayback) => {
@@ -392,11 +449,18 @@ export const createWallpaperRuntime = (
           ? {
               visualizerFrame: null,
               previousVisualizerFrame: null,
-              visualizerMotion: neutralVisualizerMotion()
+              visualizerMotion: neutralVisualizerMotion(),
+              visualizerColor: FALLBACK_VISUALIZER_COLOR
             }
           : {}),
         ...(!settings.transitions.enabled ? { transitionState: null } : {})
       };
+      if (!nextAudioReactionEnabled) {
+        activeVisualizerColorKey = '';
+        themeGeneration += 1;
+        motionReleaseSource = null;
+        motionReleaseStartedAtMs = null;
+      }
       if (!settings.transitions.enabled && transitionTimeout !== null && typeof window !== 'undefined') {
         window.clearTimeout(transitionTimeout);
         transitionTimeout = null;
@@ -429,6 +493,7 @@ export const createWallpaperRuntime = (
       if (frame.source === 'mock') {
         lastMockFrameAtMs = nowMs;
       }
+      const safeTimestampMs = Number.isFinite(frame.timestampMs) ? frame.timestampMs : nowMs;
       const isSilent = isSilentWallpaperFrame(frame, snapshot.settings.visualizer);
       let previous = snapshot.previousVisualizerFrame;
       if (frame.source === 'wallpaper-engine') {
@@ -440,13 +505,30 @@ export const createWallpaperRuntime = (
           silentSinceMs = null;
         }
       }
-      const normalized = shapeVisualizerFrame(frame, previous, snapshot.settings.visualizer);
+      const normalized = shapeVisualizerFrame({ ...frame, timestampMs: safeTimestampMs }, previous, snapshot.settings.visualizer);
       const shaped = applyVisualizerIntensity(normalized, snapshot.settings.visualizer.intensity);
+      const targetMotion = isSilent ? neutralVisualizerMotion() : calculateVisualizerMotion(normalized);
+      const targetEnergy = Math.max(targetMotion.stretchLevel, Math.hypot(targetMotion.albumOffsetX, targetMotion.albumOffsetY) / 8);
+      const currentEnergy = Math.max(snapshot.visualizerMotion.stretchLevel, Math.hypot(snapshot.visualizerMotion.albumOffsetX, snapshot.visualizerMotion.albumOffsetY) / 8);
+      let visualizerMotion = targetMotion;
+      if (targetEnergy < currentEnergy) {
+        motionReleaseSource ??= snapshot.visualizerMotion;
+        const motionClockMs = isSilent ? nowMs : normalized.timestampMs;
+        motionReleaseStartedAtMs ??= isSilent ? (silentSinceMs ?? motionClockMs) : motionClockMs;
+        visualizerMotion = releaseVisualizerMotion(
+          motionReleaseSource,
+          targetMotion,
+          motionClockMs - motionReleaseStartedAtMs
+        );
+      } else {
+        motionReleaseSource = null;
+        motionReleaseStartedAtMs = null;
+      }
       snapshot = {
         ...snapshot,
         previousVisualizerFrame: normalized,
         visualizerFrame: snapshot.settings.visualizer.enabled ? shaped : null,
-        visualizerMotion: calculateVisualizerMotion(normalized)
+        visualizerMotion
       };
       emit();
     },
@@ -521,6 +603,8 @@ export const createWallpaperRuntime = (
       lastWallpaperFrameAtMs = 0;
       lastMockFrameAtMs = 0;
       silentSinceMs = null;
+      motionReleaseSource = null;
+      motionReleaseStartedAtMs = null;
       credentialClosure.clear();
       listeners.clear();
     }

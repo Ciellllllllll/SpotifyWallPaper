@@ -29,6 +29,16 @@ export const visualizerResponsePeak = (peak: number, intensity: number, response
   return visualizerResponseSample(safeSignal(peak) / safeIntensity, responseGain) * safeIntensity;
 };
 
+export const resolveVisualizerColor = (
+  settings: WallpaperPreferences['visualizer'],
+  theme: WallpaperTheme,
+  runtimeVisualizerColor = ''
+): string => {
+  if (settings.colorMode === 'accent') return theme.accentColor;
+  if (settings.colorMode === 'white') return '#ffffff';
+  return /^#[0-9a-f]{6}$/i.test(runtimeVisualizerColor) ? runtimeVisualizerColor : theme.primaryColor;
+};
+
 export const effectiveVisualizerConfig = (settings: WallpaperPreferences): EffectiveVisualizerConfig => {
   const requestedBars = settings.visualizer.barCount;
   const performanceMode = settings.performance.mode;
@@ -66,13 +76,10 @@ export const effectiveVisualizerConfig = (settings: WallpaperPreferences): Effec
 export const visualizerStyleVariables = (
   settings: WallpaperPreferences['visualizer'],
   theme: WallpaperTheme,
-  config: EffectiveVisualizerConfig
+  config: EffectiveVisualizerConfig,
+  runtimeVisualizerColor = ''
 ): Readonly<Record<string, string>> => ({
-  '--visualizer-color': settings.colorMode === 'accent'
-    ? theme.accentColor
-    : settings.colorMode === 'white'
-      ? '#ffffff'
-      : theme.primaryColor,
+  '--visualizer-color': resolveVisualizerColor(settings, theme, runtimeVisualizerColor),
   '--visualizer-line-width': `${settings.lineWidth}px`,
   '--visualizer-glow': `${config.glowStrength}`
 });

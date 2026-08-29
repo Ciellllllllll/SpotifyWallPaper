@@ -3,7 +3,7 @@
   import GlowingObjectCanvas from './particles/GlowingObjectCanvas.svelte';
   import AlbumVisualizer from './visualizer/AlbumVisualizer.svelte';
   import BottomVisualizer from './visualizer/BottomVisualizer.svelte';
-  import { effectiveVisualizerConfig, visualizerStyleVariables } from './visualizerStyle';
+  import { effectiveVisualizerConfig, resolveVisualizerColor, visualizerStyleVariables } from './visualizerStyle';
 
   export let model: WallpaperViewModel;
   export let onIntent: (intent: WallpaperViewIntent) => void = () => undefined;
@@ -39,7 +39,8 @@
     .filter((_, index) => index % effectiveVisualizer.sampleStep === 0)
     .slice(0, effectiveVisualizer.barCount);
   $: visualizerImpactLevel = model.visualizerMotion.impactLevel;
-  $: visualizerVariables = Object.entries(visualizerStyleVariables(settings.visualizer, model.theme, effectiveVisualizer))
+  $: visualizerColor = resolveVisualizerColor(settings.visualizer, model.theme, model.visualizerColor);
+  $: visualizerVariables = Object.entries(visualizerStyleVariables(settings.visualizer, model.theme, effectiveVisualizer, model.visualizerColor))
     .map(([key, value]) => `${key}: ${value}`)
     .join('; ');
   $: bottomVisualizerStyle = [
@@ -161,11 +162,8 @@
     glow={effectiveVisualizer.particleGlow}
     glowStrength={effectiveVisualizer.particleGlowStrength}
     speedMultiplier={model.visualizerMotion.particleSpeedMultiplier}
-    color={settings.visualizer.colorMode === 'accent'
-      ? model.theme.accentColor
-      : settings.visualizer.colorMode === 'white'
-        ? '#ffffff'
-        : model.theme.primaryColor}
+    brightnessMultiplier={model.visualizerMotion.particleBrightnessMultiplier}
+    color={visualizerColor}
   />
 
   {#if model.providerConfigurationError}
@@ -179,7 +177,6 @@
     <BottomVisualizer
       mode={settings.visualizer.mode}
       samples={visualizerSamples}
-      peak={model.visualizerFrame?.peak ?? 0}
       gap={settings.visualizer.gap}
       radius={settings.visualizer.radius}
       intensity={settings.visualizer.intensity}
@@ -201,7 +198,10 @@
       on:focusin={() => (detailHoverUiVisible = true)}
       on:focusout={() => (detailHoverUiVisible = false)}
     >
-      <div class="album-reactive-content" style={`scale: ${model.visualizerMotion.albumScale}`}>
+      <div
+        class="album-reactive-content"
+        style={`translate: ${model.visualizerMotion.albumOffsetX}px ${model.visualizerMotion.albumOffsetY}px; scale: ${model.visualizerMotion.albumScale}`}
+      >
         {#if settings.visualizer.enabled && settings.visualizer.position === 'around-album'}
           <AlbumVisualizer
             mode={settings.visualizer.mode}
@@ -331,7 +331,7 @@
   .settings-status { position: absolute; top: 58px; left: 50%; z-index: 10; padding: 8px 14px; border: 1px solid rgb(255 208 122 / 44%); border-radius: 999px; color: #ffe0a6; background: rgb(0 0 0 / 42%); transform: translateX(-50%); }
   .album-frame { aspect-ratio: 1; overflow: visible; border-radius: 50%; pointer-events: none; filter: drop-shadow(0 28px 80px rgb(0 0 0 / 42%)); animation: album-enter 780ms cubic-bezier(.22, 1, .36, 1) both; transition: left 560ms var(--ease-out-circ), top 560ms var(--ease-out-circ), width 560ms var(--ease-out-circ), height 560ms var(--ease-out-circ), transform 560ms var(--ease-out-circ), filter 420ms ease; }
   .album-only-mode .album-frame { z-index: 8 !important; }
-  .album-reactive-content { position: absolute; inset: 0; overflow: visible; border-radius: 50%; transform-origin: center; transition: scale 450ms cubic-bezier(.22, 1, .36, 1); will-change: scale; }
+  .album-reactive-content { position: absolute; inset: 0; overflow: visible; border-radius: 50%; transform-origin: center; transition: scale 90ms linear, translate 90ms linear; will-change: scale, translate; }
   .album-disc { position: relative; z-index: 1; width: 100%; height: 100%; overflow: hidden; border: 1px solid rgb(255 255 255 / 20%); border-radius: 50%; background: rgb(255 255 255 / 8%); box-shadow: 0 28px 80px rgb(0 0 0 / 42%); transform-origin: center; transition: filter 420ms ease, scale 420ms cubic-bezier(.22, 1, .36, 1); will-change: transform; }
   .album-art { display: block; width: 100%; height: 100%; object-fit: cover; }
   .album-spinning { animation: album-spin 22s linear infinite; }

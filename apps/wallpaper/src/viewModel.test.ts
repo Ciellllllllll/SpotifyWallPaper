@@ -86,6 +86,19 @@ describe('toWallpaperViewModel', () => {
     });
     runtime.dispose();
   });
+
+  it('carries the visualizer-only album color separately from the theme payload', () => {
+    const runtime = createWallpaperRuntime();
+    const snapshot = {
+      ...runtimeSnapshot(runtime),
+      visualizerColor: '#123456'
+    } as ReadonlyWallpaperRuntimeSnapshot & { visualizerColor: string };
+    const model = toWallpaperViewModel(snapshot, host) as WallpaperViewModel & { visualizerColor?: string };
+
+    expect(model.visualizerColor).toBe('#123456');
+    expect(model.theme).toEqual(snapshot.theme);
+    runtime.dispose();
+  });
 });
 
 const runtimeSnapshot = (runtime: ReturnType<typeof createWallpaperRuntime>) => {
