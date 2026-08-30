@@ -60,7 +60,7 @@ upward. Invalid position notifications from Wallpaper Engine are ignored so the
 existing position is retained. Missing or invalid values while restoring shared
 settings are repaired to `around-album`.
 
-The runtime also derives one audio-coupled motion state from the adapted
+The runtime also derives one audio-coupled motion state from the shaped
 visualizer frame. Its weighted impact is `peak * 0.45 + bass * 0.30 + mid *
 0.15 + treble * 0.10`. The resulting impact is applied continuously: album
 content scales from `1.0` to `1.54`, glowing-object speed scales from `1.0` to
@@ -69,23 +69,38 @@ gives the album a deterministic outward offset capped at 8px. This state is
 calculated even when the SVG visualizer is disabled, so the album and
 glowing-object layers remain independent consumers. Silence, stopped playback,
 and stale callbacks release it toward neutral over about 450ms through the
-existing zero-frame path. While playing, the runtime tracks a per-song high-water
-level with about 12 seconds of decay, compensates for Spotify volume inversely,
-and caps automatic plus volume gain at 4×. The fixed reference target is
-approximately 98% at the default `2.16` intensity; the configured intensity
-remains the final display multiplier and the normalized state is never
-overwritten. A volume-only refresh does not treat the previous audio frame as
-a newly observed peak.
+existing zero-frame path. Real Wallpaper Engine audio is eligible only after
+the current direct/backend provider has returned a successful Spotify result,
+the normalized source is `spotify`, playback is active, and the item is a track
+or episode. A provider change clears that success state until the new provider
+succeeds; a transient network, rate-limit, or unsupported-response failure
+retains the previous successful state. Item-null, no-active-device,
+unauthorized, and forbidden results clear eligibility.
+An optimistic Play control result also clears eligibility until the next
+successful playing poll confirms the state.
+Eligible Spotify volume from 1 through 100 applies a fixed `100 / volume` input
+gain before sensitivity, noise gating, clamping, smoothing, and decay. Zero,
+missing, and invalid volume uses gain 1. There is no gain cap. The gain changes
+visual response only and never calls a Spotify or PC volume API. A volume change
+takes effect on the next audio callback; the runtime does not keep or replay an
+unprocessed audio frame.
 
 Fallback modes:
 
 - mock waveform in browser preview
+- mock audio uses gain 1 regardless of the mock playback volume
+- paused, stopped, missing-item, source-mismatched, and not-yet-fetched Spotify
+  states keep the idle visualizer but do not drive album or glowing-object motion
 - idle animation while no Wallpaper Engine listener is available or a browser
   mock callback is waiting/stale
 - after the Wallpaper Engine source is established, noise-gated silence and a
   stale callback produce a zero frame instead of restarting idle animation
 - hidden/static SVG visualizer when it is disabled; album and glowing-object
   motion consumers remain independent when enabled
+
+Wallpaper Engine audio is the PC-wide mixed output rather than a Spotify-only
+stream. While Spotify playback is eligible, the fixed virtual gain therefore
+also affects other applications present in that mix.
 
 ## Output
 

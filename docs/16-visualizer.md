@@ -113,19 +113,32 @@ it may decay for about 450ms, and then its normalized state is reset to zero.
 If the Wallpaper Engine callback stops, the performance-mode timeout injects a
 zero frame instead of restarting idle animation.
 
-The shaping order is safe input, sensitivity and band weighting, one
-Rust/WASM-or-fallback normalization pass, live high-water and volume
-adaptation, then rendered intensity. Do not normalize each frame to its own
-peak because that would erase absolute loudness. While playing, the runtime
-updates a per-track high-water level continuously, decays it on an approximately
-12-second timescale, and uses inverse Spotify volume compensation. Automatic
-and volume gain together are capped at 4×. The fixed reference target is about
-98% after the response curve at the default `2.16` intensity; configured
-intensity remains the final display multiplier. Paused playback holds the
-high-water and decay clock; volume-only refreshes reuse the corrected high-water
-without recording the previous audio frame as a new peak; track changes carry
-the prior level and smooth the new gain over about 450ms. The normalized state
-is never overwritten by these display corrections.
+The shaping order is safe input, fixed eligible volume gain, sensitivity and
+band weighting, one Rust/WASM-or-fallback normalization pass, then rendered
+intensity. Do not normalize each frame to its own peak because that would erase
+absolute loudness. For Wallpaper Engine audio, normalized Spotify volume from
+1 through 100 uses `100 / volume`, so attenuated input is referenced to volume
+100. Zero, missing, non-finite, negative, and above-100 values use gain 1. The
+fixed gain has no maximum. It changes visual input only and does not call
+Spotify or PC volume controls. Mock and idle frames always use gain 1. A volume
+change takes effect on the next audio callback; no unprocessed frame is stored
+for immediate replay. Configured intensity remains the final display
+multiplier.
+
+Real audio is eligible only when the current direct/backend connection has
+completed at least one successful poll, the playback source is `spotify`, the
+item is a track or episode, and it is playing. A provider change clears the
+successful-poll flag; a transient network, rate-limit, or unsupported-response
+failure keeps its previous value and the last valid playback. Item-null,
+no-active-device, unauthorized, forbidden, or a later successful paused,
+stopped, or missing-item result disables real audio. Ineligible real audio is replaced by the idle visualizer
+frame, but that idle frame never drives album pulse, offset, or glowing-object
+speed/brightness. Those motion values release to neutral over about 450ms.
+After an optimistic Play control update, real audio stays ineligible until a
+later successful playing poll confirms it.
+Wallpaper Engine supplies the PC-wide mixed output, so other audible
+applications in the mix receive the same virtual gain while Spotify is
+eligible.
 Audio callbacks are rendered as received; no additional polling or timer
 throttling is introduced. Album ring, radial bars, and waveform line do not
 rotate as a whole. In `around-album`, the visualizer cancels the album frame's
@@ -151,7 +164,7 @@ amplitude are three times their previous values in all three modes and both
 positions. Standard and high-effect modes add thin glow layers: the album ring
 pulses in thickness and opacity, while radial bars and both waveform views
 receive a back-glow. Low-power keeps the main geometry but omits these extra
-layers. The separate motion state uses the weighted adapted impact
+layers. The separate motion state uses the weighted shaped impact
 continuously; it is not gated at a visible threshold. `stretchLevel` maps to
 album scale `1.0..1.54`, particle speed `1.0..2.0`, and particle brightness
 `1.0..1.6`. Low-frequency impact also moves the album content along a stable

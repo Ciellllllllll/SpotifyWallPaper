@@ -89,4 +89,26 @@ describe('Wallpaper Engine audio adapter', () => {
     handle.stop();
     expect(target.clearInterval).toHaveBeenCalledWith(7);
   });
+
+  it('uses the browser-preview mock samples when provided', () => {
+    const onFrame = vi.fn();
+    const callbacks: Array<() => void> = [];
+    const target = {
+      __SPOTIFY_WALLPAPER_MOCK_AUDIO__: [0.1, 0.2, 0.3],
+      setInterval: vi.fn((callback: () => void) => {
+        callbacks.push(callback);
+        return 7;
+      }),
+      clearInterval: vi.fn()
+    } as unknown as Window;
+
+    startAudioBridge(onFrame, target);
+    callbacks[0]?.();
+
+    expect(onFrame).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'mock',
+      samples: [0.1, 0.2, 0.3],
+      peak: 0.3
+    }));
+  });
 });

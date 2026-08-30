@@ -3,6 +3,7 @@ import type { WallpaperAudioListener } from './types';
 
 const MOCK_SAMPLE_COUNT = 64;
 const MOCK_INTERVAL_MS = 100;
+const MOCK_AUDIO_GLOBAL = '__SPOTIFY_WALLPAPER_MOCK_AUDIO__';
 
 export type AudioBridgeSource = 'wallpaper-engine' | 'mock';
 
@@ -63,9 +64,13 @@ export const startAudioBridge = (
     return { source: 'wallpaper-engine', stop: () => { stopped = true; } };
   }
 
-  const interval = target.setInterval(() => {
-    onFrame(createMockAudioFrame());
-  }, MOCK_INTERVAL_MS);
+  const previewTarget = target as Window & { __SPOTIFY_WALLPAPER_MOCK_AUDIO__?: ArrayLike<number> };
+  const emitMockFrame = () => {
+    const previewSamples = previewTarget[MOCK_AUDIO_GLOBAL];
+    onFrame(previewSamples ? normalizeAudioFrame(previewSamples, 'mock') : createMockAudioFrame());
+  };
+  if (previewTarget[MOCK_AUDIO_GLOBAL]) emitMockFrame();
+  const interval = target.setInterval(emitMockFrame, MOCK_INTERVAL_MS);
 
   return { source: 'mock', stop: () => target.clearInterval(interval) };
 };

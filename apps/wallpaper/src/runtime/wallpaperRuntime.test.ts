@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { visualizerResponseSample } from '@spotify-wallpaper/shared-types';
 import type { NormalizedPlayback, ProviderResult, VisualizerFrame, WallpaperPreferences, WallpaperTheme } from '@spotify-wallpaper/shared-types';
 import { mockPlayback } from '../mock/mockPlayback';
 import { defaultSettings } from '../settings/defaultSettings';
@@ -118,7 +117,7 @@ describe('WallpaperRuntime', () => {
     runtime.dispose();
   });
 
-  it('refreshes the current visualizer immediately when volume changes', async () => {
+  it('applies a changed Spotify volume on the next audio frame without replaying old input', async () => {
     const playback = {
       ...mockPlayback,
       source: 'spotify' as const,
@@ -129,7 +128,14 @@ describe('WallpaperRuntime', () => {
       { ok: true, value: playback },
       { ok: true, value: undefined }
     );
-    const settings = settingsForProvider('direct');
+    const settings = {
+      ...settingsForProvider('direct'),
+      visualizer: {
+        ...defaultSettings.visualizer,
+        smoothing: 0,
+        decay: 1
+      }
+    };
     const runtime = createWallpaperRuntime(settings, {
       selectProvider: () => ({ kind: 'ready', provider })
     });
@@ -155,12 +161,23 @@ describe('WallpaperRuntime', () => {
       timestampMs: Date.now()
     });
     const before = current.visualizerFrame?.samples[0] ?? 0;
+    const previousBefore = current.previousVisualizerFrame?.samples[0] ?? 0;
 
     await runtime.execute({ type: 'volume', volumePercent: 25 });
 
     expect(current.playback.volumePercent).toBe(25);
-    expect(current.visualizerFrame?.samples[0]).toBeGreaterThan(before);
-    expect(current.previousVisualizerFrame?.samples[0]).toBeLessThan(current.visualizerFrame?.samples[0] ?? 0);
+    expect(current.visualizerFrame?.samples[0]).toBe(before);
+    expect(current.previousVisualizerFrame?.samples[0]).toBe(previousBefore);
+    runtime.acceptAudioFrame({
+      source: 'wallpaper-engine',
+      samples: [0.1125, 0.1125, 0.1125],
+      bass: 0.1125,
+      mid: 0.1125,
+      treble: 0.1125,
+      peak: 0.1125,
+      timestampMs: Date.now()
+    });
+    expect(current.visualizerFrame?.samples[0]).toBeCloseTo(before, 5);
     unsubscribe();
     runtime.dispose();
   });
@@ -232,7 +249,7 @@ describe('WallpaperRuntime', () => {
     runtime.subscribe(() => undefined);
     const before = cloneCount;
     runtime.acceptAudioFrame({
-      source: 'wallpaper-engine',
+      source: 'mock',
       samples: [0.8, 0.4],
       bass: 0.8,
       mid: 0.4,
@@ -266,7 +283,7 @@ describe('WallpaperRuntime', () => {
     const before = emissions;
 
     runtime.acceptAudioFrame({
-      source: 'wallpaper-engine',
+      source: 'mock',
       samples: [0.5, 0.5, 0.5],
       bass: 0.5,
       mid: 0.5,
@@ -286,7 +303,7 @@ describe('WallpaperRuntime', () => {
     runtime.dispose();
   });
 
-  it('adapts browser mock audio without mutating its normalized frame', () => {
+  it('keeps browser mock audio unboosted without mutating its normalized frame', () => {
     const runtime = createWallpaperRuntime({
       ...defaultSettings,
       visualizer: {
@@ -312,14 +329,331 @@ describe('WallpaperRuntime', () => {
     });
 
     const snapshot = runtimeSnapshot(runtime);
-    const renderedPeak = visualizerResponseSample(
-      (snapshot.visualizerFrame?.peak ?? 0) / defaultSettings.visualizer.intensity,
-      1.15
-    ) * defaultSettings.visualizer.intensity;
     expect(snapshot.previousVisualizerFrame?.source).toBe('mock');
     expect(snapshot.previousVisualizerFrame?.samples).toEqual([0.25, 0.25]);
-    expect(renderedPeak).toBeCloseTo(0.98, 2);
+    expect(snapshot.visualizerFrame?.samples).toEqual([0.54, 0.54]);
     expect(snapshot.visualizerFrame?.samples.every(Number.isFinite)).toBe(true);
+    runtime.dispose();
+  });
+
+  it('keeps Wallpaper Engine notifications idle for mock playback', () => {
+    const runtime = createWallpaperRuntime({
+      ...defaultSettings,
+      visualizer: {
+        ...defaultSettings.visualizer,
+        sensitivity: 1,
+        smoothing: 0,
+        decay: 1,
+        noiseGate: 0,
+        bassWeight: 1,
+        midWeight: 1,
+        trebleWeight: 1
+      }
+    });
+
+    runtime.acceptAudioFrame({
+      source: 'wallpaper-engine',
+      samples: [0.25, 0.25],
+      bass: 0.25,
+      mid: 0.25,
+      treble: 0.25,
+      peak: 0.25,
+      timestampMs: 1000
+    });
+
+    const snapshot = runtimeSnapshot(runtime);
+    expect(snapshot.previousVisualizerFrame?.source).toBe('idle');
+    expect(snapshot.visualizerFrame?.source).toBe('idle');
+    expect(snapshot.visualizerMotion).toEqual(neutralVisualizerMotion());
+    runtime.dispose();
+  });
+
+  it.each([1, 25, 50, 100])(
+    'makes %d-percent Wallpaper Engine input produce the same normalized frame and motion as full Spotify volume',
+    async (volumePercent) => {
+      const settings = {
+        ...settingsForProvider('direct'),
+        visualizer: {
+          ...defaultSettings.visualizer,
+          intensity: 1,
+          sensitivity: 1,
+          smoothing: 0,
+          decay: 1,
+          noiseGate: 0,
+          bassWeight: 1,
+          midWeight: 1,
+          trebleWeight: 1
+        }
+      };
+      const playback = {
+        ...mockPlayback,
+        source: 'spotify' as const,
+        volumePercent,
+        device: mockPlayback.device ? { ...mockPlayback.device, volumePercent } : null
+      };
+      const provider = controlledProvider({ ok: true, value: playback }, { ok: true, value: undefined });
+      const runtime = createWallpaperRuntime(settings, {
+        selectProvider: () => ({ kind: 'ready', provider })
+      });
+      runtime.applyConfiguration(
+        settings,
+        { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+        true
+      );
+      runtime.start();
+      await flushAsync();
+
+      const sample = 0.4 * volumePercent / 100;
+      runtime.acceptAudioFrame({
+        source: 'wallpaper-engine',
+        samples: [sample],
+        bass: sample,
+        mid: sample,
+        treble: sample,
+        peak: sample,
+        timestampMs: Date.now()
+      });
+
+      const snapshot = runtimeSnapshot(runtime);
+      expect(snapshot.previousVisualizerFrame?.samples[0]).toBeCloseTo(0.4, 5);
+      expect(snapshot.visualizerMotion.impactLevel).toBeCloseTo(0.3, 5);
+      expect(provider.control).not.toHaveBeenCalled();
+      runtime.dispose();
+    }
+  );
+
+  it('waits for the active Spotify connection to return a successful playing item before using real audio', async () => {
+    const pending = deferred<ProviderResult<NormalizedPlayback>>();
+    const provider = deferredProvider(pending.promise);
+    const settings = settingsForProvider('direct');
+    const runtime = createWallpaperRuntime(settings, {
+      selectProvider: () => ({ kind: 'ready', provider })
+    });
+    runtime.applyConfiguration(
+      settings,
+      { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+      true
+    );
+    runtime.start();
+
+    runtime.acceptAudioFrame(wallpaperFrame(0.8));
+    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+    expect(runtimeSnapshot(runtime).visualizerMotion).toEqual(neutralVisualizerMotion());
+
+    pending.resolve({ ok: true, value: { ...mockPlayback, source: 'spotify' as const } });
+    await flushAsync();
+    runtime.acceptAudioFrame(wallpaperFrame(0.8));
+    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('wallpaper-engine');
+    expect(runtimeSnapshot(runtime).visualizerMotion.albumScale).toBeGreaterThan(1);
+    runtime.dispose();
+  });
+
+  it.each([
+    ['paused playback', { source: 'spotify' as const, isPlaying: false }],
+    ['missing item', { source: 'spotify' as const, itemType: 'none' as const, id: null, uri: null, isPlaying: false }],
+    ['connection-source mismatch', { source: 'mock' as const }]
+  ])('keeps real audio out of the visualizer for %s', async (_label, playbackPatch) => {
+    const playback = { ...mockPlayback, ...playbackPatch };
+    const provider = controlledProvider({ ok: true, value: playback }, { ok: true, value: undefined });
+    const settings = settingsForProvider('direct');
+    const runtime = createWallpaperRuntime(settings, {
+      selectProvider: () => ({ kind: 'ready', provider })
+    });
+    runtime.applyConfiguration(
+      settings,
+      { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+      true
+    );
+    runtime.start();
+    await flushAsync();
+
+    runtime.acceptAudioFrame(wallpaperFrame(0.8));
+
+    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+    expect(runtimeSnapshot(runtime).visualizerMotion).toEqual(neutralVisualizerMotion());
+    runtime.dispose();
+  });
+
+  it('waits for a playing poll after an optimistic play command', async () => {
+    const paused = { ...mockPlayback, source: 'spotify' as const, isPlaying: false };
+    const provider = controlledProvider(
+      { ok: true, value: paused },
+      { ok: true, value: undefined }
+    );
+    const settings = settingsForProvider('direct');
+    const runtime = createWallpaperRuntime(settings, {
+      selectProvider: () => ({ kind: 'ready', provider })
+    });
+    runtime.applyConfiguration(
+      settings,
+      { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+      true
+    );
+    runtime.start();
+    await flushAsync();
+
+    await runtime.execute({ type: 'play' });
+    expect(runtimeSnapshot(runtime).playback.isPlaying).toBe(true);
+    runtime.acceptAudioFrame(wallpaperFrame(0.8));
+
+    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+    expect(runtimeSnapshot(runtime).visualizerMotion).toEqual(neutralVisualizerMotion());
+    runtime.dispose();
+  });
+
+  it('retains the last successful playing state through a poll failure and stops on a later successful pause', async () => {
+    const timeouts: Array<() => void> = [];
+    const playing = {
+      ...mockPlayback,
+      source: 'spotify' as const,
+      volumePercent: 100,
+      device: mockPlayback.device ? { ...mockPlayback.device, volumePercent: 100 } : null
+    };
+    const provider = {
+      kind: 'direct' as const,
+      poll: vi.fn()
+        .mockResolvedValueOnce({ ok: true as const, value: playing })
+        .mockResolvedValueOnce({ ok: false as const, error: { kind: 'network_error' as const, message: 'offline' } })
+        .mockResolvedValueOnce({ ok: true as const, value: { ...playing, isPlaying: false } }),
+      control: vi.fn(async () => ({ ok: true as const, value: undefined })),
+      dispose: vi.fn()
+    };
+    const settings = {
+      ...settingsForProvider('direct'),
+      clock: { ...defaultSettings.clock, enabled: false },
+      transitions: { ...defaultSettings.transitions, enabled: false }
+    };
+    const runtime = createWallpaperRuntime(settings, {
+      selectProvider: () => ({ kind: 'ready', provider }),
+      startAudioBridge: () => ({ source: 'wallpaper-engine', stop: () => undefined })
+    });
+    vi.stubGlobal('window', {
+      setTimeout: vi.fn((callback: () => void) => {
+        timeouts.push(callback);
+        return timeouts.length;
+      }),
+      clearTimeout: vi.fn(),
+      setInterval: vi.fn(() => 1),
+      clearInterval: vi.fn()
+    });
+
+    try {
+      runtime.applyConfiguration(
+        settings,
+        { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+        true
+      );
+      runtime.start();
+      await flushMicrotasks();
+      runtime.acceptAudioFrame(wallpaperFrame(0.8));
+      expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('wallpaper-engine');
+
+      timeouts.shift()?.();
+      await flushMicrotasks();
+      runtime.acceptAudioFrame(wallpaperFrame(0.8));
+      expect(runtimeSnapshot(runtime).spotifyError?.kind).toBe('network_error');
+      expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('wallpaper-engine');
+
+      timeouts.shift()?.();
+      await flushMicrotasks();
+      runtime.acceptAudioFrame(wallpaperFrame(0.8));
+      expect(runtimeSnapshot(runtime).playback.isPlaying).toBe(false);
+      expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+    } finally {
+      runtime.dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each(['item_null', 'unauthorized', 'forbidden', 'unavailable'] as const)(
+    'stops real audio after a successful playback poll returns %s',
+    async (kind) => {
+      const timeouts: Array<() => void> = [];
+      const playing = { ...mockPlayback, source: 'spotify' as const, volumePercent: 100 };
+      const provider = {
+        kind: 'direct' as const,
+        poll: vi.fn()
+          .mockResolvedValueOnce({ ok: true as const, value: playing })
+          .mockResolvedValueOnce({ ok: false as const, error: { kind, message: 'playback unavailable' } }),
+        control: vi.fn(async () => ({ ok: true as const, value: undefined })),
+        dispose: vi.fn()
+      };
+      const settings = {
+        ...settingsForProvider('direct'),
+        clock: { ...defaultSettings.clock, enabled: false },
+        transitions: { ...defaultSettings.transitions, enabled: false }
+      };
+      const runtime = createWallpaperRuntime(settings, {
+        selectProvider: () => ({ kind: 'ready', provider }),
+        startAudioBridge: () => ({ source: 'wallpaper-engine', stop: () => undefined })
+      });
+      vi.stubGlobal('window', {
+        setTimeout: vi.fn((callback: () => void) => {
+          timeouts.push(callback);
+          return timeouts.length;
+        }),
+        clearTimeout: vi.fn(),
+        setInterval: vi.fn(() => 1),
+        clearInterval: vi.fn()
+      });
+
+      try {
+        runtime.applyConfiguration(
+          settings,
+          { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+          true
+        );
+        runtime.start();
+        await flushMicrotasks();
+        runtime.acceptAudioFrame(wallpaperFrame(0.8));
+        expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('wallpaper-engine');
+        const activeScale = runtimeSnapshot(runtime).visualizerMotion.albumScale;
+
+        timeouts.shift()?.();
+        await flushMicrotasks();
+        runtime.acceptAudioFrame(wallpaperFrame(0.8));
+
+        expect(runtimeSnapshot(runtime).spotifyError?.kind).toBe(kind);
+        expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+        expect(runtimeSnapshot(runtime).visualizerMotion.albumScale).toBeLessThanOrEqual(activeScale);
+      } finally {
+        runtime.dispose();
+        vi.unstubAllGlobals();
+      }
+    }
+  );
+
+  it('forgets successful playback when the connection changes until the new provider succeeds', async () => {
+    const directPoll = deferred<ProviderResult<NormalizedPlayback>>();
+    const backendPoll = deferred<ProviderResult<NormalizedPlayback>>();
+    const providers = [deferredProvider(directPoll.promise), deferredProvider(backendPoll.promise)];
+    let providerIndex = 0;
+    const runtime = createWallpaperRuntime(settingsForProvider('direct'), {
+      selectProvider: () => ({ kind: 'ready', provider: providers[providerIndex++] })
+    });
+    runtime.applyConfiguration(
+      settingsForProvider('direct'),
+      { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+      true
+    );
+    runtime.start();
+    directPoll.resolve({ ok: true, value: { ...mockPlayback, source: 'spotify' as const, volumePercent: 100 } });
+    await flushMicrotasks();
+    runtime.acceptAudioFrame(wallpaperFrame(0.8));
+    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('wallpaper-engine');
+
+    runtime.applyConfiguration(
+      settingsForProvider('backend'),
+      { kind: 'replace', value: { kind: 'backend', pairingToken: 'pairing-token' } },
+      true
+    );
+    runtime.acceptAudioFrame(wallpaperFrame(0.8));
+    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+
+    backendPoll.resolve({ ok: true, value: { ...mockPlayback, source: 'spotify' as const, volumePercent: 100 } });
+    await flushMicrotasks();
+    runtime.acceptAudioFrame(wallpaperFrame(0.8));
+    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('wallpaper-engine');
     runtime.dispose();
   });
 
@@ -340,7 +674,7 @@ describe('WallpaperRuntime', () => {
     });
 
     runtime.acceptAudioFrame({
-      source: 'wallpaper-engine',
+      source: 'mock',
       samples: [0.8, 0.8, 0.8],
       bass: 0.8,
       mid: 0.8,
@@ -363,7 +697,7 @@ describe('WallpaperRuntime', () => {
   it('does not process audio when every visual reaction consumer is disabled', () => {
     const runtime = createWallpaperRuntime();
     runtime.acceptAudioFrame({
-      source: 'wallpaper-engine',
+      source: 'mock',
       samples: [1, 1, 1],
       bass: 1,
       mid: 1,
@@ -416,8 +750,8 @@ describe('WallpaperRuntime', () => {
     runtime.dispose();
   });
 
-  it('advances decay for every silent Wallpaper Engine callback', () => {
-    const runtime = createWallpaperRuntime({
+  it('advances decay for every silent Wallpaper Engine callback', async () => {
+    const runtime = await startPlayingSpotifyRuntime({
       ...defaultSettings,
       visualizer: {
         ...defaultSettings.visualizer,
@@ -464,14 +798,8 @@ describe('WallpaperRuntime', () => {
     runtime.dispose();
   });
 
-  it('does not reintroduce idle animation after a Wallpaper Engine source is established', () => {
+  it('does not reintroduce idle animation after a Wallpaper Engine source is established', async () => {
     const intervals: Array<() => void> = [];
-    const runtime = createWallpaperRuntime(defaultSettings, {
-      startAudioBridge: () => ({
-        source: 'wallpaper-engine',
-        stop: () => undefined
-      })
-    });
     const windowStub = {
       setTimeout: vi.fn(() => 1),
       clearTimeout: vi.fn(),
@@ -483,8 +811,15 @@ describe('WallpaperRuntime', () => {
     };
     vi.stubGlobal('window', windowStub);
 
+    let runtime: ReturnType<typeof createWallpaperRuntime> | null = null;
     try {
-      runtime.start();
+      runtime = await startPlayingSpotifyRuntime(defaultSettings, {
+        startAudioBridge: () => ({
+          source: 'wallpaper-engine',
+          stop: () => undefined
+        })
+      });
+      runtime.acceptAudioFrame(wallpaperFrame(0));
 
       const snapshot = runtimeSnapshot(runtime);
       expect(snapshot.visualizerFrame?.source).toBe('wallpaper-engine');
@@ -492,7 +827,7 @@ describe('WallpaperRuntime', () => {
       expect(intervals.length).toBeGreaterThan(0);
     } finally {
       try {
-        runtime.dispose();
+        runtime?.dispose();
       } finally {
         vi.unstubAllGlobals();
       }
@@ -550,9 +885,9 @@ describe('WallpaperRuntime', () => {
     }
   });
 
-  it('fades a silent Wallpaper Engine stream to zero within the silence release window', () => {
+  it('fades a silent Wallpaper Engine stream to zero within the silence release window', async () => {
     vi.useFakeTimers();
-    const runtime = createWallpaperRuntime(defaultSettings);
+    const runtime = await startPlayingSpotifyRuntime();
     try {
       vi.setSystemTime(1000);
       runtime.acceptAudioFrame({
@@ -619,9 +954,9 @@ describe('WallpaperRuntime', () => {
     }
   });
 
-  it('uses the receive time when an audio frame has an invalid timestamp', () => {
+  it('uses the receive time when an audio frame has an invalid timestamp', async () => {
     vi.useFakeTimers();
-    const runtime = createWallpaperRuntime(defaultSettings);
+    const runtime = await startPlayingSpotifyRuntime();
     try {
       vi.setSystemTime(1000);
       runtime.acceptAudioFrame({
@@ -654,9 +989,9 @@ describe('WallpaperRuntime', () => {
     }
   });
 
-  it('releases motion from silence start even when visualizer smoothing holds the frame', () => {
+  it('releases motion from silence start even when visualizer smoothing holds the frame', async () => {
     vi.useFakeTimers();
-    const runtime = createWallpaperRuntime({
+    const runtime = await startPlayingSpotifyRuntime({
       ...defaultSettings,
       visualizer: {
         ...defaultSettings.visualizer,
@@ -709,15 +1044,10 @@ describe('WallpaperRuntime', () => {
     }
   });
 
-  it('uses zero frames instead of idle frames when a Wallpaper Engine callback becomes stale', () => {
+  it('uses zero frames instead of idle frames when a Wallpaper Engine callback becomes stale', async () => {
     vi.useFakeTimers();
     const intervals: Array<() => void> = [];
-    const runtime = createWallpaperRuntime(defaultSettings, {
-      startAudioBridge: () => ({
-        source: 'wallpaper-engine',
-        stop: () => undefined
-      })
-    });
+    let runtime: ReturnType<typeof createWallpaperRuntime> | null = null;
     try {
       vi.setSystemTime(1000);
       const windowStub = {
@@ -730,7 +1060,12 @@ describe('WallpaperRuntime', () => {
         clearInterval: vi.fn()
       };
       vi.stubGlobal('window', windowStub);
-      runtime.start();
+      runtime = await startPlayingSpotifyRuntime(defaultSettings, {
+        startAudioBridge: () => ({
+          source: 'wallpaper-engine',
+          stop: () => undefined
+        })
+      });
       runtime.acceptAudioFrame({
         source: 'wallpaper-engine',
         samples: [0.8],
@@ -749,7 +1084,7 @@ describe('WallpaperRuntime', () => {
       expect(snapshot.visualizerFrame?.peak).toBe(0);
     } finally {
       try {
-        runtime.dispose();
+        runtime?.dispose();
       } finally {
         vi.unstubAllGlobals();
         vi.useRealTimers();
@@ -1090,6 +1425,50 @@ const controlledProvider = (
   dispose: vi.fn()
 });
 
+const wallpaperFrame = (sample: number, timestampMs = Date.now()): VisualizerFrame => ({
+  source: 'wallpaper-engine',
+  samples: [sample],
+  bass: sample,
+  mid: sample,
+  treble: sample,
+  peak: sample,
+  timestampMs
+});
+
+const startPlayingSpotifyRuntime = async (
+  settings: WallpaperPreferences = defaultSettings,
+  dependencies: Parameters<typeof createWallpaperRuntime>[1] = {}
+) => {
+  const directSettings = {
+    ...settings,
+    spotify: { ...settings.spotify, provider: 'direct' as const }
+  };
+  const provider = controlledProvider(
+    {
+      ok: true,
+      value: {
+        ...mockPlayback,
+        source: 'spotify' as const,
+        volumePercent: 100,
+        device: mockPlayback.device ? { ...mockPlayback.device, volumePercent: 100 } : null
+      }
+    },
+    { ok: true, value: undefined }
+  );
+  const runtime = createWallpaperRuntime(directSettings, {
+    ...dependencies,
+    selectProvider: () => ({ kind: 'ready', provider })
+  });
+  runtime.applyConfiguration(
+    directSettings,
+    { kind: 'replace', value: { kind: 'direct', clientId: 'client-id', refreshToken: 'refresh-token' } },
+    true
+  );
+  runtime.start();
+  await flushMicrotasks();
+  return runtime;
+};
+
 const themeFixture: WallpaperTheme = {
   primaryColor: '#505a64',
   secondaryColor: '#141e28',
@@ -1111,6 +1490,10 @@ const createWindowStub = () => ({
 });
 
 const flushAsync = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+const flushMicrotasks = async () => {
+  for (let index = 0; index < 4; index += 1) await Promise.resolve();
+};
 
 const runtimeSnapshot = (runtime: ReturnType<typeof createWallpaperRuntime>) => {
   let current: Parameters<Parameters<typeof runtime.subscribe>[0]>[0] | undefined;

@@ -5,9 +5,10 @@ import { normalizeSamplesFallback } from '../wasm/fallback';
 export const shapeVisualizerFrame = (
   frame: VisualizerFrame,
   previous: VisualizerFrame | null,
-  settings: WallpaperPreferences['visualizer']
+  settings: WallpaperPreferences['visualizer'],
+  inputGain = 1
 ): VisualizerFrame => {
-  const weightedSamples = prepareSamples(frame.samples, settings);
+  const weightedSamples = prepareSamples(frame.samples, settings, inputGain);
   const normalized =
     normalizeSamplesWithCore({ ...frame, samples: weightedSamples }, previous, settings) ??
     normalizeSamplesFallback(weightedSamples, previous?.samples ?? [], settings);
@@ -31,7 +32,8 @@ export const idleVisualizerFrame = (timestampMs: number, settings: WallpaperPref
 
 export const isSilentWallpaperFrame = (
   frame: VisualizerFrame,
-  settings: WallpaperPreferences['visualizer']
+  settings: WallpaperPreferences['visualizer'],
+  inputGain = 1
 ): boolean => {
   if (frame.source !== 'wallpaper-engine') {
     return false;
@@ -39,16 +41,22 @@ export const isSilentWallpaperFrame = (
 
   const clampMax = Math.max(0.0001, settings.clampMax);
   const noiseGate = Math.min(clampMax, Math.max(0, settings.noiseGate));
-  return prepareSamples(frame.samples, settings).every(
+  return prepareSamples(frame.samples, settings, inputGain).every(
     (sample) => sample === 0 || Math.min(clampMax, sample) < noiseGate
   );
 };
 
-const prepareSamples = (samples: number[], settings: WallpaperPreferences['visualizer']): number[] => {
+export const virtualVolumeBoostGain = (volumePercent: number | null | undefined): number =>
+  typeof volumePercent === 'number' && Number.isFinite(volumePercent) && volumePercent >= 1 && volumePercent <= 100
+    ? 100 / volumePercent
+    : 1;
+
+const prepareSamples = (samples: number[], settings: WallpaperPreferences['visualizer'], inputGain: number): number[] => {
   const safeSamples = samples.length > 0 ? samples : [0];
+  const safeInputGain = Number.isFinite(inputGain) && inputGain > 0 ? inputGain : 1;
   return safeSamples.map((sample, index) => {
     const safeSample = Number.isFinite(sample) ? Math.max(0, sample) : 0;
-    return safeSample * settings.sensitivity * bandWeight(index, safeSamples.length, settings);
+    return safeSample * safeInputGain * settings.sensitivity * bandWeight(index, safeSamples.length, settings);
   });
 };
 

@@ -83,6 +83,20 @@ Resource-intensive commands should run through `h5i capture run`.
 ## Spotify
 
 - Confirm current playback displays when credentials are valid.
+- Confirm real Wallpaper Engine audio reacts only after the current provider
+  has successfully returned a playing track or episode.
+- Confirm a transient poll failure retains the last valid playing eligibility,
+  a successful paused/stopped/item-null result disables it, and a provider
+  change waits for the new provider's first success.
+- Confirm no-active-device, unauthorized, and forbidden results also disable
+  real audio while network/rate-limit failures retain the last state.
+- Confirm an optimistic Play command does not enable real audio before the next
+  successful playing poll.
+- Confirm volume 1, 25, 50, and 100 produce matching visuals for equivalently
+  attenuated input; zero and unavailable volume remain unboosted.
+- Confirm virtual gain changes neither Spotify volume nor PC volume and sends
+  no volume command. Note that other applications in Wallpaper Engine's
+  PC-wide audio mix receive the same visual gain while Spotify is eligible.
 - Confirm paused playback slows polling and does not crash.
 - Confirm stopped or item-null playback does not crash.
 - Confirm 401, 403, 429, network failure, and unknown responses show safe status.
@@ -122,6 +136,10 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm long title and many-artist fixtures do not break text layout.
 - Confirm very bright and very dark theme cases keep text readable.
 - Confirm low-power mode reduces visualizer work and blur.
+- Confirm paused, stopped, missing-item, source-mismatched, and initial-fetch
+  states retain idle visualizer bars without album or glowing-object motion,
+  and motion returns to neutral in about 450ms.
+- Confirm browser mock audio remains reactive with no volume boost.
 - Confirm automatic glowing-object density is 24/48/96 for low-power/standard/high-effect,
   and that high-effect glow is stronger than standard while low-power disables
   particle shadow blur.
