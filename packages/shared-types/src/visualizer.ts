@@ -22,22 +22,3 @@ export const visualizerResponsePeak = (peak: number, intensity: number, response
   if (safeIntensity === 0) return 0;
   return visualizerResponseSample(safeSignal(peak) / safeIntensity, responseGain) * safeIntensity;
 };
-
-/**
- * Returns the input signal needed to reach a final display value after the
- * response curve and manual intensity have both been applied.
- */
-export const inverseVisualizerResponseInput = (
-  finalDisplayValue: number,
-  intensity: number,
-  responseGain: number
-): number => {
-  const safeIntensity = safeSignal(intensity);
-  const safeTarget = safeSignal(finalDisplayValue);
-  const gain = Number.isFinite(responseGain) ? Math.max(0, responseGain) : 1;
-  if (safeIntensity === 0 || safeTarget === 0 || gain === 0) return 0;
-
-  const targetResponse = Math.min(VISUALIZER_RESPONSE_CAP, safeTarget / safeIntensity);
-  const input = (targetResponse / gain) ** (1 / VISUALIZER_RESPONSE_EXPONENT);
-  return Number.isFinite(input) ? Math.max(0, input) : 0;
-};

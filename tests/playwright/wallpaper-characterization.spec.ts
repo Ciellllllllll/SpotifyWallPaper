@@ -37,15 +37,17 @@ async function freezeBrowserState(page: Page, samples = audioFixture.samples) {
     Math.random = () => 0.42;
   });
   await page.addInitScript((samples: number[]) => {
-    const browserWindow = window as Window & {
-      wallpaperRegisterAudioListener?: (listener: (samples: number[]) => void) => void;
-      __wallpaperAudioListener?: (samples: number[]) => void;
-    };
-    browserWindow.wallpaperRegisterAudioListener = (listener) => {
-      browserWindow.__wallpaperAudioListener = listener;
-      listener(samples);
-    };
+    const browserWindow = window as Window & { __SPOTIFY_WALLPAPER_MOCK_AUDIO__?: number[] };
+    browserWindow.__SPOTIFY_WALLPAPER_MOCK_AUDIO__ = samples;
   }, samples);
+}
+
+async function setBrowserMockAudio(page: Page, samples: number[]) {
+  await page.evaluate((nextSamples) => {
+    const browserWindow = window as Window & { __SPOTIFY_WALLPAPER_MOCK_AUDIO__?: number[] };
+    browserWindow.__SPOTIFY_WALLPAPER_MOCK_AUDIO__ = nextSamples;
+  }, samples);
+  await page.waitForTimeout(120);
 }
 
 async function disableMotionAndCaret(page: Page) {
@@ -104,7 +106,7 @@ test.describe('visualizer positioning', () => {
               layout: { items: { albumArt: { rotation: 45 } } }
             }));
           }, { performanceMode, visualizerMode, visualizerPosition });
-          await freezeBrowserState(page);
+          await freezeBrowserState(page, Array.from({ length: 64 }, () => 0.4));
           await page.goto('/');
 
           const visualizer = page.locator('.visualizer');
@@ -413,10 +415,7 @@ test.describe('glowing object canvas', () => {
       const beforeContent = await reactiveContent.boundingBox();
       await expect(progressRing).toHaveCount(0);
       await expect(lineSeekbar).toHaveCount(1);
-      await page.evaluate(() => {
-        const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
-        browserWindow.__wallpaperAudioListener?.([0.8, 0.8, 0.8]);
-      });
+      await setBrowserMockAudio(page, [0.8, 0.8, 0.8]);
 
       await expect.poll(() => reactiveContent.evaluate((element) => Number(getComputedStyle(element).scale))).toBeGreaterThan(1.04);
       const afterContent = await reactiveContent.boundingBox();
@@ -836,13 +835,9 @@ test.describe('album visualizer geometry', () => {
       }, { intensity });
       await freezeBrowserState(page, Array.from({ length: 128 }, () => 0));
       await page.goto('/');
-      await page.evaluate(({ sample }) => {
-        const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
-        const samples = Array.from({ length: 128 }, () => 0);
-        samples[3] = sample;
-        samples[67] = sample;
-        browserWindow.__wallpaperAudioListener?.(samples);
-      }, { sample });
+      const samples = Array.from({ length: 64 }, () => 0);
+      samples[3] = sample;
+      await setBrowserMockAudio(page, samples);
 
       const bar = page.locator('.visualizer-album .radial-bar').nth(3);
       if (visible) {
@@ -877,13 +872,9 @@ test.describe('album visualizer geometry', () => {
     await page.goto('/');
 
     const sendSample = async (sample: number) => {
-      await page.evaluate(({ sample }) => {
-        const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
-        const samples = Array.from({ length: 128 }, () => 0);
-        samples[3] = sample;
-        samples[67] = sample;
-        browserWindow.__wallpaperAudioListener?.(samples);
-      }, { sample });
+      const samples = Array.from({ length: 64 }, () => 0);
+      samples[3] = sample;
+      await setBrowserMockAudio(page, samples);
     };
 
     const bar = page.locator('.visualizer-bottom .bottom-bar').nth(3);
@@ -908,10 +899,7 @@ test.describe('album visualizer geometry', () => {
     });
     await freezeBrowserState(page, Array.from({ length: 128 }, () => 0));
     await page.goto('/');
-    await page.evaluate(() => {
-      const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
-      browserWindow.__wallpaperAudioListener?.(Array.from({ length: 128 }, () => 0));
-    });
+    await setBrowserMockAudio(page, Array.from({ length: 64 }, () => 0));
 
     const bars = page.locator('.visualizer-album .radial-bar');
     await expect(bars).toHaveCount(8);
@@ -923,13 +911,9 @@ test.describe('album visualizer geometry', () => {
       browserWindow.__radialBarNodes = [...document.querySelectorAll('.visualizer-album .radial-bar')];
     });
 
-    await page.evaluate(() => {
-      const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
-      const samples = Array.from({ length: 128 }, () => 0);
-      samples[3] = 1;
-      samples[67] = 1;
-      browserWindow.__wallpaperAudioListener?.(samples);
-    });
+    const visibleSamples = Array.from({ length: 64 }, () => 0);
+    visibleSamples[3] = 1;
+    await setBrowserMockAudio(page, visibleSamples);
 
     await expect(bars.nth(3)).toBeVisible();
     expect(await page.evaluate(() => {
@@ -977,10 +961,7 @@ test.describe('album visualizer geometry', () => {
         }));
       }, { mode, radius });
       await page.reload();
-      await page.evaluate(({ sample }) => {
-        const browserWindow = window as Window & { __wallpaperAudioListener?: (samples: number[]) => void };
-        browserWindow.__wallpaperAudioListener?.(Array.from({ length: 128 }, () => sample));
-      }, { sample: mode === 'radial-bars' ? 0.01 : 0.0001 });
+      await setBrowserMockAudio(page, Array.from({ length: 64 }, () => 0.1));
       if (mode === 'radial-bars') {
         const bars = page.locator('.visualizer-album .radial-bar');
         await expect(bars).not.toHaveCount(0);
@@ -990,7 +971,7 @@ test.describe('album visualizer geometry', () => {
       return page.locator('.visualizer-album .circular-waveform').getAttribute('points');
     };
 
-    await freezeBrowserState(page, Array.from({ length: 128 }, () => 0.01));
+    await freezeBrowserState(page, Array.from({ length: 128 }, () => 0.1));
     await page.goto('/');
     const parsePoints = (points: string | null) => (points ?? '').trim().split(/\s+/)
       .filter(Boolean)
@@ -1014,7 +995,7 @@ test.describe('album visualizer geometry', () => {
   });
 
   test('changes bottom-up radius extension without moving the bottom anchor', async ({ page }) => {
-    const samples = Array.from({ length: 128 }, () => 0.01);
+    const samples = Array.from({ length: 128 }, () => 0.1);
     await freezeBrowserState(page, samples);
     await page.addInitScript(() => {
       if (!localStorage.getItem('spotify-wallpaper-settings')) {
@@ -1114,7 +1095,7 @@ test.describe('album visualizer geometry', () => {
     expect(large[1][1]).toBeLessThan(small[1][1]);
   });
 
-  test('keeps the adapted reference consistent across performance modes', async ({ page }) => {
+  test('applies performance presentation gain after fixed shaping', async ({ page }) => {
     const samples = Array.from({ length: 128 }, () => 0.5);
     await page.addInitScript(() => {
       if (!localStorage.getItem('spotify-wallpaper-settings')) {
@@ -1156,12 +1137,12 @@ test.describe('album visualizer geometry', () => {
     await page.reload();
     const highEffectDash = await readRingDash();
 
-    expect(standardDash).toBeCloseTo(0.454, 2);
-    expect(highEffectDash).toBeCloseTo(0.454, 2);
+    expect(standardDash).toBeGreaterThan(0);
+    expect(highEffectDash).toBeGreaterThan(standardDash);
   });
 
   test('keeps manual intensity as the final ring display multiplier', async ({ page }) => {
-    const samples = Array.from({ length: 128 }, () => 1);
+    const samples = Array.from({ length: 128 }, () => 0.5);
     await page.addInitScript(() => {
       if (!localStorage.getItem('spotify-wallpaper-settings')) {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
@@ -1209,7 +1190,7 @@ test.describe('album visualizer geometry', () => {
     expect(highIntensityStrokeWidth).toBeGreaterThan(normalIntensityStrokeWidth);
   });
 
-  test('clips adapted bottom-up bars at the native SVG boundary', async ({ page }) => {
+  test('clips normalized bottom-up bars at the native SVG boundary', async ({ page }) => {
     const samples = Array.from({ length: 128 }, () => 1);
     await page.addInitScript(() => {
       if (!localStorage.getItem('spotify-wallpaper-settings')) {
@@ -1318,7 +1299,7 @@ for (const viewport of viewports) {
       await page.addInitScript(() => {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
           schemaVersion: 3,
-          visualizer: { glowingObjectsEnabled: false }
+          visualizer: { glowingObjectsEnabled: false, smoothing: 0, decay: 1 }
         }));
       });
       await freezeBrowserState(page);
@@ -1340,7 +1321,7 @@ for (const viewport of viewports) {
       await page.addInitScript(() => {
         localStorage.setItem('spotify-wallpaper-settings', JSON.stringify({
           schemaVersion: 3,
-          visualizer: { glowingObjectsEnabled: false }
+          visualizer: { glowingObjectsEnabled: false, smoothing: 0, decay: 1 }
         }));
       });
       await freezeBrowserState(page);

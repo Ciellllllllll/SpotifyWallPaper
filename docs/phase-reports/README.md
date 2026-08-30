@@ -29,6 +29,7 @@ System-wide designs, plans, and reports remain historical evidence.
 - `rc-2-wallpaper-engine-property-types.md`
 - `lyrics-deferred-spec-update.md`
 - `one-click-spotify-auth-token.md`
+- `spotify-playback-virtual-volume-boost.md`
 - `wallpaper-engine-update-flow.md`
 
 The old lyrics and numeric phase sequence has been superseded where current

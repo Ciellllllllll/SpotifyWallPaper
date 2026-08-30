@@ -49,9 +49,11 @@ TypeScript:
 - mock mode initialization
 - Visualizer motion continuity, maximum album scale, maximum particle speed and
   brightness, capped album offset, silence release, and non-finite input handling
-- Visualizer response inversion, volume compensation at 100/50/25/0 percent,
-  per-track high-water decay, pause retention, track-change smoothing, and the
-  combined 4× gain cap
+- Fixed virtual volume gain at 1/25/50/100 percent, gain 1 for zero/missing/
+  invalid volume, and equivalence to volume-100 shaping and motion
+- Real-audio eligibility after the first successful current-provider poll,
+  stopped/missing-item/source-mismatch rejection, transient-error retention,
+  and provider-change reset
 - Settings v3 migration, one-time legacy intensity conversion, and legacy
   seekbar migration to the straight line style
 - Glowing-particle outward movement, speed multiplier, lifetime, viewport cull,
@@ -99,9 +101,20 @@ Confirm:
   returns all values to neutral.
 - The straight seekbar remains independent while the inner album content scales
   and moves; no progress-ring element is rendered.
-- Audio peaks at normal, half, quarter, zero, and unavailable Spotify volume
-  remain visible through the common automatic adaptation path, with no more than
-  4× combined correction.
+- Volume 1, 25, 50, and 100 produce the same visual response for equivalently
+  attenuated input; zero and unavailable volume use gain 1.
+- Before the first successful Spotify result, and for paused, stopped,
+  missing-item, or source-mismatched playback, PC audio does not drive album or
+  glowing-object motion. The SVG visualizer receives an immediate zero frame,
+  and motion returns to neutral in about 450ms.
+- A transient Spotify communication failure retains the last valid playing
+  eligibility. Changing provider waits for the new provider's first success.
+- Item-null, no-active-device, unauthorized, and forbidden results disable
+  real-audio eligibility even though the last display data remains available.
+- A successful Play control remains idle until the next successful playing poll.
+- Browser mock audio is not volume-boosted. Wallpaper Engine's PC-wide mixed
+  audio means other applications in the mix are boosted while Spotify is
+  eligible.
 - Zero particle count/life use the automatic performance-mode values, and the
   disabled toggle stops and clears the Canvas loop.
 - `around-album` centers circular visualizer geometry on the album art.

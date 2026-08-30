@@ -99,14 +99,13 @@ automatic value, not as an off switch. Automatic particle counts are 24 in
 seconds. Disable the effect with `glowingObjectsEnabled`.
 
 Audio-coupled album scale, capped outward offset, particle speed/brightness,
-album-art dominant color, and live volume adaptation are runtime view values.
-They are not added to the serialized settings object. The runtime keeps a
-per-track high-water level, decays it over about 12 seconds while playing, and
-limits automatic plus Spotify-volume compensation to 4×. The visual target is
-about 98% after the response curve at the default `2.16` intensity. Configured
-intensity remains the final display multiplier. Volume-only refreshes reuse the
-corrected high-water without recording the previous audio frame as a new peak;
-the normalized frame remains unchanged.
+album-art dominant color, and the fixed Spotify-volume input gain are runtime
+view values. They are not added to the serialized settings object. Eligible
+Wallpaper Engine input uses `100 / volume` for Spotify volume 1 through 100;
+zero, missing, and invalid values use gain 1. The gain has no configured cap and
+is applied before sensitivity, noise gating, clamping, smoothing, and decay.
+Configured intensity remains the final display multiplier. Volume changes take
+effect on the next audio callback without storing an unprocessed frame.
 
 ## Validation policy
 

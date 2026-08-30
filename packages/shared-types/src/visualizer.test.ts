@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  inverseVisualizerResponseInput,
   visualizerResponseGainForPerformance,
   visualizerResponseSample
 } from './visualizer';
@@ -14,17 +13,4 @@ describe('shared visualizer response math', () => {
     expect(visualizerResponseGainForPerformance('high-effect')).toBe(1.35);
   });
 
-  it('inverts the response curve after manual intensity for the 98 percent target', () => {
-    const intensity = 2.16;
-    const responseGain = 1.15;
-    const input = inverseVisualizerResponseInput(0.98, intensity, responseGain);
-
-    expect(visualizerResponseSample(input, responseGain) * intensity).toBeCloseTo(0.98, 5);
-  });
-
-  it('handles zero intensity and invalid values without producing non-finite output', () => {
-    expect(inverseVisualizerResponseInput(0.98, 0, 1.15)).toBe(0);
-    expect(inverseVisualizerResponseInput(Number.NaN, 2.16, 1.15)).toBe(0);
-    expect(Number.isFinite(inverseVisualizerResponseInput(0.98, 2.16, Number.NaN))).toBe(true);
-  });
 });

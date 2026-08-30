@@ -5,7 +5,8 @@ import {
   applyVisualizerIntensity,
   idleVisualizerFrame,
   shapeVisualizerFrame,
-  isSilentWallpaperFrame
+  isSilentWallpaperFrame,
+  virtualVolumeBoostGain
 } from './model';
 
 const frame: VisualizerFrame = {
@@ -19,6 +20,51 @@ const frame: VisualizerFrame = {
 };
 
 describe('visualizer model', () => {
+  it.each([
+    [1, 100],
+    [25, 4],
+    [50, 2],
+    [100, 1]
+  ])('maps Spotify volume %d to a fixed 100-percent reference gain', (volumePercent, expectedGain) => {
+    expect(virtualVolumeBoostGain(volumePercent)).toBe(expectedGain);
+  });
+
+  it.each([0, null, undefined, -1, 101, Number.NaN, Number.POSITIVE_INFINITY])(
+    'leaves zero, missing, and invalid Spotify volume %s unboosted',
+    (volumePercent) => {
+      expect(virtualVolumeBoostGain(volumePercent)).toBe(1);
+    }
+  );
+
+  it.each([1, 25, 50, 100])(
+    'applies the %d-percent input gain before sensitivity, gating, and normalization',
+    (volumePercent) => {
+      const settings = {
+        ...defaultSettings.visualizer,
+        sensitivity: 1,
+        smoothing: 0,
+        decay: 1,
+        clampMax: 1,
+        noiseGate: 0.03,
+        bassWeight: 1,
+        midWeight: 1,
+        trebleWeight: 1
+      };
+      const gain = virtualVolumeBoostGain(volumePercent);
+      const attenuated = 0.4 * volumePercent / 100;
+      const input = { ...frame, source: 'wallpaper-engine' as const, samples: [attenuated], peak: attenuated };
+      const fullVolume = shapeVisualizerFrame(
+        { ...frame, source: 'wallpaper-engine', samples: [0.4], peak: 0.4 },
+        null,
+        settings
+      );
+      const boosted = shapeVisualizerFrame(input, null, settings, gain);
+
+      expect(boosted.samples[0]).toBeCloseTo(fullVolume.samples[0] ?? 0, 5);
+      expect(isSilentWallpaperFrame(input, settings, gain)).toBe(false);
+    }
+  );
+
   it('normalizes each sample only once', () => {
     const shaped = shapeVisualizerFrame(
       { ...frame, samples: [1], peak: 1 },

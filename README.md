@@ -295,9 +295,17 @@ changes only the outward extension of radial bars and waveform; it does not move
 radius rule applies to bottom-up bars and waveform height without moving the bottom anchor. If album art is hidden or its layout item is disabled,
 the `around-album` visualizer is hidden as well. Sensitivity affects normalization, while intensity scales the final rendered output.
 Audio-derived radial extension, bottom bars, and waveform amplitude use the 3× tuning in all three modes and both positions.
-The runtime continuously adapts a playing track's high-water level (about 12 seconds of decay) and applies inverse Spotify
-volume compensation, capped at a combined 4× gain. Its fixed reference is about 98% at the default `2.16` intensity, while
-the configured intensity remains the final display multiplier and the normalized frame stays unchanged. The album motion
+For Wallpaper Engine audio, Spotify volume from 1 through 100 is mapped to a fixed 100-percent reference with
+`100 / volume`; zero, missing, and invalid values use gain 1. The gain is applied before sensitivity, the noise gate, and
+normalization, with no maximum multiplier. It changes only visual response, never Spotify or PC volume. Real audio reacts
+only after the current direct/backend connection has returned a successful Spotify result whose source matches the
+connection and whose item is a playing track or episode. A transient poll failure keeps the last successful playback
+state, while item-null, no-active-device, unauthorized, and forbidden results disable it; a connection change waits for
+the new provider's first success. Paused, stopped, missing-item, mismatched,
+and not-yet-fetched states publish a zero visualizer frame instead of idle bars; album and glowing-object motion ease to neutral
+over about 450ms. Browser mock audio stays unboosted. Wallpaper Engine supplies the PC-wide audio mix, so other audible
+applications are also multiplied while Spotify is eligible. The configured intensity remains the final display multiplier.
+The album motion
 scale ranges from `1.0` to `1.54`; particle speed and brightness retain
 their existing `2.0` and `1.6` caps. The view uses `min(1.35, pow(clamp(sample, 0, 1), 0.72) * responseGain)` with gains
 `0.90`, `1.15`, and `1.35` for low-power, standard, and high-effect. Standard and high-effect add SVG glow layers;
