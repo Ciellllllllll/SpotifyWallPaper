@@ -131,9 +131,10 @@ item is a track or episode, and it is playing. A provider change clears the
 successful-poll flag; a transient network, rate-limit, or unsupported-response
 failure keeps its previous value and the last valid playback. Item-null,
 no-active-device, unauthorized, forbidden, or a later successful paused,
-stopped, or missing-item result disables real audio. Ineligible real audio is replaced by the idle visualizer
-frame, but that idle frame never drives album pulse, offset, or glowing-object
-speed/brightness. Those motion values release to neutral over about 450ms.
+stopped, or missing-item result disables real audio. Ineligible Wallpaper Engine
+audio is replaced by an immediate zero frame without reusing prior normalization
+history. Album pulse, offset, and glowing-object speed/brightness then release to
+neutral over about 450ms. Browser mock mode retains its mock and idle display.
 After an optimistic Play control update, real audio stays ineligible until a
 later successful playing poll confirms it.
 Wallpaper Engine supplies the PC-wide mixed output, so other audible

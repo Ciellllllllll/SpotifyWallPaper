@@ -105,8 +105,8 @@ Confirm:
   attenuated input; zero and unavailable volume use gain 1.
 - Before the first successful Spotify result, and for paused, stopped,
   missing-item, or source-mismatched playback, PC audio does not drive album or
-  glowing-object motion. The idle visualizer remains visible and motion returns
-  to neutral in about 450ms.
+  glowing-object motion. The SVG visualizer receives an immediate zero frame,
+  and motion returns to neutral in about 450ms.
 - A transient Spotify communication failure retains the last valid playing
   eligibility. Changing provider waits for the new provider's first success.
 - Item-null, no-active-device, unauthorized, and forbidden results disable

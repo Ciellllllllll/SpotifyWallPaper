@@ -302,7 +302,7 @@ only after the current direct/backend connection has returned a successful Spoti
 connection and whose item is a playing track or episode. A transient poll failure keeps the last successful playback
 state, while item-null, no-active-device, unauthorized, and forbidden results disable it; a connection change waits for
 the new provider's first success. Paused, stopped, missing-item, mismatched,
-and not-yet-fetched states show the idle visualizer without driving album or glowing-object motion; motion eases to neutral
+and not-yet-fetched states publish a zero visualizer frame instead of idle bars; album and glowing-object motion ease to neutral
 over about 450ms. Browser mock audio stays unboosted. Wallpaper Engine supplies the PC-wide audio mix, so other audible
 applications are also multiplied while Spotify is eligible. The configured intensity remains the final display multiplier.
 The album motion

@@ -534,10 +534,11 @@ export const createWallpaperRuntime = (
           silentSinceMs = null;
         }
       }
-      const displayFrame = frame.source === 'wallpaper-engine' && !acceptsAudio
-        ? idleVisualizerFrame(safeTimestampMs, snapshot.settings.visualizer)
+      const inactiveWallpaperAudio = frame.source === 'wallpaper-engine' && !acceptsAudio;
+      const displayFrame = inactiveWallpaperAudio
+        ? createSilentAudioFrame(safeTimestampMs)
         : { ...frame, timestampMs: safeTimestampMs };
-      if (displayFrame.source === 'idle') previous = null;
+      if (inactiveWallpaperAudio || displayFrame.source === 'idle') previous = null;
       const normalized = shapeVisualizerFrame(displayFrame, previous, snapshot.settings.visualizer, inputGain);
       const shaped = applyVisualizerIntensity(normalized, snapshot.settings.visualizer.intensity);
       const releaseToNeutral = isSilent || !acceptsAudio;

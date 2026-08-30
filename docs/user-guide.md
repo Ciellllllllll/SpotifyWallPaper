@@ -223,8 +223,8 @@ after the current connection successfully reports a playing track or episode.
 Spotify volume 1 through 100 is virtually referenced to 100 with
 `100 / volume`; zero or unavailable volume is left unboosted. This affects only
 the wallpaper response and never changes Spotify or PC volume. Paused, stopped,
-missing-item, and not-yet-fetched states keep the idle bars without pulsing the
-album or lights. A short network failure keeps the last valid playback state,
+missing-item, and not-yet-fetched states set the visualizer to zero while the
+album and lights return to rest. A short network failure keeps the last valid playback state,
 while no active device, no item, expired authorization, or denied access stops
 audio response. Changing connection waits for the next successful result. Browser mock
 audio is never boosted. Because Wallpaper Engine receives the PC-wide audio

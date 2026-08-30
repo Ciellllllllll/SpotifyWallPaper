@@ -90,7 +90,8 @@ Fallback modes:
 - mock waveform in browser preview
 - mock audio uses gain 1 regardless of the mock playback volume
 - paused, stopped, missing-item, source-mismatched, and not-yet-fetched Spotify
-  states keep the idle visualizer but do not drive album or glowing-object motion
+  states publish an immediate zero visualizer frame; prior normalization history
+  is not reused, and album or glowing-object motion releases toward neutral
 - idle animation while no Wallpaper Engine listener is available or a browser
   mock callback is waiting/stale
 - after the Wallpaper Engine source is established, noise-gated silence and a

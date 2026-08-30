@@ -137,8 +137,8 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm very bright and very dark theme cases keep text readable.
 - Confirm low-power mode reduces visualizer work and blur.
 - Confirm paused, stopped, missing-item, source-mismatched, and initial-fetch
-  states retain idle visualizer bars without album or glowing-object motion,
-  and motion returns to neutral in about 450ms.
+  states show a zero visualizer frame without album or glowing-object input;
+  motion returns to neutral in about 450ms.
 - Confirm browser mock audio remains reactive with no volume boost.
 - Confirm automatic glowing-object density is 24/48/96 for low-power/standard/high-effect,
   and that high-effect glow is stronger than standard while low-power disables

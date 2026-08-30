@@ -336,7 +336,7 @@ describe('WallpaperRuntime', () => {
     runtime.dispose();
   });
 
-  it('keeps Wallpaper Engine notifications idle for mock playback', () => {
+  it('zeros Wallpaper Engine notifications during mock playback', () => {
     const runtime = createWallpaperRuntime({
       ...defaultSettings,
       visualizer: {
@@ -362,8 +362,8 @@ describe('WallpaperRuntime', () => {
     });
 
     const snapshot = runtimeSnapshot(runtime);
-    expect(snapshot.previousVisualizerFrame?.source).toBe('idle');
-    expect(snapshot.visualizerFrame?.source).toBe('idle');
+    expect(snapshot.previousVisualizerFrame?.samples).toEqual(Array(64).fill(0));
+    expectZeroWallpaperVisualizer(snapshot);
     expect(snapshot.visualizerMotion).toEqual(neutralVisualizerMotion());
     runtime.dispose();
   });
@@ -422,7 +422,7 @@ describe('WallpaperRuntime', () => {
     }
   );
 
-  it('waits for the active Spotify connection to return a successful playing item before using real audio', async () => {
+  it('outputs zero until the active Spotify connection returns a successful playing item', async () => {
     const pending = deferred<ProviderResult<NormalizedPlayback>>();
     const provider = deferredProvider(pending.promise);
     const settings = settingsForProvider('direct');
@@ -437,7 +437,7 @@ describe('WallpaperRuntime', () => {
     runtime.start();
 
     runtime.acceptAudioFrame(wallpaperFrame(0.8));
-    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+    expectZeroWallpaperVisualizer(runtimeSnapshot(runtime));
     expect(runtimeSnapshot(runtime).visualizerMotion).toEqual(neutralVisualizerMotion());
 
     pending.resolve({ ok: true, value: { ...mockPlayback, source: 'spotify' as const } });
@@ -469,7 +469,7 @@ describe('WallpaperRuntime', () => {
 
     runtime.acceptAudioFrame(wallpaperFrame(0.8));
 
-    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+    expectZeroWallpaperVisualizer(runtimeSnapshot(runtime));
     expect(runtimeSnapshot(runtime).visualizerMotion).toEqual(neutralVisualizerMotion());
     runtime.dispose();
   });
@@ -496,7 +496,7 @@ describe('WallpaperRuntime', () => {
     expect(runtimeSnapshot(runtime).playback.isPlaying).toBe(true);
     runtime.acceptAudioFrame(wallpaperFrame(0.8));
 
-    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+    expectZeroWallpaperVisualizer(runtimeSnapshot(runtime));
     expect(runtimeSnapshot(runtime).visualizerMotion).toEqual(neutralVisualizerMotion());
     runtime.dispose();
   });
@@ -547,18 +547,20 @@ describe('WallpaperRuntime', () => {
       await flushMicrotasks();
       runtime.acceptAudioFrame(wallpaperFrame(0.8));
       expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('wallpaper-engine');
+      expect(runtimeSnapshot(runtime).visualizerFrame?.peak).toBeGreaterThan(0);
 
       timeouts.shift()?.();
       await flushMicrotasks();
       runtime.acceptAudioFrame(wallpaperFrame(0.8));
       expect(runtimeSnapshot(runtime).spotifyError?.kind).toBe('network_error');
       expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('wallpaper-engine');
+      expect(runtimeSnapshot(runtime).visualizerFrame?.peak).toBeGreaterThan(0);
 
       timeouts.shift()?.();
       await flushMicrotasks();
       runtime.acceptAudioFrame(wallpaperFrame(0.8));
       expect(runtimeSnapshot(runtime).playback.isPlaying).toBe(false);
-      expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+      expectZeroWallpaperVisualizer(runtimeSnapshot(runtime));
     } finally {
       runtime.dispose();
       vi.unstubAllGlobals();
@@ -614,7 +616,7 @@ describe('WallpaperRuntime', () => {
         runtime.acceptAudioFrame(wallpaperFrame(0.8));
 
         expect(runtimeSnapshot(runtime).spotifyError?.kind).toBe(kind);
-        expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+        expectZeroWallpaperVisualizer(runtimeSnapshot(runtime));
         expect(runtimeSnapshot(runtime).visualizerMotion.albumScale).toBeLessThanOrEqual(activeScale);
       } finally {
         runtime.dispose();
@@ -641,6 +643,7 @@ describe('WallpaperRuntime', () => {
     await flushMicrotasks();
     runtime.acceptAudioFrame(wallpaperFrame(0.8));
     expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('wallpaper-engine');
+    expect(runtimeSnapshot(runtime).visualizerFrame?.peak).toBeGreaterThan(0);
 
     runtime.applyConfiguration(
       settingsForProvider('backend'),
@@ -648,12 +651,13 @@ describe('WallpaperRuntime', () => {
       true
     );
     runtime.acceptAudioFrame(wallpaperFrame(0.8));
-    expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('idle');
+    expectZeroWallpaperVisualizer(runtimeSnapshot(runtime));
 
     backendPoll.resolve({ ok: true, value: { ...mockPlayback, source: 'spotify' as const, volumePercent: 100 } });
     await flushMicrotasks();
     runtime.acceptAudioFrame(wallpaperFrame(0.8));
     expect(runtimeSnapshot(runtime).visualizerFrame?.source).toBe('wallpaper-engine');
+    expect(runtimeSnapshot(runtime).visualizerFrame?.peak).toBeGreaterThan(0);
     runtime.dispose();
   });
 
@@ -1503,4 +1507,15 @@ const runtimeSnapshot = (runtime: ReturnType<typeof createWallpaperRuntime>) => 
   unsubscribe();
   if (!current) throw new Error('runtime did not emit an initial snapshot');
   return current;
+};
+
+const expectZeroWallpaperVisualizer = (snapshot: ReturnType<typeof runtimeSnapshot>) => {
+  expect(snapshot.visualizerFrame?.source).toBe('wallpaper-engine');
+  expect(snapshot.visualizerFrame?.samples).toEqual(Array(64).fill(0));
+  expect([
+    snapshot.visualizerFrame?.bass,
+    snapshot.visualizerFrame?.mid,
+    snapshot.visualizerFrame?.treble,
+    snapshot.visualizerFrame?.peak
+  ]).toEqual([0, 0, 0, 0]);
 };
