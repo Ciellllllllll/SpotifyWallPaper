@@ -22,12 +22,24 @@ Without Spotify settings, the wallpaper uses mock playback, mock audio, and safe
 
 ## Spotify Developer Setup
 
-The optional public backend beta uses BYO Client ID with Authorization Code and PKCE. Create one Spotify Developer app
-for your own use. Do not create, paste, or store a Spotify Client Secret in the wallpaper or setup page.
+The optional public backend target uses BYO Client ID with Authorization Code
+and PKCE. It is not deployed or open for setup. Do not create an app for this
+target or register its callback yet. A future approved unlock may require one
+Spotify Developer app for your own use. Never create, paste, or store a Spotify
+Client Secret in the wallpaper or setup page.
 
-Spotify-connected Limited beta access is not open yet. The flow below applies
-only after the phase report records the policy, legal, infrastructure, smoke,
-alert-delivery, Security, and SpecGuard gates.
+Spotify-connected Limited beta access is not open. The production origin is
+`https://ciel-spotify-wallpaper.duckdns.org` and runs only as
+`SPOTIFY_MODE=policy_locked`. Every supported Spotify request returns a fixed
+no-store 503 before Node reads request or database state; unsupported methods
+and paths are rejected. Do not
+register its callback, connect a real account, or expect backend playback,
+controls, deletion, reauthorization, or Pairing Token issuance.
+
+The flow below is a dormant future protocol, not an available setup guide. It
+may become active only after a separately reviewed application-mode and
+systemd/network change plus policy, legal, infrastructure, smoke,
+alert-delivery, Security, SpecGuard, Limited beta, and soak evidence.
 
 Required scopes for passive display:
 
@@ -45,8 +57,8 @@ be grandfathered. Check the Developer Dashboard before assuming a new BYO app
 can be created. Passive display does not otherwise require Premium, but
 playback controls can be restricted by account or device capabilities.
 
-The production backend must use a fixed custom HTTPS origin. The operator publishes that origin only after the production
-domain release gate is complete. Use this flow:
+The production backend has one fixed HTTPS origin. If a future unlock is
+approved, use only the origin above and this flow:
 
 1. In the Spotify Developer Dashboard, register exactly the callback URI formed from the official production origin plus
    `/auth/callback`. It must have the same scheme and host as the official `/setup` page and no added trailing slash,
@@ -65,7 +77,7 @@ to maintainers, or put it in a URL, screenshot, recording, log, issue, browser s
 
 ### Six-Month Reauthorization
 
-Spotify authorization expires six months after the most recent authorization. The Worker also requires reauthorization
+Spotify authorization expires six months after the most recent authorization. The public backend also requires reauthorization
 if Spotify returns `invalid_grant`. The wallpaper keeps its last safe display and reports `unauthorized` instead of
 retrying indefinitely.
 
@@ -85,22 +97,26 @@ reauthorization success page does not issue a replacement token.
 4. In Spotify account settings, open Apps and remove the BYO app using the
    name you assigned when creating it.
 
-The setup page calls authenticated `DELETE /api/account`. The Worker first writes a 35-day non-secret `publicId`
-tombstone to a separate deletion ledger, then deletes OAuth sessions, encrypted Spotify tokens, Client ID, Pairing
-digest, refresh leases, and cache from the primary database. The tombstone blocks restored primary data from becoming
-active. Cloudflare D1 Time Travel can retain historical encrypted database state for up to 30 days on Workers Paid; it
-is not live account data, and the 35-day tombstone covers that restore window. Backend deletion does not disconnect the
-app inside Spotify, so step 4 is required.
+The setup page calls authenticated `DELETE /api/account`. The backend
+first writes a 35-day non-secret `publicId` tombstone to
+`spotify_wallpaper_deletion_ledger`, then deletes OAuth sessions, encrypted
+Spotify tokens, Client ID, Pairing digest, refresh leases, and cache from
+`spotify_wallpaper`. The two PostgreSQL 17 databases are dumped, validated,
+retained, and restored independently. After a primary restore, traffic remains
+closed until all retained tombstones are replayed and pending reconciliation
+is zero. Backend deletion does not disconnect the app inside Spotify, so step
+4 remains required after any future unlock.
 
 For an incident or deletion problem, use the repository issue tracker:
 `https://github.com/Ciellllllllll/SpotifyWallPaper/issues`. Include only non-sensitive symptoms and times. Never include
-a Client ID, Pairing Token, Spotify token, authorization code, callback URL, or Worker secret. For a sensitive report,
+a Client ID, Pairing Token, Spotify token, authorization code, callback URL,
+header, IP address, or backend secret. For a sensitive report,
 open a non-sensitive issue asking maintainers for a private reporting channel.
 
 ### Legacy Direct Mode
 
 Direct mode remains available for compatibility and developer testing. A `swpt1.` token contains a Client ID and Spotify
-Refresh Token and is accepted only by direct mode; the public Worker never accepts it. The static GitHub Pages auth page
+Refresh Token and is accepted only by direct mode; the public backend never accepts it. The static GitHub Pages auth page
 is a local developer-only legacy tool, not the Workshop default or a managed
 public authorization path. The repository workflow checks/builds it manually
 but no longer has GitHub Pages deployment permission.
@@ -156,7 +172,7 @@ Normal development builds never contain a Workshop ID. Workshop builds read
 `apps/wallpaper/workshop-metadata.json` instead:
 
 ```powershell
-$env:VITE_SPOTIFY_BACKEND_ORIGIN='https://your-approved-origin.example'
+$env:VITE_SPOTIFY_BACKEND_ORIGIN='https://ciel-spotify-wallpaper.duckdns.org'
 npm run build:workshop -w @spotify-wallpaper/wallpaper
 ```
 
@@ -189,13 +205,14 @@ Visible user property keys:
 - `debug_enabled`
 
 The `spotify_refresh_token` key is displayed as Spotify Token for saved-value
-compatibility. Paste `swpb1.` for the public backend or `swpt1.` for direct
-mode; the prefix selects the provider automatically. The release build rejects
-arbitrary HTTPS origins before sending a credential. Clearing the field
-disconnects Spotify, and malformed prefixed input does not replace the active
-credential. Legacy hidden properties remain readable for existing installs,
-but Settings JSON and the separate provider, backend URL, Client ID, and
-Pairing Token controls are no longer shown.
+compatibility. `swpt1.` selects legacy direct mode. The `swpb1.` grammar is
+retained for dormant public-backend compatibility, but production cannot issue
+or use it while policy-locked. The release build rejects arbitrary HTTPS
+origins before sending a credential. Clearing the field disconnects Spotify,
+and malformed prefixed input does not replace the active credential. Legacy
+hidden properties remain readable for existing installs, but Settings JSON
+and the separate provider, backend URL, Client ID, and Pairing Token controls
+are no longer shown.
 
 If Wallpaper Engine APIs are absent, the same build still works in a browser using mock settings and mock playback.
 
@@ -351,8 +368,12 @@ A minimal Rainmeter reader sample is available at `examples/rainmeter/SpotifyWal
 - Browser opens but no Spotify data appears: this is expected without Spotify settings; mock playback should still render.
 - Wallpaper Engine properties do not apply: reload the existing development wallpaper after rebuilding and confirm the visible property key names.
 - Spotify controls fail: passive display works without Premium, but some playback operations can be denied by Spotify or by restricted devices.
-- Public backend reports `unauthorized`: reauthorize from the same official `/setup` page with the existing Pairing Token. If the backend account was deleted, complete a new setup instead.
-- Public backend setup fails: confirm the Spotify app has the exact production callback URI and that its owner meets Spotify Development Mode Premium and user-limit requirements.
+- Public backend returns `503`: this is the required production policy lock.
+  Keep mock/legacy/local mode; do not attempt authorization or callback
+  registration.
+- A future synthetic OAuth test fails: confirm it is externally unreachable,
+  uses only synthetic credentials, and follows the exact socket/mode contract
+  in `docs/25-public-backend.md`.
 - Lyrics/LRC settings are not available in this milestone. Remove legacy `lyrics` fields from pasted settings JSON if they appear in old samples.
 - Visualizer is idle: Wallpaper Engine audio data may be unavailable; browser preview uses mock or idle audio paths. In Wallpaper Engine, confirm Visualizer Enabled, lower Smoothing, and raise Sensitivity gradually.
 - Rainmeter write fails: confirm the configurator is running in the Tauri shell, not only the browser preview, and verify the output path is writable.

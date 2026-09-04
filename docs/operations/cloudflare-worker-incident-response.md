@@ -1,227 +1,162 @@
-# Cloudflare Worker Incident Response Runbook
+# Public Backend VPS Incident Response Runbook
 
-## Scope
+> The filename is retained temporarily for path compatibility. This is the
+> current Node.js/PostgreSQL/Caddy/OAuth2 Proxy response procedure.
 
-Use this runbook for security, privacy, availability, data-integrity, or cost
-incidents affecting the public Spotify backend. Preview and production are
-handled independently unless evidence shows shared Cloudflare account
-compromise.
+## Scope and evidence rules
 
-Never place any of the following in tickets, chat, screenshots, shell history,
-metrics, or incident documents:
+Use this runbook for security, privacy, availability, integrity, deletion,
+backup, certificate, host, or cost incidents affecting the public backend.
+Production remains `SPOTIFY_MODE=policy_locked` unless a later separately
+approved specification says otherwise.
 
-- Spotify Access or Refresh Token;
-- Pairing Token;
-- authorization code;
-- OAuth state, browser nonce, or PKCE verifier;
-- full OAuth callback URL;
-- encryption or HMAC key;
-- raw request URL or Authorization header; or
-- D1 row export.
+Never place these in tickets, chat, screenshots, shell history, metrics,
+journal excerpts, mail, or incident documents:
 
-Record only timestamps, environment, Worker/version IDs, D1 bookmark IDs,
-aggregate counts, status classes, route classes, and approved key IDs.
-Invocation logs remain disabled. Do not enable them temporarily and do not use
-`wrangler tail` on this Worker.
+- Spotify Access/Refresh Token or Pairing Token;
+- authorization code, OAuth state, PKCE verifier, or callback data;
+- URL, query string, header, Cookie, Client ID, IP address, or `publicId`;
+- encryption/HMAC/session key or systemd credential;
+- PostgreSQL row/export/dump content; or
+- raw exception/upstream response text.
+
+Record only timestamps, release ID/checksum, fixed service/database names,
+component versions, migration IDs, backup checksums, key IDs, fixed event and
+status classes, aggregate counts, and approvals. Caddy/OAuth2 Proxy
+request/auth/access logs remain disabled. Node emits fixed events/counts only;
+do not enable more verbose logging during an incident.
 
 ## Severity
 
-- **SEV-1:** confirmed secret/key exposure, unauthorized account access,
-  deletion rollback, production domain takeover, or uncontrolled cost.
-- **SEV-2:** sustained auth/playback outage, D1 corruption, refresh storm,
-  deletion reconciler backlog, or widespread false reauthorization.
-- **SEV-3:** isolated user failure with no evidence of secret disclosure or
-  persistent data loss.
+- **SEV-1:** confirmed key/credential exposure, unauthorized admin access,
+  lost deletion tombstone, restored deleted account, host takeover, or
+  uncontrolled public exposure/cost.
+- **SEV-2:** sustained outage, PostgreSQL corruption, failed backup validation,
+  reconciliation backlog, socket boundary failure, or widespread false
+  reauthorization.
+- **SEV-3:** isolated fixed-outcome failure without disclosure or persistent
+  data-loss evidence.
 
 Assign incident commander, security lead, operations lead, and communications
-owner. Use a separate operator for command review on SEV-1.
+owner. A second operator reviews every destructive SEV-1 command.
 
 ## First 15 minutes
 
-1. Declare severity and freeze production deployments.
-2. Preserve the current Worker version ID and current D1 Time Travel bookmarks
-   in the restricted incident record:
+1. Declare severity and freeze releases, migrations, rotations, and restores.
+2. Confirm the fixed production origin still returns the policy-lock 503 for
+   all `/setup`, `/auth/*`, and `/api/*` routes.
+3. If routing, host, or integrity is uncertain, stop Caddy public traffic and
+   the Node service. Preserve the deletion-ledger database.
+4. Record current release checksum, installed component versions, both schema
+   versions, latest independent backup metadata, timer states, socket
+   ownership/modes, and aggregate ledger backlog.
+5. Preserve systemd/Caddy/OAuth2 Proxy configuration checksums and approved
+   fixed-event counters. Do not collect request logs.
+6. Revoke compromised host/operator credentials using provider controls and
+   install replacements only through the secret manager/systemd credential
+   path.
+7. If data integrity is uncertain, do not migrate, clean rows, rotate keys, or
+   roll back until both databases and deletion history are accounted for.
 
-   ```powershell
-   npx wrangler deployments list --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-   npx wrangler d1 time-travel info $env:CLOUDFLARE_PRIMARY_D1_NAME --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-   npx wrangler d1 time-travel info $env:CLOUDFLARE_DELETION_D1_NAME --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-   ```
+## Classification and containment
 
-3. Inspect aggregate Analytics Engine and built-in Worker metrics only. Query
-   by route class, status class, latency bucket, rate-limit class, refresh
-   outcome, and cost counters.
-4. For a suspected active compromise or destructive write, remove the
-   production Custom Domain or route traffic to a pre-approved maintenance
-   Worker in the Cloudflare dashboard. Keep the deletion ledger available to
-   responders.
-5. Revoke compromised Cloudflare API tokens and sessions through Cloudflare's
-   account controls. Do not paste replacement credentials into this repository.
-6. If integrity is uncertain, do not run migrations, account cleanup, or code
-   rollback until bookmarks are recorded.
+### Unexpected Spotify-route behavior
 
-## Incident classification and containment
+Any allowed Spotify route/method returning other than the fixed no-store 503,
+or any unlisted method/path reaching Node, is SEV-1. Stop Caddy and Node,
+preserve configuration checksums, and verify `SPOTIFY_MODE=policy_locked` without printing its
+environment file. Check that `synthetic_test` is not installed in a
+production unit and no Node TCP listener exists.
 
-### Pairing Token disclosure
+### Socket or admin-boundary failure
 
-For a single user, instruct the user to:
+Stop traffic if a route works on the wrong socket, a trailing-slash variant is
+accepted, Caddy can reach the admin socket directly, OAuth2 Proxy admits an
+unapproved identity, or socket modes are broader than tracked configuration.
+Restore the reviewed unit/proxy configuration; do not chmod/chown ad hoc.
 
-1. open the official setup page directly;
-2. delete the backend account using the same-origin account-deletion action;
-3. disconnect the app in Spotify account settings; and
-4. reconnect to obtain a new Pairing Token.
+### Pairing or Spotify credential disclosure
 
-Do not ask the user to send the token. Account deletion writes the
-35-day tombstone before primary credential deletion.
+Production should have no live public-backend credential. If dormant or
+restored data is affected, keep traffic closed. For Pairing compromise,
+ledger-first delete affected credentials and require new Pairing Tokens only
+after a future approved unlock. For Spotify token/encryption-key compromise,
+rotate with the emergency key procedure, clear affected ciphertext/leases,
+mark reauthorization required, and disconnect affected Spotify authorization.
+Never ask a user to send a credential.
 
-For disclosure caused by a compromised Pairing HMAC key, delete every
-credential referencing the compromised key through an approved, reviewed
-administrative process, retain deletion tombstones, rotate the keyring, and
-require new Pairing Tokens. Reauthorization alone does not rotate Pairing
-digests.
+### OAuth/callback compromise
 
-### Spotify token or encryption-key disclosure
+Rotate the OAuth-state key, delete all OAuth sessions through the approved
+maintenance transaction, revoke OAuth2 Proxy operator sessions if applicable,
+and verify old synthetic callbacks receive fixed rejection. Production policy
+lock must reject the callback before Cookie/database access.
 
-Immediately:
+### Database corruption, deletion failure, or restore regression
 
-1. rotate token-encryption keys using the emergency path in the key-rotation
-   runbook;
-2. disconnect affected authorizations through Spotify;
-3. force affected credentials to reauthorize; and
-4. remove token ciphertext and active refresh leases.
+Stop traffic and follow the restore runbook. Credential recovery is allowed
+only for primary-only loss while the current live deletion ledger remains
+healthy. Replay every retained tombstone and require pending count zero before
+reopening even locked proxy traffic. Ledger-only, combined-database, cluster,
+or backup-only loss restores no OAuth or credential state and requires every
+user to authorize again.
 
-For a confirmed environment-wide disclosure, this fixed SQL invalidates all
-live Spotify tokens without exposing row data:
+### Backup, disk, or timer failure
 
-```powershell
-npx wrangler d1 execute $env:CLOUDFLARE_PRIMARY_D1_NAME --remote `
-  --command "UPDATE credentials SET auth_status = 'reauth_required', refresh_token_ciphertext = NULL, refresh_token_nonce = NULL, refresh_token_key_id = NULL, access_token_ciphertext = NULL, access_token_nonce = NULL, access_token_key_id = NULL, access_token_expires_at_ms = NULL, refresh_lease_id = NULL, refresh_lease_until_ms = NULL, token_version = token_version + 1, updated_at_ms = CAST(unixepoch() AS INTEGER) * 1000;" `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
+Stop promotion. Check only fixed metadata: unit/timer state, backup timestamp,
+size/checksum, isolated validation result, disk/inode percentage, and
+database/migration identifier. Never open a dump to collect incident evidence.
+Repair capacity or scheduling, then produce and validate a new independent
+dump for each database.
 
-Verify only aggregate status:
+### Abuse or cost incident
 
-```powershell
-npx wrangler d1 execute $env:CLOUDFLARE_PRIMARY_D1_NAME --remote `
-  --command "SELECT auth_status, COUNT(*) AS row_count FROM credentials GROUP BY auth_status;" `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-All affected users must complete a new Spotify authorization. Do not attempt to
-recover or reuse exposed tokens.
-
-### OAuth-state or callback handling compromise
-
-1. Rotate `OAUTH_STATE_HMAC_KEY` interactively.
-2. Delete all `oauth_sessions`.
-3. Keep invocation logs disabled.
-4. Require users with in-flight setup to restart from `/setup`.
-5. Verify callback responses contain no code, state, callback URL, or exception
-   text.
-
-### Deletion failure or restored deleted accounts
-
-1. Stop public traffic.
-2. Do not restore the deletion-ledger D1 to an older point unless that ledger
-   itself is corrupt.
-3. Follow the restore runbook to reset `reconciled_at_ms`, replay every
-   tombstone in batches of 100, and verify zero pending rows before resuming
-   traffic.
-4. Confirm the scheduled reconciler aggregate shows success and no growing
-   backlog.
-5. Notify affected users to disconnect the app in Spotify if token exposure is
-   possible.
-
-### Abuse, refresh storm, or cost incident
-
-1. Confirm the 50%, 80%, or 100% budget alert and identify the aggregate route
-   and status classes causing growth.
-2. Keep Cloudflare Rate Limiting bindings enabled. Do not increase limits
-   during the incident.
-3. Confirm Spotify `Retry-After` backoff is being honored by Client ID.
-4. If spend is uncontrolled, remove the Custom Domain or use the maintenance
-   Worker.
-5. Review Worker request/CPU, D1 rows read/written, Analytics Engine data
-   points, and Spotify refresh outcome counts.
-6. Treat per-location Rate Limiting as abuse mitigation, not a globally strict
-   Spotify quota.
-7. Before reopening public traffic, repeat the external zone-level WAF,
-   shared-NAT, distributed invalid-token, authenticated-token, Spotify upstream,
-   and Worker/D1/Analytics cost gates. Keep public traffic closed if any gate
-   lacks current evidence.
+Because production Spotify routes are locked before rate limiting/database
+access, unexpected application cost indicates routing, health-check, host, or
+configuration failure. Stop public traffic if cost is uncontrolled. Use fixed
+service counters and provider billing totals only; do not enable access logs
+or collect IP addresses.
 
 ## Investigation
 
 Allowed evidence:
 
-- Cloudflare account audit events;
-- deployment and version metadata;
-- D1 Time Travel bookmarks;
-- migration lists;
-- aggregate Analytics Engine data;
-- built-in request/error/CPU metrics; and
-- aggregate D1 counts grouped by status or key ID.
+- systemd unit/timer state and configuration checksums;
+- artifact checksum and component versions;
+- PostgreSQL schema versions and aggregate status/key-ID counts;
+- independent backup timestamps, sizes, checksums, and validation outcomes;
+- socket file ownership/mode and local listener inventory;
+- certificate lifetime and DNS record state;
+- fixed Node outcome counters and secret-free Postfix delivery outcomes; and
+- provider account audit/billing events that contain no prohibited request
+  data.
 
-Forbidden evidence:
-
-- invocation/request logs;
-- raw callback or request URLs;
-- browser history exports;
-- Authorization headers;
-- raw D1 exports; and
-- screenshots containing setup success tokens.
-
-If a diagnostic tool would collect a forbidden field, do not run it. Reproduce
-in preview with synthetic credentials and fixed secret-free errors instead.
+If a tool would collect a URL, query, header, callback, identity token, IP,
+row, dump content, or secret, do not run it. Reproduce with synthetic input in
+an externally unreachable environment.
 
 ## Recovery
 
 1. Apply the relevant key-rotation or restore runbook.
-2. Run both D1 `migrations list` gates and confirm no unapplied migration.
-3. Deploy or roll back only with a reviewed generated config.
-4. Run secret-free health, setup, malformed-token 401, OAuth, playback,
-   control, reauthorization, deletion, and reconciler smoke tests.
-5. Confirm invocation logs are still disabled in the deployed version.
-6. Verify aggregate alerts and the 50%, 80%, and 100% budget alerts deliver to
-   at least two maintainers.
-7. Resume a limited production beta before restoring normal traffic.
+2. Verify exact migrations for both PostgreSQL databases.
+3. produce and independently validate new dumps;
+4. deploy or roll back only a checksum-verified artifact;
+5. verify public/admin socket route matrices, permissions, and absence of a
+   Node TCP listener;
+6. run DB-independent health plus the complete early policy-lock matrix;
+7. confirm Caddy/OAuth2 Proxy logging is disabled and Node events are fixed;
+8. verify local readiness and every alert-delivery path; and
+9. complete the required soak while real Spotify traffic remains prohibited.
 
-## User communication
+## Communication and closure
 
-State what capability is affected and whether reauthorization, account
-deletion, Spotify disconnect, or a new Pairing Token is required. Never include
-or request a token, callback URL, Client ID, or key.
+Communicate only affected capability, time range, safe user action, and
+whether a future reauthorization/deletion/disconnect would be required. Give
+the official origin as a plain origin only; never publish a callback link or
+request a token.
 
-For confirmed credential exposure:
-
-- explain that existing backend authorization was invalidated;
-- require Spotify-side disconnect and reauthorization;
-- require account deletion/reconnect when Pairing authentication was affected;
-  and
-- provide the official setup origin as a plain origin, not a callback link.
-
-## Closure and soak
-
-The incident remains open until:
-
-- containment and invalidation are verified;
-- D1 and deletion-ledger consistency gates pass;
-- no forbidden data was persisted in metrics or artifacts;
-- aggregate error, refresh, rate-limit, reconciliation, and cost metrics return
-  to baseline;
-- Security and Operations reviewers approve recovery; and
-- a new 72-hour Wallpaper Engine soak completes.
-
-The soak must include playback state changes, Access Token refresh, Spotify
-429, backend outage, D1 failure, reauthorization, account deletion, cron
-reconciliation, Worker deploy, and Wallpaper Engine restart. Any material auth,
-crypto, persistence, CORS, binding, or origin fix restarts the 72-hour clock.
-
-## References
-
-- [Cloudflare Worker observability](https://developers.cloudflare.com/workers/observability/)
-- [Cloudflare usage-based billing](https://developers.cloudflare.com/billing/understand/usage-based-billing/)
-- [Worker rollbacks](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/)
-- [D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/)
+Close only after containment, independent database/backup validation,
+ledger reconciliation, socket/policy-lock verification, alert recovery,
+Security/Operations approval, and the new soak are recorded. A material auth,
+crypto, persistence, route, socket, proxy, origin, or logging fix restarts the
+soak and requires updated review.

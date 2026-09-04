@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic Spotify Wallpaper deletion reconciliation
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=10m
+Persistent=true
+Unit=swp-reconcile.service
+
+[Install]
+WantedBy=timers.target

@@ -1,279 +1,196 @@
-# Cloudflare Worker D1 Restore Runbook
+# Public Backend PostgreSQL Restore Runbook
+
+> The filename is retained temporarily for path compatibility. This runbook
+> applies to the two PostgreSQL 17 databases on the VPS.
 
 ## Safety model
 
-The public backend uses two independent D1 databases:
-
-- **primary:** OAuth sessions, encrypted Spotify tokens, Pairing HMAC digests,
-  refresh leases, and Spotify backoff;
-- **deletion ledger:** 35-day tombstones used to prevent a primary restore from
-  resurrecting deleted accounts.
-
-Restore the primary database without rolling the deletion ledger backward.
-After any primary restore, replay every retained tombstone before public traffic
-resumes. The Worker reconciler processes at most 100 unreconciled tombstones per
-scheduled run and marks each row only after primary data deletion succeeds.
-
-D1 Time Travel overwrites a database in place and cancels in-flight queries.
-Workers Paid retains up to 30 days of Time Travel history; the deletion ledger
-retains tombstones for 35 days to cover that restore window.
-
-## Required operator variables
-
-Supply values from the deployment inventory or restricted incident record:
-
-```text
-CLOUDFLARE_DEPLOY_ENV
-CLOUDFLARE_GENERATED_CONFIG
-CLOUDFLARE_PRIMARY_D1_NAME
-CLOUDFLARE_DELETION_D1_NAME
-CLOUDFLARE_PRIMARY_RESTORE_BOOKMARK
-CLOUDFLARE_DELETION_RESTORE_BOOKMARK
-CLOUDFLARE_PREVIEW_PUBLIC_BASE_URL
-CLOUDFLARE_PRODUCTION_PUBLIC_BASE_URL
-```
-
-Use the environment-prefixed public base URL matching
-`CLOUDFLARE_DEPLOY_ENV`. Do not create or rely on an unprefixed
-`CLOUDFLARE_PUBLIC_BASE_URL` generator input.
-
-`CLOUDFLARE_DELETION_RESTORE_BOOKMARK` is used only when the deletion ledger
-itself is corrupt. Do not set or use it for an ordinary primary restore.
-
-Do not place bookmark values in the repository. Bookmarks are operational
-metadata and belong in the restricted incident record.
-
-## 1. Stop traffic and preserve recovery points
-
-1. Freeze deployments.
-2. Remove the affected Custom Domain or route it to the pre-approved
-   maintenance Worker in the Cloudflare dashboard.
-3. Confirm account-deletion actions are also unavailable so no new tombstone is
-   written while restore sequencing is undecided.
-4. Record current Worker version and both current bookmarks:
-
-   ```powershell
-   npx wrangler deployments list --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-   npx wrangler d1 time-travel info $env:CLOUDFLARE_PRIMARY_D1_NAME --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-   npx wrangler d1 time-travel info $env:CLOUDFLARE_DELETION_D1_NAME --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-   ```
-
-The restore command returns a bookmark that can undo the restore. Record it
-outside the repository before continuing.
-
-## 2. Validate the target
-
-Confirm:
-
-- the selected bookmark precedes the corrupt write but is no older than the
-  available Time Travel window;
-- the database reports the production D1 storage backend;
-- the generated config points to the intended environment's two database IDs;
-- the deletion ledger contains the complete period from the selected primary
-  bookmark through the incident; and
-- required old encryption/HMAC keys remain available in offline escrow if the
-  restored rows reference them.
-
-Inspect database metadata:
-
-```powershell
-npx wrangler d1 info $env:CLOUDFLARE_PRIMARY_D1_NAME --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-npx wrangler d1 info $env:CLOUDFLARE_DELETION_D1_NAME --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-Do not export either database for inspection.
-
-## 3. Restore the primary database
-
-This command is destructive. A second operator must verify the environment,
-database name, and bookmark before confirmation:
-
-```powershell
-if ([string]::IsNullOrWhiteSpace($env:CLOUDFLARE_PRIMARY_RESTORE_BOOKMARK)) {
-  throw 'Primary restore bookmark is required.'
-}
-npx wrangler d1 time-travel restore $env:CLOUDFLARE_PRIMARY_D1_NAME `
-  --bookmark $env:CLOUDFLARE_PRIMARY_RESTORE_BOOKMARK `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-Do not resume traffic. Do not restore the deletion ledger as part of this step.
-
-## 4. Reapply schema gates
-
-List and apply migrations for both bindings, then require a clean second list:
-
-```powershell
-npx wrangler d1 migrations list DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-npx wrangler d1 migrations apply DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-npx wrangler d1 migrations list DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-
-npx wrangler d1 migrations list DELETION_DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-npx wrangler d1 migrations apply DELETION_DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-npx wrangler d1 migrations list DELETION_DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-Both final lists must report no unapplied migrations.
-
-## 5. Reset deletion reconciliation checkpoints
-
-Reset every retained tombstone and its retry telemetry, including rows
-reconciled before the restore:
-
-```powershell
-npx wrangler d1 execute $env:CLOUDFLARE_DELETION_D1_NAME --remote `
-  --command "UPDATE deletion_tombstones SET reconciled_at_ms = NULL, reconciliation_attempts = 0, last_attempt_at_ms = NULL;" `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-Count pending rows:
-
-```powershell
-npx wrangler d1 execute $env:CLOUDFLARE_DELETION_D1_NAME --remote `
-  --command "SELECT COUNT(*) AS pending FROM deletion_tombstones WHERE reconciled_at_ms IS NULL;" `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-The reset must occur after primary restore and before any traffic resumes.
-
-## 6. Complete 100-row reconciliation batches
-
-The production cron invokes the same reconciler used by account deletion. Each
-run processes at most 100 rows ordered by `public_id`. Keep traffic closed and
-wait for the configured scheduled run. Cron changes can take up to 15 minutes
-to propagate, so do not change the schedule during an incident.
-
-After each scheduled run, repeat:
-
-```powershell
-npx wrangler d1 execute $env:CLOUDFLARE_DELETION_D1_NAME --remote `
-  --command "SELECT COUNT(*) AS pending FROM deletion_tombstones WHERE reconciled_at_ms IS NULL;" `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-
-npx wrangler d1 execute $env:CLOUDFLARE_DELETION_D1_NAME --remote `
-  --command "SELECT COUNT(*) AS reconciled FROM deletion_tombstones WHERE reconciled_at_ms IS NOT NULL;" `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-Expected behavior:
-
-- `pending` decreases by no more than 100 per successful scheduled run;
-- a failed primary deletion leaves that tombstone pending;
-- rerunning a batch is idempotent; and
-- expired tombstones are removed only after they are reconciled.
-
-Do not resume traffic until `pending` is exactly zero. Confirm the Analytics
-Engine scheduled-reconciler aggregate reports success for every required batch.
-For more than 100 tombstones, continue scheduled runs until all batches finish;
-do not assume the first run completed the restore.
-
-## 7. Validate restored data
-
-Use aggregate-only queries:
-
-```powershell
-npx wrangler d1 execute $env:CLOUDFLARE_PRIMARY_D1_NAME --remote `
-  --command "SELECT auth_status, COUNT(*) AS row_count FROM credentials GROUP BY auth_status;" `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-
-npx wrangler d1 execute $env:CLOUDFLARE_PRIMARY_D1_NAME --remote `
-  --command "SELECT refresh_token_key_id, COUNT(*) AS row_count FROM credentials GROUP BY refresh_token_key_id;" `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-
-npx wrangler d1 execute $env:CLOUDFLARE_PRIMARY_D1_NAME --remote `
-  --command "SELECT pairing_key_id, COUNT(*) AS row_count FROM credentials GROUP BY pairing_key_id;" `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-If a restored row references a retired key ID, restore that key from offline
-escrow to the live keyring before smoke testing. Never rewrite a key ID to make
-the row appear current.
-
-## 8. Deletion-ledger restore exception
-
-Restore the deletion ledger only when it is independently corrupt and no
-newer healthy copy exists. Before restoring it:
-
-1. preserve every known deletion after the target bookmark in a restricted
-   incident record without Pairing Tokens;
-2. stop all setup and account-deletion traffic;
-3. require Security and Operations approval; and
-4. record the current ledger bookmark for undo.
-
-Then:
-
-```powershell
-if ([string]::IsNullOrWhiteSpace($env:CLOUDFLARE_DELETION_RESTORE_BOOKMARK)) {
-  throw 'Deletion-ledger restore bookmark is required.'
-}
-npx wrangler d1 time-travel restore $env:CLOUDFLARE_DELETION_D1_NAME `
-  --bookmark $env:CLOUDFLARE_DELETION_RESTORE_BOOKMARK `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-Reinsert every post-bookmark deletion through the approved tombstone-writing
-procedure, reapply ledger migrations, reset all `reconciled_at_ms` values, and
-run every 100-row batch to `pending = 0`. If any post-bookmark deletion cannot
-be proven present, do not resume traffic; invalidate the potentially affected
-credentials and require account deletion/reconnect.
-
-## 9. Smoke and resume
-
-Before restoring the Custom Domain:
-
-- `/health` returns the expected service value;
-- `/setup` returns without cached or secret-bearing content;
-- malformed Bearer authentication returns fixed 401;
-- a synthetic preview credential can authorize and refresh;
-- existing credentials using active/previous keys can decrypt;
-- reauthorization works without changing Pairing identity;
-- account deletion writes the ledger first;
-- `pending` remains zero; and
-- invocation logs remain disabled.
-
-Restore traffic as a limited beta and monitor aggregate status, refresh,
-rate-limit, reconciliation, D1, and cost metrics.
-
-## 10. Roll back the restore
-
-If the restore worsens integrity, stop traffic again and restore the primary to
-the pre-restore bookmark returned by Cloudflare:
-
-```powershell
-if ([string]::IsNullOrWhiteSpace($env:CLOUDFLARE_PRIMARY_UNDO_BOOKMARK)) {
-  throw 'Primary undo bookmark is required.'
-}
-npx wrangler d1 time-travel restore $env:CLOUDFLARE_PRIMARY_D1_NAME `
-  --bookmark $env:CLOUDFLARE_PRIMARY_UNDO_BOOKMARK `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-Repeat migration gates, `reconciled_at_ms` reset, every 100-row batch, and all
-smoke tests. A Worker code rollback alone does not undo D1 restoration.
-
-## 11. Post-restore soak
-
-Complete a new 72-hour Wallpaper Engine soak before normal traffic or release.
-Cover playing, paused, stopped, Access Token refresh, Spotify 429,
-`invalid_grant`, reauthorization, deletion, scheduled reconciliation, Worker
-deploy, backend outage, D1 failure, and Wallpaper Engine restart.
-
-Document bookmark IDs, aggregate counts, batch count, migration names, Worker
-version, reviewer approvals, and soak result. Do not attach D1 exports, request
-logs, callback URLs, or secret values.
-
-## References
-
-- [D1 Time Travel and backups](https://developers.cloudflare.com/d1/reference/time-travel/)
-- [D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)
-- [Cloudflare Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)
+The public backend uses:
+
+- `spotify_wallpaper` for live OAuth/credential state;
+- `spotify_wallpaper_deletion_ledger` for 35-day non-secret deletion
+  tombstones and reconciliation state.
+
+The databases are dumped, checksummed, validation-restored, retained, and
+restored independently. A primary restore must not erase newer deletion
+history. Public/admin Spotify routes remain closed throughout recovery even
+though production is normally policy-locked.
+
+Credential recovery is allowed only when the primary database alone is lost
+and the current live deletion ledger remains healthy. If the ledger alone is
+lost, both databases are lost, the cluster is lost, or only backups remain,
+do not restore any OAuth, credential, setup, or confirmation state. Recreate
+empty databases and require every user to authorize again.
+
+## Required evidence
+
+Before a destructive command, two operators verify:
+
+- incident ID and fixed database name;
+- selected dump timestamp, checksum, PostgreSQL major version, and migration
+  set;
+- isolated validation-restore result;
+- current release ID and schema versions;
+- the complete deletion-history interval covered by the retained ledger; and
+- availability of every key ID needed by restored ciphertext/digests.
+
+Credentials come from restricted PostgreSQL service definitions. Do not put a
+password, row value, dump path containing sensitive text, or connection URI on
+the command line or in the repository. Record only fixed names, timestamps,
+sizes, checksums, migration IDs, aggregate counts, and approvals.
+
+Before any dump or validation copy, root sets `umask 077`. Every backup and
+temporary archive remains on the same VPS, is owned by root with mode `0600`,
+is created at an exact absolute path, and is atomically renamed only after
+`pg_restore --list` and checksum validation. Refuse wrong owner/mode/path.
+An emergency dump remains at its unique temporary path until an isolated
+restore plus schema/count validation succeeds; only then may it be atomically
+renamed into a retained series. A failed candidate is deleted at its exact
+verified temporary path and is never presented as a backup.
+
+## 1. Stop traffic and writes
+
+1. freeze deploys, migrations, rotations, backup pruning, and timers that
+   mutate either database, and stop the migration unit with
+   `systemctl stop swp-migrate.service`;
+2. stop Caddy, OAuth2 Proxy, and the Node service;
+3. verify the public/admin sockets are absent or unreachable;
+4. record current artifact checksum, schema versions, and latest independent
+   backup metadata;
+5. take new emergency custom-format dumps of both current databases when they
+   remain readable through separate root-owned temporary files; and
+6. checksum and validation-restore those emergency dumps independently.
+
+Do not enable request logging or use application traffic as a readiness test.
+
+## 2. Validate candidate dumps
+
+For each database separately:
+
+1. verify checksum and ownership;
+2. inspect the archive table-of-contents only for expected schema objects;
+3. restore into an explicitly named isolated temporary PostgreSQL 17
+   validation database owned by the restore role;
+4. apply no automatic application migration;
+5. verify exact schema version, required constraints/indexes, and fixed
+   aggregate status/key-ID counts;
+6. verify no unexpected extension, owner, executable procedure, or public
+   privilege; and
+7. drop only that explicit validation database after evidence is recorded.
+
+Delete validation copies and failed temporary archives immediately after
+exact path/owner/mode validation. Retention pruning applies independently to
+each database and never uses a broad path or unresolved glob. No dump is
+copied off the VPS; VPS/disk loss therefore starts from empty databases and
+requires reauthorization.
+
+Do not select credential columns or include dump/listing output in a report.
+A candidate that does not validate exactly is rejected.
+
+## 3. Choose restore sequence
+
+### Healthy ledger, primary restore
+
+Keep `spotify_wallpaper_deletion_ledger` at its current point. Restore only
+`spotify_wallpaper`, then replay every retained ledger tombstone before any
+traffic resumes.
+
+### Ledger, combined, cluster, or backup-only loss
+
+Reject credential recovery. Do not rebuild a live ledger from an older dump
+and then restore the primary: a deletion after that dump could be missed.
+Create empty databases, apply the tracked migrations, and require every user
+to authorize again. This deliberately sacrifices availability to prevent a
+deleted credential from returning.
+
+## 4. Restore
+
+Use the dedicated restore role and `ON_ERROR_STOP`. The primary-only procedure
+requires the fixed `spotify_wallpaper` database name to be absent; if it still
+exists, stop and investigate instead of renaming or dropping it automatically.
+Restore into a new explicitly named recovery database and never overwrite an
+active database in place. Root may use the local peer-authenticated PostgreSQL
+administrator only as the recovery broker; application services never use it.
+
+1. create the recovery database from a clean template;
+2. set the recovery database owner to `swp_migrator`, revoke all database
+   privileges from `PUBLIC`, and grant only the fixed CONNECT set;
+3. restore the validated custom-format dump with `--role=swp_migrator`,
+   `--no-owner`, and `--no-privileges`;
+4. apply every retained live-ledger tombstone and clear transient OAuth/setup/
+   confirmation/backoff rows while acting as `swp_migrator`;
+5. apply the tracked runtime grants, validate the recovery database against the
+   recovery profile, then close all connections and rename it to
+   `spotify_wallpaper`;
+6. verify the fixed database name, database/object owner, database/table/schema
+   ACLs, exact migration/schema state, and aggregate counts again against the
+   live profile;
+7. do not restore the deletion ledger in a credential-recovery procedure; and
+8. keep Node, OAuth2 Proxy, and Caddy stopped.
+
+The procedure deletes only its newly created recovery database when a step
+fails. It never drops or renames an existing fixed primary database.
+
+## 5. Reconcile deletions
+
+After any primary restore:
+
+1. reset reconciliation checkpoints for every retained tombstone that could
+   overlap the restored primary;
+2. run the local ledger reconciler in bounded batches ordered by stable
+   `publicId`;
+3. continue after a row failure while leaving that row pending;
+4. verify fixed aggregate attempted, reconciled, failed, pending,
+   oldest-pending, and retry counts; and
+5. require `pending = 0`.
+
+Every authenticated operation checks the ledger first in the dormant
+protocol. Expired tombstones are removed only after successful reconciliation
+and the full 35-day retention. Do not resume traffic when one row remains
+pending or a known deletion is missing.
+
+## 6. Keys and migrations
+
+If a restored row references a previous key ID, restore that key from approved
+offline escrow before synthetic verification. Never rewrite a key ID to make a
+row appear current.
+
+Run only tracked, reviewed SQL migrations as a separate operation after the
+restore. Verify both databases independently. An unexpected or missing
+migration keeps traffic closed; application startup must not repair schema.
+
+## 7. Verification
+
+Before restarting:
+
+- independent fresh dumps of the restored databases pass checksum and isolated
+  validation restore;
+- both schema versions match the intended release;
+- ledger pending count is zero and the deletion interval is complete;
+- roles/grants are least-privilege;
+- local disk/inode, backup freshness, timer, and certificate checks pass;
+- the artifact and systemd/proxy configurations match reviewed checksums; and
+- Caddy/OAuth2 Proxy logging remains disabled.
+
+Restart Node in `SPOTIFY_MODE=policy_locked`, then OAuth2 Proxy and Caddy.
+Verify DB-independent `/health`, exact socket route tables, absence of a Node
+TCP listener, and the fixed early no-store 503 for each allowed Spotify
+route/method. Verify wrong methods and paths remain rejected. Do not run a real
+Spotify OAuth or Bearer-token smoke test.
+
+## 8. Failed restore and rollback
+
+If recovery worsens integrity, stop all services and switch back only to an
+independently validated emergency recovery point. Repeat the full ledger
+preservation, restore, reconciliation, migration, dump-validation, socket, and
+policy-lock gates.
+
+Binary rollback alone does not undo a database restore. Never roll the ledger
+back merely to match a primary timestamp.
+
+## 9. Closure
+
+Complete a new soak and record database/dump identifiers, checksums, schema
+versions, batch/aggregate reconciliation results, key IDs, artifact checksum,
+operator approvals, alerts, and soak result. Do not attach dumps, row content,
+URLs, callback data, request logs, headers, IP addresses, or credentials.

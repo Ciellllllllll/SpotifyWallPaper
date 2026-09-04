@@ -131,12 +131,15 @@ Completion:
 
 ## Post-v0.0.1: Optional public backend
 
-Implement the formally approved Cloudflare Worker after the local backend and direct provider contracts are stable.
+Implement the formally approved Node.js 22/PostgreSQL 17 VPS backend after the
+local backend and direct provider contracts are stable. Production completes
+in `SPOTIFY_MODE=policy_locked`; dormant OAuth is acceptance-tested only with
+externally unreachable synthetic inputs.
 
 Order:
 
 1. Public-backend specification and policy gate.
-2. Worker/D1 test scaffold.
+2. Node ESM/PostgreSQL test scaffold and exact public/admin socket allowlists.
 3. OAuth session, pairing, and encrypted storage.
 4. Spotify refresh, normalized playback, controls, and backoff.
 5. Trusted-origin wallpaper integration.
@@ -145,7 +148,10 @@ Order:
 Completion:
 
 - Browser mock, direct legacy, and loopback Rust backend still work.
-- D1 exports and logs contain no plaintext credentials.
+- Independent PostgreSQL dumps and all fixed-event logs contain no plaintext
+  credentials.
+- The locked VPS deployment and dormant hardened OAuth test line are accepted
+  separately; neither authorizes real Spotify traffic.
 - Refresh is single-flight under concurrency.
 - Six-month reauthorization and deletion work.
 - Security and SpecGuard reviews have no unresolved valid findings.

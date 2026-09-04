@@ -1,263 +1,395 @@
-# Optional Public Backend
+# Public Backend
 
-## Scope
+## Status and purpose
 
-The public backend is an optional TypeScript Cloudflare Worker using D1. It exists so a Wallpaper Engine Workshop build can poll Spotify without receiving Spotify Access or Refresh Tokens.
+The optional public backend is a Node.js 22 ESM service on a Linux VPS. It
+runs behind Caddy and OAuth2 Proxy, persists encrypted credential state in
+PostgreSQL 17, and preserves the wallpaper's normalized playback/control
+contract without placing Spotify Access or Refresh Tokens in Wallpaper
+Engine.
 
-The current architecture keeps this Worker's OAuth, D1, encryption, refresh,
-and deletion state machines separate from wallpaper rendering. The Worker
-conforms at its provider boundary to the versioned provider-v1 fixtures.
-Invocation logs remain disabled, and the Worker remains optional for browser
-mock, direct legacy, and loopback operation.
+The fixed production origin is:
 
-The loopback Rust backend remains the local-development backend. Direct browser-side refresh and `swpt1.` remain legacy-compatible. Browser mock mode remains available without any backend.
+`https://ciel-spotify-wallpaper.duckdns.org`
 
-The loopback Rust backend contract remains:
+No alternate production hostname may be selected automatically. Production
+is complete only in `SPOTIFY_MODE=policy_locked`; Spotify-connected setup and
+API traffic are intentionally unavailable. The locked VPS deployment and the
+dormant hardened OAuth implementation are separate acceptance lines. Neither
+authorizes real Spotify traffic.
 
-```text
-GET  /health
-GET  /auth/start
-GET  /auth/callback
-GET  /api/playback
-POST /api/control
-```
+Browser mock, legacy direct, and loopback Rust modes remain independent. The
+public backend must never become required for wallpaper startup.
 
-It binds only to `127.0.0.1` or `::1` and uses the same success/error envelope, normalized playback, and control JSON as the public Worker.
+## Runtime boundary
 
-Legacy direct token grammar is `swpt1.<base64url-json>`, with a maximum total length of 20,000 characters. The decoded JSON must be an object containing exactly compatible `v: 1`, non-empty string `clientId`, and non-empty string `refreshToken` fields. Invalid encoding, JSON, version, types, empty values, or excessive length is rejected without logging the input. `swpt1.` is parsed only by direct legacy mode and is never accepted as a public Worker Bearer token.
+The production stack is:
 
-## Spotify application mode
+- Caddy for TLS and exact external routing;
+- OAuth2 Proxy for operator authentication on the admin route family;
+- one Node.js 22 ESM process listening only on two permission-separated
+  AF_UNIX sockets;
+- PostgreSQL 17 with two independently operated databases; and
+- systemd units and timers for service lifecycle, migrations, backup,
+  validation, deletion reconciliation, and readiness checks.
 
-The initial Worker uses BYO Client ID with Authorization Code + PKCE and no Client Secret. A managed shared Spotify application is out of scope until Extended Quota approval and a separate threat-model review.
+Node must not open a TCP listener in production. The public and admin sockets
+have separate owning groups and modes. Caddy can reach the public socket.
+OAuth2 Proxy and the authenticated admin proxy path can reach the admin
+socket. A future Spotify unlock requires a separately reviewed systemd
+unit/network change as well as an application-mode change.
 
-Development Mode is limited by Spotify and is not a scalable managed public-app foundation. General Workshop publication requires policy confirmation for the BYO model and for the wallpaper's use of artwork and audio-reactive visuals.
+The Node service owns HTTP routing, dormant OAuth PKCE, encrypted persistence,
+Pairing Token verification, refresh coordination, Spotify proxying,
+reauthorization, and ledger-first deletion. It does not render, process audio,
+mutate the DOM, replace shared playback normalization, or own Rust/WASM visual
+logic.
 
-## Routes
+## Modes and fail-closed startup
 
-```text
-GET    /health
-GET    /setup
-GET    /privacy
-GET    /terms
-POST   /auth/start
-GET    /auth/callback
-GET    /auth/confirm
-POST   /auth/confirm
-POST   /auth/reauthorize
-GET    /api/playback
-POST   /api/control
-DELETE /api/account
-```
+Exactly two application modes are recognized:
 
-Playback and control accept `Authorization: Bearer swpb1.<publicId>.<secret>`. Pairing Tokens never use URL parameters or cookies.
+- `policy_locked`: the only production mode;
+- `synthetic_test`: non-production testing with synthetic credentials and no
+  externally reachable listener.
 
-## OAuth
+An absent or unknown `SPOTIFY_MODE` fails startup. Production service units
+set `SPOTIFY_MODE=policy_locked`. `synthetic_test` must not be reachable
+through Caddy, OAuth2 Proxy, a public TCP port, or a production socket.
 
-- `/setup` shows Development Mode limits plus links to the Privacy Notice and
-  EULA before authorization.
-- `/auth/start` accepts a bounded Spotify Client ID and explicit legal
-  acceptance from a setup-Cookie/proof-bound POST.
-- `/auth/reauthorize` also requires explicit acceptance of the current legal
-  documents.
-- `/setup` is rate-limited before any D1 write and atomically permits at most
-  three unexpired sessions per keyed issuer digest under concurrent requests.
-  It creates a ten-minute, purpose-bound, single-use setup session. If an
-  exact, still-valid setup Cookie is presented to `GET /setup`, the Worker
-  atomically retires and replaces that Cookie's previous unconsumed session
-  instead of increasing the outstanding-session count. A missing, malformed,
-  or unmatched Cookie cannot retire another session. D1 stores only keyed
-  browser/issuer digests, legal-document versions, expiry, and consumption
-  state. The raw nonce is held in the exact
-  `__Host-swp-setup=<43-character-base64url-random>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=600`
-  Cookie with no `Domain`, and the signed HTML proof is bound to the session.
-- `/auth/start` is rate-limited before session lookup, requires the exact
-  setup Cookie, signed proof, and current legal acceptance, and atomically
-  consumes the setup session. It clears the setup Cookie on every terminal
-  result. A proof without its Cookie, cross-site browser form, replay, wrong
-  Cookie, wrong purpose, or expired session cannot create OAuth state.
-  `AUTH_FLOW_VERSION_MISMATCH` is a recoverable compatibility result rather
-  than a terminal session result: it occurs before D1 lookup/mutation and
-  preserves an exactly parsed hardened setup Cookie so the next hardened
-  `GET /setup` can retire/replace its row. A malformed setup Cookie is cleared.
-- The hardened flow uses exact, mutually exclusive protocol values:
+Locked startup reads only `SPOTIFY_MODE`, `PUBLIC_SOCKET_PATH`, and
+`ADMIN_SOCKET_PATH`; it does not parse database or Spotify-related secrets.
+`synthetic_test` additionally requires `PUBLIC_BASE_URL`, `PG_SOCKET_DIR`, the
+OAuth/encryption/Pairing key settings, current legal versions, and explicit
+`SYNTHETIC_AUTHORIZE_ENDPOINT`, `SYNTHETIC_TOKEN_ENDPOINT`, and
+`SYNTHETIC_PLAYBACK_ENDPOINT` values. Those three endpoints must be HTTPS and
+must not use `accounts.spotify.com` or `api.spotify.com`. PostgreSQL identity is
+fixed to the peer-authenticated `swp_backend` role, port `5433`, and the two
+specified database names.
 
-  ```text
-  setup proof       swps2.<sessionId>.<expiresAtMs>.<signature>
-  OAuth state       swpo2.<43-character-base64url-random>
-  confirmation      swpc1.<confirmationId>.<expiresAtMs>.<signature>
-  ```
+In `policy_locked`, every exact Spotify route/method in the socket tables below
+returns the same fixed `503` response with `Cache-Control: no-store`. This
+includes `GET /auth/callback`. Node selects the response before reading or
+parsing:
 
-  `sessionId` and `confirmationId` are unpadded base64url encodings of 128
-  random bits (22 characters), `expiresAtMs` is exactly 13 ASCII decimal
-  digits, and each signature is an unpadded 32-byte HMAC-SHA-256 value (43
-  characters). The exact UTF-8 HMAC inputs are
-  `spotify-wallpaper:setup-session-v2:<sessionId>:<expiresAtMs>` and
-  `spotify-wallpaper:oauth-confirm-v1:<confirmationId>:<expiresAtMs>`.
-  OAuth state is 32 random bytes and its stored digest is HMAC-SHA-256 over
-  exact UTF-8
-  `spotify-wallpaper:oauth-state-v2:<complete-swpo2-state-value>`.
-  The OAuth Cookie is exactly
-  `__Host-swp-oauth-v2=<43-character-base64url-random>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600`
-  with no `Domain`. Each parser requires its exact prefix, part count,
-  alphabet, lengths, purpose, and database protocol version. Signed proof
-  verification uses WebCrypto verification or an equivalent constant-time
-  comparison after exact parsing and rate limiting.
-- Setup proof, confirmation proof, state digest, and all browser/issuer digests
-  use the Worker `OAUTH_STATE_HMAC_KEY`, an unpadded canonical base64url
-  encoding of exactly 32 key bytes that is separate from encryption and
-  Pairing HMAC keys. Every HMAC output is canonical unpadded base64url.
-  Setup, OAuth, and confirmation Cookie values are each exactly the canonical
-  43-character encoding of 32 CSPRNG bytes; duplicate Cookie names are
-  rejected. Their other exact UTF-8 HMAC inputs are:
+- request body;
+- Cookie or Authorization headers;
+- database state;
+- rate-limit state;
+- random bytes;
+- clock-dependent OAuth state; or
+- any outbound network.
 
-  ```text
-  spotify-wallpaper:setup-browser-v2:<setup-cookie-value>
-  spotify-wallpaper:setup-issuer-v2:<canonical-issuer>
-  spotify-wallpaper:oauth-browser-v2:<oauth-cookie-value>
-  spotify-wallpaper:oauth-confirm-browser-v1:<confirmation-cookie-value>
-  ```
+The fixed response contains no user-controlled data and does not redirect.
+Wrong methods, wrong sockets, unknown paths, and trailing-slash variants are
+rejected before the policy lock. Changing the route order so any listed input
+is inspected first for an allowed Spotify route is a security regression.
 
-  `canonical-issuer` is the trusted Cloudflare client IP parsed strictly and
-  encoded as `v4:` plus eight lowercase hexadecimal digits or `v6:` plus 32
-  lowercase hexadecimal digits; IPv4-mapped IPv6 is normalized to `v4`.
-  Missing or invalid input fails closed before D1 access. These short-lived
-  HMAC records have no key ID or previous-key fallback. Rotating the key
-  intentionally invalidates all in-flight authorization sessions, which then
-  expire or are purged and must restart without downgrade.
-- The baseline Worker rejects `swps2` setup proofs because its parser accepts
-  only the legacy three-part `expiresAtMs.nonce.signature` shape. Its callback
-  rejects `swpo2` before D1 lookup because that value is not a raw 32-byte
-  base64url state. Hardened parsers reject every baseline proof, state, and
-  OAuth Cookie format. No handler retries, translates, or downgrades between
-  protocol versions. A request that crosses old/new edge isolates receives
-  either the approved baseline's fixed invalid-proof/callback/route-not-found
-  error or the hardened `AUTH_FLOW_VERSION_MISMATCH` response. The hardened
-  response and the Phase 4A compatibility stub provide a safe link back to a
-  freshly loaded setup or confirmation page. No cross-version failure permits
-  D1 mutation, Spotify token exchange, or credential creation.
-- Redirect URI and scopes are fixed by the Worker.
-- State, browser nonce, and PKCE verifier use cryptographically secure randomness.
-- D1 stores state/browser digests and an encrypted PKCE verifier.
-- OAuth sessions expire within ten minutes and are deleted or transitioned
-  atomically when consumed.
-- When an opaque-origin browser omits the callback Cookie, the Worker accepts
-  a first-time callback only into a five-minute pending-confirmation state; it
-  does not exchange the authorization code or create credentials. The Worker
-  stores the code/verifier only as key-ID/AAD-bound ciphertext, sets the exact
-  `__Host-swp-confirm=<43-character-base64url-random>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
-  Cookie with no `Domain`, and redirects with `303` to the query-free
-  `GET /auth/confirm` URL. `Lax` is required so the Cookie survives the
-  cross-site Spotify callback's top-level safe-method redirect; confirmation
-  GET is non-mutating and confirmation POST still requires Cookie, proof,
-  explicit action, and legal acceptance.
-- `GET /auth/confirm` is rate-limited before D1 access and requires exactly one
-  valid confirmation Cookie. A keyed digest of that Cookie identifies exactly
-  one unexpired, unconsumed row under a unique index. Zero or multiple matches,
-  malformed Cookies, expiry, or storage failure return a fixed no-store error
-  without decrypting or consuming the row. The clean page contains no
-  authorization code, OAuth state, Client ID, confirmation ID, or credential
-  in its URL, JavaScript, or reflected error. It emits only the signed
-  single-use `swpc1` proof and current legal-acceptance controls needed by the
-  form.
-- `POST /auth/confirm` requires the exact Cookie, signed proof, current legal
-  acceptance, and an explicit user action. After constant-time signature
-  verification, one conditional `DELETE ... RETURNING` operation may consume
-  a row only when the proof's exact `confirmationId` and `expiresAtMs`, the
-  HMAC digest of the presented confirmation Cookie, `protocol_version = 1`,
-  unconsumed state, and current unexpired state all match that same
-  `callback_confirmations` row. Only the returned row may be decrypted and
-  exchanged. A zero/multiple-row result or any cross-row mismatch performs no
-  decrypt, consumption, token exchange, or credential creation.
-  Proof/Cookie binding mismatch is recoverable and preserves the valid Cookie
-  and every candidate row so the correct pairing can retry; other terminal
-  results clear the confirmation Cookie. A Phase 4A compatibility response or
-  transient cross-version failure leaves the pending row and Cookie unconsumed
-  so the user can return to query-free `GET /auth/confirm` and retry within
-  five minutes. Reauthorization always requires the original matching
-  callback Cookie and never uses this fallback. Malformed or duplicate
-  callback or confirmation Cookies are rejected.
-- Expired/consumed setup, OAuth, and callback-confirmation sessions are
-  purged by bounded scheduled maintenance without starvation.
-- Setup, callback, confirmation GET/POST, and Phase 4A compatibility-stub
-  responses set `Cache-Control: no-store`, `Referrer-Policy: no-referrer`,
-  restrictive CSP, frame denial, and `X-Content-Type-Options: nosniff` on both
-  success and every fixed error page.
-- Cloudflare invocation logs are disabled because callback URLs contain authorization codes.
-- Pairing Token generation occurs only after successful Spotify token exchange.
-- Initial authorization completion shows the Pairing Token once.
-  Reauthorization keeps the existing Pairing Token.
+## Exact socket route tables
 
-## Pairing Token
+Paths are exact. Trailing-slash variants are distinct and rejected. A route
+that exists on one socket is rejected on the other socket.
 
-Format:
+### Public socket
+
+| Method | Exact path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | DB-independent process liveness |
+| `GET` | `/privacy` | Current Privacy Notice |
+| `GET` | `/terms` | Current EULA |
+| `GET` | `/auth/callback` | Dormant Spotify callback |
+| `GET` | `/api/playback` | Normalized playback |
+| `POST` | `/api/control` | Normalized control command |
+| `DELETE` | `/api/account` | Ledger-first account deletion |
+| `OPTIONS` | `/api/playback` | Fixed CORS preflight |
+| `OPTIONS` | `/api/control` | Fixed CORS preflight |
+
+### Admin socket
+
+| Method | Exact path | Purpose |
+| --- | --- | --- |
+| `GET` | `/setup` | Operator-authenticated setup page |
+| `POST` | `/auth/start` | Start dormant PKCE authorization |
+| `GET` | `/auth/confirm` | Read confirmation state |
+| `POST` | `/auth/confirm` | Confirm authorization completion |
+| `POST` | `/auth/reauthorize` | Start dormant reauthorization |
+
+Wrong socket, path, or method is rejected with a fixed response. Node does not
+add a general fallback route, directory redirect, automatic `HEAD`, or
+trailing-slash normalization. Caddy and OAuth2 Proxy must preserve the exact
+method/path and must not expose another Node route.
+
+`GET /health` reports process liveness without querying PostgreSQL, migrations,
+backups, Spotify, or DNS. Database connectivity, migration state, backup
+freshness, dump validation, disk capacity, and reconciliation readiness are
+local maintenance checks and systemd timer results. They are not exposed as
+another public or admin HTTP readiness route.
+
+## Reverse proxy and origin
+
+Caddy accepts HTTPS only for
+`https://ciel-spotify-wallpaper.duckdns.org`. It forwards only the exact public
+socket method/path table, the exact admin method/path table through OAuth2
+Proxy, and the reviewed `GET` OAuth2 endpoints. It returns 404 for every other
+method/path. Node enforces the identical socket allowlists and the early policy
+lock, so bypassing Caddy cannot unlock a route. Automatic HTTP redirects are
+disabled and the VPS/provider firewall denies inbound TCP 80; only TCP 443 is
+opened for the public origin.
+
+OAuth2 Proxy admits only GitHub user `Ciellllllllll` before forwarding an
+admin route to the admin socket. Its externally reachable infrastructure
+endpoints are limited to `GET /oauth2/sign_in`, `/oauth2/start`,
+`/oauth2/callback`, `/oauth2/sign_out`, and `/oauth2/static/<asset>`.
+`/oauth2/auth`, `userinfo`, `ping`, `ready`, `metrics`, and every other OAuth2
+Proxy path are not externally exposed. Authentication may complete while
+policy locked, but Node still returns the fixed 503 for the authenticated
+Spotify setup route.
+
+Caddy and OAuth2 Proxy request, access, and authentication logs are disabled.
+Neither layer records URLs, query strings, headers, callback data, Client ID,
+IP address, or credentials. Deployment and smoke commands must also avoid
+verbose output and must never print the environment.
+
+CORS applies only to `/api/playback` and `/api/control`. It permits exactly
+`Origin: null` and `http://127.0.0.1:5173`; methods are the route method plus
+`OPTIONS`, request headers are limited to `authorization` and `content-type`,
+and `authorization` is required. Cookie credentials are disabled. A valid
+preflight reads no body, database, credential, or rate-limit state. Invalid or
+duplicate requested headers, methods, and origins receive a fixed rejection.
+
+`DELETE /api/account` is not a CORS route. It requires the exact public HTTPS
+origin in both request URL and `Origin`, and rejects missing Origin and
+`Origin: null`. Wallpaper requests use `redirect: 'error'`,
+`credentials: 'omit'`, and `referrerPolicy: 'no-referrer'`. A packaged
+Wallpaper Engine build trusts only the exact release origin. Arbitrary HTTPS
+origins, redirects, user information, non-standard ports, paths, queries, and
+fragments never receive a Pairing Token. An invalid backend configuration
+fails closed and never silently falls back to direct credentials.
+
+## Dormant OAuth protocol
+
+The hardened OAuth path is specified for `synthetic_test` acceptance only.
+It uses each user's public Spotify Client ID, Authorization Code with PKCE,
+fixed scopes, and no Client Secret. A real Spotify endpoint, credential, or
+account is prohibited while production remains locked.
+
+OAuth state is single-use and stored only as a keyed digest. The PKCE verifier
+is encrypted and expires within ten minutes. Redirect URI and scopes are fixed
+by the backend. Authorization codes, full callback URLs, raw state, and PKCE
+verifiers are never logged or placed in another URL.
+
+The hardened protocol uses exact, mutually exclusive values:
 
 ```text
-swpb1.<publicId>.<secret>
+setup proof       swps2.<sessionId>.<expiresAtMs>.<signature>
+OAuth state       swpo2.<43-character-base64url-random>
+confirmation      swpc1.<confirmationId>.<expiresAtMs>.<signature>
 ```
 
-`swpb1` is protocol version 1. `publicId` contains 128 bits of CSPRNG entropy. `secret` contains 256 bits. The encoded token must not exceed 256 characters. D1 stores `publicId`, a HMAC-SHA-256 digest, and digest-key ID. Verification is constant-time after an exact format parse.
-
-Pairing Tokens remain valid until account deletion or explicit revocation. Spotify reauthorization retains the same Pairing Token. `swpt1.` is accepted by direct legacy mode only and is never accepted by the public Worker.
-
-## Token encryption
-
-Refresh and Access Tokens use AES-256-GCM with random 96-bit nonces. Encryption and Pairing HMAC keys are separate Worker secrets. Each encrypted field stores its own key ID.
-
-AAD:
+`sessionId` and `confirmationId` are canonical unpadded base64url encodings
+of 128 random bits (22 characters). `expiresAtMs` is exactly 13 decimal ASCII
+digits. Signatures are canonical unpadded 32-byte HMAC-SHA-256 values (43
+characters). Exact UTF-8 HMAC inputs are:
 
 ```text
-spotify-wallpaper:v1:<recordId>:<spotifyClientId>:<fieldName>
+spotify-wallpaper:setup-session-v2:<sessionId>:<expiresAtMs>
+spotify-wallpaper:oauth-confirm-v1:<confirmationId>:<expiresAtMs>
+spotify-wallpaper:oauth-state-v2:<complete-swpo2-state-value>
+spotify-wallpaper:setup-browser-v2:<setup-cookie-value>
+spotify-wallpaper:setup-issuer-v2:<canonical-issuer>
+spotify-wallpaper:oauth-browser-v2:<oauth-cookie-value>
+spotify-wallpaper:oauth-confirm-browser-v1:<confirmation-cookie-value>
 ```
 
-Pending callback-confirmation authorization code and PKCE verifier fields use
-the same AES-256-GCM encryption keyring, separate random 96-bit nonces and key
-IDs, and exact AAD:
+The setup/confirmation proof and browser/issuer/state digests use the OAuth
+HMAC key, which is separate from encryption and Pairing HMAC keys. Parsers
+require exact prefix, part count, canonical encoding, length, purpose, expiry,
+and database protocol version. Proof verification uses Web Crypto verification
+or an equivalent constant-time byte comparison after the pre-database rate
+limit. There is no legacy parser, translation, or downgrade path.
 
-```text
-spotify-wallpaper:oauth-confirm:v1:<confirmationId>:<spotifyClientId>:<fieldName>
-```
+Caddy removes every client-supplied `X-SWP-Client-IP` value and writes exactly
+one value from its authenticated connection address. OAuth2 Proxy preserves
+that Caddy-generated header without appending. Node trusts it only on its two
+permission-separated sockets, rejects a missing, duplicate, comma-containing,
+or malformed value, parses IPv4/IPv6 strictly, normalizes IPv4-mapped IPv6 to
+IPv4, and encodes canonical issuer as `v4:` plus eight lowercase hex digits or
+`v6:` plus 32 lowercase hex digits. The raw address is held only long enough
+to parse and HMAC it; only the keyed issuer digest is a limiter/database key.
+Raw and canonical addresses are never stored or logged.
 
-`fieldName` is exactly `authorizationCode` or `pkceVerifier`. Moving an OAuth
-session to pending confirmation re-encrypts the verifier under the new AAD.
-Field swaps, row swaps, tampering, expiry, or decrypt failure fail closed.
-Successful non-consuming reads under a previous key lazily rotate both fields,
-and key-reference scans include pending-confirmation rows.
+Only these first-party cookies are permitted. Their values are each exactly a
+canonical 43-character encoding of 32 random bytes, and duplicate names are
+rejected:
 
-The active key and previous keys form a keyring. Successful reads using an old key lazily re-encrypt the field with the active key. An old key is removed only after no D1 row references its key ID. A D1 export without Worker secrets cannot recover Spotify tokens.
+- `__Host-swp-setup`: binds explicit Privacy/EULA consent to a setup browser;
+- `__Host-swp-oauth-v2`: binds the top-level OAuth callback;
+- `__Host-swp-confirm`: binds the post-callback confirmation step.
 
-## Refresh and backoff
+All are `HttpOnly`, `Secure`, host-only, have `Path=/`, omit `Domain`, and are
+cleared when consumed. The setup cookie uses `SameSite=Strict` and
+`Max-Age=600`. The OAuth and confirmation cookies use `SameSite=Lax` with
+`Max-Age=600` and `Max-Age=300` respectively. Confirmation must be Lax so it
+survives the first query-free top-level GET after the cross-site callback; that
+GET is non-mutating. No tracking, analytics, compatibility, or legacy
+`swpb_oauth` cookie is allowed. Production policy lock executes before Cookie
+parsing or cookie emission.
 
-Encrypted Access Tokens may be cached in D1 because Workers are stateless. Refresh begins 60 seconds before Access Token expiry.
+`GET /setup` is rate-limited before PostgreSQL access. It creates a purpose-
+bound, single-use, ten-minute setup row that stores only keyed browser/issuer
+digests, legal versions, protocol version, and expiry. Under a transaction-
+scoped advisory lock, presenting the exact live setup cookie retires its row
+before the service enforces at most three live rows for that issuer and inserts
+the replacement. Missing, malformed, or unmatched cookies cannot retire
+another row. The signed proof is bound to the inserted session.
 
-A conditional D1 lease permits one refresh owner per credential. The lease has a unique ID and bounded expiry. Lease completion requires matching lease ID and token version. Concurrent losers wait briefly, reload D1, and do not call Spotify. Every success and failure path releases or expires the lease.
+`POST /auth/start` is rate-limited before row lookup, requires the exact setup
+cookie, signed proof, same-origin form, and current legal acceptance, and uses
+one conditional delete/return operation to consume the matching session. A
+missing cookie, cross-row proof/cookie, replay, expired row, or wrong protocol
+creates no OAuth state. Terminal results clear the setup cookie.
 
-When Spotify rotates the Refresh Token, both token updates are committed atomically. If Spotify omits it, retain the previous Refresh Token.
+The callback has three distinct paths:
 
-`invalid_grant` deletes encrypted Spotify tokens, marks reauthorization required, releases the lease, and is not retried. Spotify 429 backoff is persisted by Client ID and preserves `Retry-After`.
+1. Initial authorization with the exact OAuth cookie atomically consumes the
+   matching OAuth row and may exchange its code once.
+2. Initial authorization missing only that cookie atomically moves the OAuth
+   row into a five-minute `callback_confirmations` row. The authorization code
+   and re-encrypted verifier use separate AES-GCM fields/nonces/key IDs with
+   exact AAD
+   `spotify-wallpaper:oauth-confirm:v1:<confirmationId>:<spotifyClientId>:<fieldName>`,
+   where `fieldName` is `authorizationCode` or `pkceVerifier`. It sets the
+   confirmation cookie and returns `303` to query-free `/auth/confirm`; it does
+   not exchange tokens or create a credential.
+3. Reauthorization requires the original matching OAuth cookie, never creates
+   a confirmation row, and preserves the Pairing identity.
 
-## API contract
+`GET /auth/confirm` is rate-limited before PostgreSQL, requires exactly one
+valid confirmation cookie, and performs no mutation. Its keyed cookie digest
+must identify exactly one live row. The page contains only the signed `swpc1`
+proof and current legal controls; no code, state, Client ID, row ID, or Pairing
+data appears in its URL, script, or error.
 
-Success:
+`POST /auth/confirm` requires that same cookie, its exact proof, explicit user
+action, same-origin form, and current legal acceptance. One conditional
+`DELETE ... RETURNING` operation binds proof ID/expiry, confirmation-cookie
+digest, protocol version, and live expiry to the same row. Only the returned
+row may be decrypted and exchanged. Cross-row mismatch is non-consuming and
+may retry with the correct pair. Success is single-use; other terminal results
+clear the cookie. No database transaction is held across Spotify HTTPS.
+
+The setup/confirmation pages use restrictive CSP, `Referrer-Policy:
+no-referrer`, and `Cache-Control: no-store`. Initial authorization and
+reauthorization both require the current Privacy Notice and EULA acceptance.
+Consumed sessions are deleted atomically; abandoned expired sessions are
+purged by local scheduled maintenance.
+
+After a successful synthetic token exchange, the one-time response may show:
+
+`swpb1.<publicId>.<secret>`
+
+`publicId` contains at least 128 bits of CSPRNG entropy and `secret` contains
+at least 256 bits. The complete token is at most 256 characters. It appears
+only in the one-time no-store response and the Wallpaper Engine user property.
+It never appears in a URL, Cookie, Web Storage, IndexedDB, log, metric,
+database row, screenshot, fixture, or committed file.
+
+PostgreSQL stores the `publicId`, digest-key ID, and a keyed HMAC-SHA-256
+digest of the secret. Verification performs exact parsing and constant-time
+comparison. Legacy `swpt1.` tokens are accepted only by direct mode and never
+as public-backend Bearer credentials.
+
+## PostgreSQL authority
+
+PostgreSQL 17 uses exactly two databases:
+
+- `spotify_wallpaper`: OAuth sessions, encrypted Spotify tokens, public Client
+  ID, Pairing digest/key ID, refresh leases, backoff, and live credential
+  state;
+- `spotify_wallpaper_deletion_ledger`: non-secret `publicId` tombstones and
+  reconciliation status retained for 35 days.
+
+They use different least-privilege database roles. The Node runtime role has
+only the statements required by the service. Migration, backup, restore, and
+maintenance roles are separate. The service never relies on superuser access.
+
+Each database has its own SQL migration stream. Migrations run as a separate
+local operation before service restart; application startup does not mutate
+schema. A migration failure, unexpected version, missing ledger database, or
+failed reconciliation keeps traffic closed.
+
+Both databases are independently dumped, validated with a temporary isolated
+restore, and only then atomically retained under a backup-series name. A dump
+that fails listing, checksum, isolated restore, the exact tracked migration
+list, full schema/constraint/index/privilege comparison, unexpected-object
+rejection, or fixed aggregate checks is deleted from its exact temporary path
+and is never a recovery candidate. A successful primary dump is not evidence
+that the ledger dump succeeded. Backup metadata contains only fixed names,
+timestamps, sizes, checksums, and success/failure states.
+
+There is no evidence of live D1 data. No D1 import utility or production data
+conversion path is authorized. Historical Cloudflare plans and reports remain
+evidence only.
+
+## Encryption and refresh
+
+Refresh and Access Tokens and stored PKCE verifiers use AES-256-GCM with a
+fresh random 96-bit nonce per field. Token-encryption, Pairing-HMAC, and OAuth
+state keys are independent secrets. Every ciphertext/digest stores a key ID.
+The active/previous keyring supports lazy token re-encryption. A previous key
+is not removed while a live row or retained backup can reference it.
+
+Live Access/Refresh Token AAD is exact UTF-8
+`spotify-wallpaper:v1:<recordId>:<spotifyClientId>:<fieldName>`, where
+`recordId` is the credential public ID and `fieldName` is exactly
+`access_token` or `refresh_token`. Row, Client-ID, and field swaps therefore
+fail authentication. When refresh returns a new Refresh Token, Access and
+Refresh ciphertext plus token version update atomically. If Spotify omits a
+Refresh Token, the existing encrypted Refresh Token is retained.
+
+Access-token refresh begins before expiry. A conditional PostgreSQL lease with
+a unique lease ID, bounded expiry, and token version permits one refresh owner
+per credential. Concurrent losers wait briefly and reload. Lease completion
+requires the matching lease ID and token version. Spotify `invalid_grant`
+clears token ciphertext, marks reauthorization required, releases the lease,
+and stops retrying.
+
+Spotify 429 handling stores bounded backoff by Client ID and honors a valid
+`Retry-After`. Response bodies and headers are reduced to fixed internal
+outcomes before logging or returning an error.
+
+## Playback, controls, and provider behavior
+
+`GET /api/playback`, `POST /api/control`, and `DELETE /api/account` use
+`Authorization: Bearer <Pairing Token>` in the dormant protocol. Tokens never
+appear in URLs. Playback returns the shared normalized provider-v1 model;
+errors use fixed application codes/messages and never forward Spotify bodies.
+
+Controls permit only the documented play, pause, previous, next, seek, volume,
+shuffle, and repeat operations. Inputs are schema-validated, range-limited,
+and sent to fixed Spotify endpoints. The backend never records or proxies
+Spotify audio and never fetches lyrics.
+
+Provider-v1 success and error envelopes are respectively:
 
 ```json
 { "ok": true, "value": {} }
 ```
-
-Error:
 
 ```json
 {
   "ok": false,
   "error": {
     "kind": "unauthorized",
-    "message": "Spotify authorization is required.",
+    "message": "A fixed application message.",
     "status": 401,
     "retryAfterMs": 1000
   }
 }
 ```
 
-The envelope and command format are protocol version 1 through the `swpb1` credential version. Accepted command JSON is:
+`retryAfterMs` is optional. No upstream body or secret is copied into the
+envelope. Accepted command bodies contain exactly one of these shapes:
 
 ```json
 { "type": "play" }
@@ -270,96 +402,167 @@ The envelope and command format are protocol version 1 through the `swpb1` crede
 { "type": "repeat", "state": "off" }
 ```
 
-`positionMs` is a finite integer from 0 through the current item duration. `volumePercent` is a finite integer from 0 through 100. `shuffle.state` is boolean. `repeat.state` is exactly `off`, `track`, or `context`. Unknown fields, missing fields, unknown commands, non-integer numbers, and out-of-range values are rejected before a Spotify request.
+`positionMs` is a finite integer from zero through the current item duration;
+`volumePercent` is a finite integer from zero through 100; shuffle state is a
+boolean; repeat state is exactly `off`, `track`, or `context`. Unknown or
+missing fields, extra fields, unknown commands, non-integers, and out-of-range
+values are rejected before a Spotify request.
 
-The Worker returns normalized playback only. `source` remains `spotify` and `fetchedAt` is required. Errors contain fixed application messages, not Spotify response bodies or secrets.
+The Wallpaper provider contract remains unchanged: mock, legacy direct,
+loopback Rust, and backend providers normalize to the same playback model. In
+production, backend requests receive the fixed policy-lock 503 and the
+wallpaper keeps its last safe display/status. It does not downgrade to direct
+mode, send a Pairing Token to another origin, or stop browser mock operation.
 
-## Origin and request policy
+## Account deletion and restore safety
 
-Playback/control CORS permits Wallpaper Engine `Origin: null` and explicit local preview origins only. Allowed methods and headers are fixed, `Authorization` is required, and credentialed cookie CORS is disabled. CORS is not authentication.
+Account deletion is ledger-first:
 
-Account management is same-origin and rejects `Origin: null`. Setup
-authorization treats neither the HTML proof nor its Cookie as human-presence
-or browser-possession proof because a server can fetch and replay both in its
-own client. Their single-use, SameSite-bound session prevents cross-site
-browser CSRF and replay; server-originated setup creation is bounded by
-pre-write rate limits and outstanding-session caps. If the authorization URL
-is handed to a different browser, a Cookie-less initial callback cannot
-exchange tokens until that browser performs the visible one-time confirmation.
-The signed proof provides tamper and expiry validation, not bot resistance.
-Wallpaper requests use `redirect: 'error'`, `credentials: 'omit'`, and
-`referrerPolicy: 'no-referrer'`. The wallpaper permits HTTP loopback and the
-exact release-configured HTTPS origin only.
+1. verify the Pairing credential;
+2. commit the non-secret `publicId` tombstone to
+   `spotify_wallpaper_deletion_ledger`;
+3. delete OAuth sessions, encrypted Spotify tokens, Client ID, Pairing digest,
+   leases, backoff/cache, and live state from `spotify_wallpaper`;
+4. return a fixed success only after the live credential is unusable.
 
-Cloudflare Rate Limiting bindings protect setup before D1 insertion, auth
-start, callback, confirmation-page GET, confirmation POST, and reauthorization
-by IP and API routes by `publicId`. A rate-limit binding failure fails closed
-before state mutation. Spotify's persisted `Retry-After` remains authoritative.
+Every authenticated request checks the ledger before using primary state. The
+local reconciler processes retained tombstones independently and keeps failed
+rows pending so one failure does not block later rows. It publishes fixed
+aggregate attempted/reconciled/failed/pending/oldest-pending/retry counts only.
 
-## Reauthorization and deletion
+After a primary-only loss, public/admin Spotify routes stay closed and only
+the current healthy live ledger may authorize credential recovery. Restore
+the primary into a new database only when the fixed primary database name is
+absent. Root uses the local peer-authenticated PostgreSQL administrator only
+as a recovery broker: restored objects and the database are owned by
+`swp_migrator`, runtime grants and database ACLs are restored, every retained
+tombstone is applied, and zero retained credential matches is required. The
+script then renames the validated recovery database to the fixed primary name
+and validates owner, object owner, exact grants, migration, schema, and counts.
+Reset the retained tombstones to pending, run reconciliation, and require
+pending count zero before traffic can resume. Application services never run
+as the PostgreSQL administrator.
 
-Spotify Refresh Tokens expire six months from the original authorization time. There is no server-side grace period after `invalid_grant`; the wallpaper keeps its last safe display and reports reauthorization required.
+If the ledger alone is lost, both databases are lost, the cluster is lost, or
+only backups remain, restore no OAuth, credential, setup, confirmation, or
+backoff state. Start with empty migrated databases and require every user to
+authorize again. An older ledger backup is never used to justify restoring
+credentials because a later deletion could be absent.
 
-Setup JavaScript may submit the existing Pairing Token through an Authorization header to begin reauthorization. It never stores the token in DOM copies, URLs, Web Storage, IndexedDB, cookies, or errors.
+## Rate limits and observability
 
-Account deletion first writes a 35-day non-secret `publicId` tombstone to a separate deletion-ledger D1 database, then removes the primary OAuth sessions, token ciphertext, Client ID, Pairing digest, leases, and cache. Every authenticated request checks the ledger first. A scheduled reconciler reapplies tombstones to the primary database, including after Time Travel restoration.
+Rate limits are bounded in-memory controls suitable for one locked VPS
+instance. Separate buckets cover authentication, unauthenticated API traffic,
+authenticated playback, and controls. They use only fixed internal keys and
+must not make production policy-lock responses stateful: the early 503 occurs
+before rate-limit access.
 
-The reconciler isolates each failed tombstone so one permanent primary-D1
-failure cannot block later deletions. The ledger records retry count and last
-attempt time. Aggregate scheduled metrics report attempted, reconciled,
-failed, pending, oldest-pending age, and maximum retry counts without
-identifiers.
+Every bucket is a fixed 60-second window; expired entries are removed every 30
+seconds. Setup/callback/confirm/reauthorize use 20 requests per issuer with at
+most 4096 issuers. The pre-database request bucket uses 6000 per issuer with at
+most 4096. Playback uses 120 per Pairing ID with at most 64 IDs. Control and
+account deletion share 60 per Pairing ID with at most 64. New keys fail closed
+when a map is full. Rejections return `429` and `Retry-After` of one through 60
+seconds. Spotify's persisted `Retry-After` remains authoritative.
 
-## Operations
+| Routes | Bucket/key | Limit/cap |
+| --- | --- | --- |
+| `GET /setup`, `POST /auth/start`, callback, both confirm methods, reauthorize | keyed canonical-issuer digest | 20 / 4096 issuers |
+| playback, control, account before any DB access | keyed canonical-issuer digest | 6000 / 4096 issuers |
+| playback after authentication | Pairing public ID | 120 / 64 IDs |
+| control and account after authentication | Pairing public ID | 60 shared / 64 IDs |
+| valid CORS `OPTIONS` | none | no limiter mutation |
 
-- Preview and production use different domains, D1 databases, keyrings, and rate-limit namespaces.
-- Production uses Workers Paid and a fixed custom HTTPS domain.
-- Additive setup/confirmation-session tables and expiry/issuer indexes are
-  migrated with an additive
-  `oauth_sessions.protocol_version INTEGER NOT NULL DEFAULT 1 CHECK (protocol_version IN (1, 2))`
-  column and
-  verified in preview, then production, before deploying a Worker that
-  requires them. Existing Workers insert/read version 1 by default and ignore
-  the new tables. Hardened OAuth rows are inserted explicitly as version 2 and
-  may be consumed only by a version-2 handler; setup rows require protocol
-  version 2 and confirmation rows require protocol version 1.
-  Missing or partial schema fails closed with a fixed unavailable response and
-  never falls back to stateless setup.
-- Phase 4A also routes inert `GET /auth/confirm` and `POST /auth/confirm`
-  compatibility stubs. They do not parse OAuth material or read/write D1; they
-  return a fixed no-store `409 AUTH_FLOW_VERSION_MISMATCH` page with a
-  query-free retry link. This release must be fully deployed and verified
-  before any callback can create pending-confirmation rows. A Phase 4C rollout
-  is supported only over the fully deployed Phase 4A/4B generation, never
-  directly over commit `455dcf1`.
-- Deployment characterization freezes both protocol generations: old
-  setup/start and callback parsers reject hardened values before state
-  mutation, while hardened parsers reject old proof/state/Cookie values. The
-  frozen `455dcf1` baseline returns its fixed 404 for both confirmation methods
-  without D1 access; the Phase 4A stub returns the safe 409 recovery page.
-  Mixed-isolate tests must exercise setup/start/callback plus confirmation GET
-  and POST in both directions, including new callback to old stub to new retry,
-  before the hardened routes are enabled.
-- Aggregate metrics use Analytics Engine and contain only route/status/latency classes and outcome counters.
-- Request URL invocation logs remain disabled.
-- Deployment, key rotation, incident response, migration, cost, and restore runbooks are release requirements.
+Node emits fixed event names, fixed outcome classes, latency buckets, and
+aggregate counts only. It never logs:
 
-## Completion and publication
+- URL, path with query, query string, or callback data;
+- headers, Cookies, Authorization, Client ID, or IP address;
+- `publicId`, state, verifier, authorization code, Spotify token, Pairing
+  Token, key material, track metadata, exception message, or upstream body.
 
-Implementation completion requires automated Worker/wallpaper/Rust gates,
-staging integration, secret-surface inspection, independent Security and
-SpecGuard approval, and a 72-hour Wallpaper Engine soak.
+Systemd journal retention and permissions are operator-controlled. Caddy and
+OAuth2 Proxy access/request/auth logs remain disabled. Operators use local
+fixed-output maintenance commands for health, migration, backup, disk,
+certificate, reconciliation, and service checks.
 
-Private local or mock-only staging may proceed without Spotify users. A
-Spotify-connected Limited beta is blocked until either a dated Spotify policy
-decision or a policy-compatible build covers BYO authorization, visual
-synchronization, product naming, Spotify Marks/links, and artwork treatment.
-It also requires published operator/privacy/incident contacts, the Privacy
-Notice and EULA consent flow, real preview infrastructure, smoke tests, alert
-delivery tests, and independent Security/SpecGuard approval.
+## Build and deployment artifacts
 
-General Workshop publication additionally requires the completed Limited beta,
-72-hour Wallpaper Engine soak, and every publication checklist item recorded
-with reviewer/owner and evidence location in the public-backend phase report.
-Implementation completion alone does not authorize Spotify-connected
-distribution.
+The public backend is an npm workspace named
+`@spotify-wallpaper/public-backend`. It builds TypeScript to Node.js 22 ESM
+without source maps. Production runtime dependencies are limited to external
+`pg` plus the local product dependency
+`@spotify-wallpaper/shared-types`. Node standard HTTP and Web Crypto APIs are
+used instead of a framework, ORM, Redis, Docker, or a custom migration tool.
+
+The source artifact is built only from a clean worktree whose `HEAD` equals the
+reviewed 40-character release ID. The builder removes and rebuilds both
+ignored `dist` trees before copying them, then records that ID in `RELEASE_ID`
+and includes it in `SHA256SUMS`. The remaining allowlist is the root
+`package.json` and lockfile, `apps/public-backend` manifest, compiled `dist`,
+migrations, and legal files, plus the `packages/shared-types` manifest and
+compiled `dist`. It excludes TypeScript source, source maps, tests, fixtures,
+deployment configuration, local databases, dumps, `.env` files, secrets,
+logs, and tool caches.
+
+The build command is
+`node scripts/build-public-backend-artifact.mjs <empty-output-directory> <reviewed-HEAD-SHA>`.
+It fails before producing a checksum manifest when the repository root, HEAD,
+or clean-worktree check differs.
+
+Deployment extracts that allowlist into a new empty temporary release
+directory, runs workspace-scoped `npm ci --omit=dev`, verifies shared-type
+import, startup, and health, and only then writes and checks a sorted SHA-256
+manifest over the complete runtime tree including `node_modules`. The verified
+tree is made readable/executable but never writable by the non-root runtime
+user, then atomically promoted by switching `current`.
+Neither dependency installation nor any other mutation occurs after the final
+runtime manifest. The transport artifact has its own checksum; it is not
+mistaken for the final release-tree checksum.
+
+Caddy, OAuth2 Proxy, systemd, PostgreSQL, and timer configuration is delivered
+as a separate config bundle generated only from tracked deployment files at
+the same reviewed Git SHA. It has its own sorted manifest and SHA-256 checksum
+recorded with the release ID. Operators install only that verified bundle,
+never files read directly from a mutable Git checkout.
+Fixed operating-system paths are root-created links through the configuration
+inside `/opt/spotify-wallpaper/current`. The application and its exact config
+bundle share one immutable generation, so deployment and rollback switch one
+verified pointer and cannot expose mismatched versions. The two real
+environment files remain root-owned local secret files and are never linked
+from a bundle.
+
+Every setup, callback success/error, confirmation GET/POST, and one-time token
+display HTML response sets `Cache-Control: no-store`, `Referrer-Policy:
+no-referrer`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and
+the exact CSP base
+`default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`.
+Pages needing inline script/style add only per-response nonces; pages that do
+not need them omit those sources. Fixed error HTML uses the same boundary.
+
+## Acceptance and release gates
+
+The phase has two separate completion lines:
+
+1. locked VPS: exact origin, TLS/proxy chain, two socket permissions, early
+   policy lock, two-database migrations/backups/restores, local readiness,
+   packaging, alerts, rollback, and soak;
+2. dormant hardened OAuth: synthetic-only setup/callback/confirmation,
+   encryption, pairing, refresh, normalized playback/controls,
+   reauthorization, deletion, and reconciliation tests.
+
+The dormant line includes the tracked `deploy/public-backend/test` integration
+suite. Build `Dockerfile.synthetic-e2e`, then run `synthetic-e2e.sh` in that
+image with the repository mounted read-only. It uses Node 22, a real
+PostgreSQL 17 cluster, both real AF_UNIX sockets, and a private self-signed
+HTTPS provider, and validates the tracked Caddyfile with the Caddy binary. It
+must finish with only `SYNTHETIC_E2E_PASS`; no state,
+Cookie, Client ID, authorization code, token, or callback URL is printed.
+
+Passing either or both lines does not authorize real Spotify traffic.
+Unlocking requires updated current specifications, Spotify policy/legal
+approval, operator identity and private contacts, reviewed Privacy/EULA,
+registered callback, a separately reviewed production mode and systemd/network
+unit, security and SpecGuard approval, alert-delivery evidence, limited beta,
+and the required soak. The production origin remains policy-locked until that
+separate change is approved.

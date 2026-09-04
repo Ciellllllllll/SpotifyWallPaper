@@ -1,0 +1,33 @@
+[Unit]
+Description=Spotify Wallpaper Caddy TLS boundary
+After=network-online.target systemd-tmpfiles-setup.service swp-public-backend.service swp-oauth2-proxy.service
+Wants=network-online.target
+Requires=swp-public-backend.service swp-oauth2-proxy.service
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+SupplementaryGroups=swp-public swp-oauth
+Environment=XDG_DATA_HOME=/var/lib/caddy
+Environment=XDG_CONFIG_HOME=/var/lib/caddy
+StateDirectory=caddy
+ExecStartPre=/usr/bin/caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+ExecStart=/usr/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/caddy
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

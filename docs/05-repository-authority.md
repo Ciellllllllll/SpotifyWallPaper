@@ -178,11 +178,15 @@ remain governed by the repository entry instructions.
 
 ## Tracked generated source
 
-`apps/cloudflare-worker/worker-configuration.d.ts` is the sole tracked
-generated-source exception. Its owner, producer, source inputs, and
-verification command are declared in the policy. Regeneration must leave the
-tracked declaration byte-identical unless a reviewed phase intentionally
-changes its source contract.
+There is no tracked generated-source exception for the public backend. Retired
+Wrangler output and generated Cloudflare types are neither source inputs nor
+release material. The explicit ownership rules in
+`config/repository-authority.json` cover residue under the retired
+`apps/cloudflare-worker` path and its `apps/public-backend` successor, so an
+ordinary checkout update cannot expose preserved ignored files during the
+directory migration. The active public-backend tests live under
+`apps/public-backend/test` and are tracked repository inputs. The retired
+Cloudflare `node-test` path has no ignore or authority exception.
 
 `package-lock.json`, `Cargo.lock`, and
 `apps/configurator/src-tauri/Cargo.lock` are tracked reproducibility inputs,

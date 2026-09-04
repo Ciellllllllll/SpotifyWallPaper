@@ -1,5 +1,5 @@
-import type { PlaybackProviderKind } from './provider';
-import type { RainmeterOutputMode } from './rainmeter';
+import type { PlaybackProviderKind } from './provider.js';
+import type { RainmeterOutputMode } from './rainmeter.js';
 import type {
   DisplayMode,
   ExistingPlayerPreferences,
@@ -8,7 +8,7 @@ import type {
   LayoutItemKey,
   LayoutPresetName,
   LayoutUnit
-} from './view';
+} from './view.js';
 
 export type TransitionPreset = 'fade' | 'crossfade' | 'slide-left' | 'zoom-in' | 'blur-fade';
 export type TransitionEasing = 'linear' | 'ease' | 'ease-out' | 'ease-in-out';

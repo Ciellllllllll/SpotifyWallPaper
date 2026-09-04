@@ -1,0 +1,21 @@
+[Unit]
+Description=Spotify Wallpaper PostgreSQL migrations
+After=postgresql@17-swp.service
+Requires=postgresql@17-swp.service
+Before=swp-public-backend.service
+
+[Service]
+Type=oneshot
+User=swp_migrator
+Group=swp_migrator
+SupplementaryGroups=swp-pg
+ExecStartPre=/usr/local/libexec/spotify-wallpaper/preflight.sh database
+ExecStart=/usr/local/libexec/spotify-wallpaper/migrate.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

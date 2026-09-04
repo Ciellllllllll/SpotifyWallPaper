@@ -13,12 +13,16 @@
 /apps/spotify-auth/pages/
 /apps/wallpaper/public/wasm/
 
-# Cloudflare Worker local and generated output
+# Local residue from the retired Cloudflare implementation; never release it.
 /apps/cloudflare-worker/.wrangler/
-/apps/cloudflare-worker/.wrangler.*.generated.json
-/apps/cloudflare-worker/.wrangler.*.generated.json.*.tmp
-/apps/cloudflare-worker/dist-preview/
+/apps/cloudflare-worker/.wrangler.*.generated.json*
+/apps/cloudflare-worker/dist-preview*/
 /apps/cloudflare-worker/dist-production/
+/apps/public-backend/.wrangler/
+/apps/public-backend/.wrangler.*.generated.json*
+/apps/public-backend/dist-preview*/
+/apps/public-backend/dist-production/
+/apps/public-backend/node-test/
 /dist-preview/
 /dist-production/
 

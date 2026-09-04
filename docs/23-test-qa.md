@@ -5,7 +5,7 @@
 Every code-changing phase starts from characterization or a red contract test
 and ends with targeted verification, Sol/medium review, SpecGuard (and
 Security where applicable), then same-diff Ponytail audit. Browser mock startup must
-remain credential-free without Spotify, Tauri, Worker, or WASM. Fixed-time
+remain credential-free without Spotify, Tauri, public backend, or WASM. Fixed-time
 visual fixtures cover 1920×1080 and 3440×1440 for both display modes;
 the accepted maximum visual diff ratio is 0.002.
 
@@ -43,7 +43,8 @@ TypeScript:
 
 - Shared Spotify response normalization (track, episode, none, invalid shape,
   numeric bounds, and collection caps)
-- Direct-provider warning wrapper and Worker provider-v1 fixture parity
+- Direct-provider warning wrapper and Node public-backend provider-v1 fixture
+  parity
 - error classification
 - settings load fallback
 - mock mode initialization
@@ -58,11 +59,29 @@ TypeScript:
   seekbar migration to the straight line style
 - Glowing-particle outward movement, speed multiplier, lifetime, viewport cull,
   and finite-state safety
-- Worker OAuth state expiry and replay
+- Public-backend OAuth state expiry and replay in externally unreachable
+  `synthetic_test`
 - Pairing Token parsing and HMAC verification
-- D1 application-layer encryption
+- PostgreSQL application-layer encryption
 - concurrent single-flight token refresh
-- public-backend CORS, rate limits, reauthorization, and deletion
+- public-backend CORS allowlist (`null` and local preview), invalid preflight,
+  cookie-credential rejection, same-origin account deletion, bounded rate
+  limits, reauthorization, and deletion
+- `policy_locked` returns the fixed 503 for every exact allowed Spotify
+  route/method before request/state inspection and still rejects methods or
+  paths outside the socket allowlists
+- exact public/admin AF_UNIX socket method/path allowlists, wrong-socket
+  rejection, and trailing-slash rejection
+- DB-independent `/health` liveness and local-only database/migration/backup
+  readiness
+- independent dump/validate/retention/restore tests for both PostgreSQL
+  databases, including ledger-first reconciliation before traffic
+- exact `swps2`/`swpo2`/`swpc1` parsing, duplicate-cookie rejection,
+  single-use callback/confirmation, cross-row swap rejection, and no
+  confirmation fallback for reauthorization
+- all eight provider-v1 control bodies, exact fields/ranges, and rejection
+  before outbound access
+- post-`npm ci` runtime-tree manifest verification before atomic promotion
 
 ## Mock data
 
@@ -127,10 +146,11 @@ Confirm:
 - Low-power mode reduces work.
 - Rainmeter output contains no secrets.
 - Token never appears in logs.
-- Pairing Token never appears in logs, URLs, debug output, or stored Worker pages.
-- D1 export does not contain plaintext Spotify or Pairing tokens.
-- Direct, loopback Rust, public Worker, and browser mock paths all work.
-- Shared TypeScript normalization remains the authority for direct and Worker
+- Pairing Token never appears in logs, URLs, debug output, or stored backend pages.
+- PostgreSQL dumps do not contain plaintext Spotify or Pairing tokens.
+- Direct, loopback Rust, policy-locked public backend, and browser mock paths
+  all work independently.
+- Shared TypeScript normalization remains the authority for direct and public-backend
   paths; Rust parity is checked at the provider-v1 fixture boundary.
 - `invalid_grant` stops refresh retries and permits reauthorization.
 - Arbitrary HTTPS origins and redirects receive no Bearer token.

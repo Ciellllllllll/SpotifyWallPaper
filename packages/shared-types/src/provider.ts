@@ -1,4 +1,4 @@
-import type { NormalizedPlayback, SpotifyErrorKind, SpotifyPlaybackError } from './playback';
+import type { NormalizedPlayback, SpotifyErrorKind, SpotifyPlaybackError } from './playback.js';
 
 export type PlaybackProviderKind = 'mock' | 'direct' | 'backend';
 

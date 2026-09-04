@@ -1,4 +1,4 @@
-import type { PlaybackSource } from './playback';
+import type { PlaybackSource } from './playback.js';
 
 export type RainmeterOutputMode = 'json';
 

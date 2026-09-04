@@ -1,15 +1,22 @@
-name: Cloudflare Worker CI
+name: Public Backend CI
 
 on:
   pull_request:
     paths:
       - .github/workflows/cloudflare-worker-ci.yml
-      - apps/cloudflare-worker/**
+      - apps/public-backend/**
+      - deploy/public-backend/**
+      - apps/spotify-auth/**
+      - apps/configurator/**
       - apps/wallpaper/**
       - crates/**
       - docs/operations/**
       - packages/shared-types/**
+      - packages/wallpaper-view/**
+      - scripts/build-public-backend-artifact.mjs
+      - scripts/build-public-backend-artifact.test.mjs
       - scripts/check-public-backend-secrets.mjs
+      - scripts/check-public-backend-secrets.test.mjs
       - Cargo.lock
       - Cargo.toml
       - package-lock.json
@@ -19,12 +26,19 @@ on:
       - master
     paths:
       - .github/workflows/cloudflare-worker-ci.yml
-      - apps/cloudflare-worker/**
+      - apps/public-backend/**
+      - deploy/public-backend/**
+      - apps/spotify-auth/**
+      - apps/configurator/**
       - apps/wallpaper/**
       - crates/**
       - docs/operations/**
       - packages/shared-types/**
+      - packages/wallpaper-view/**
+      - scripts/build-public-backend-artifact.mjs
+      - scripts/build-public-backend-artifact.test.mjs
       - scripts/check-public-backend-secrets.mjs
+      - scripts/check-public-backend-secrets.test.mjs
       - Cargo.lock
       - Cargo.toml
       - package-lock.json
@@ -34,7 +48,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-worker-ci-${{ github.ref }}
+  group: public-backend-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -61,14 +75,26 @@ jobs:
       - name: Build shared types for clean-clone consumers
         run: npm run build:shared-types
 
-      - name: Test Cloudflare Worker
-        run: npm run test -w @spotify-wallpaper/cloudflare-worker
+      - name: Test public backend
+        run: npm run test -w @spotify-wallpaper/public-backend
 
-      - name: Check Cloudflare Worker
-        run: npm run check -w @spotify-wallpaper/cloudflare-worker
+      - name: Check public backend
+        run: npm run check -w @spotify-wallpaper/public-backend
 
-      - name: Verify generated Worker types are committed
-        run: git diff --exit-code -- apps/cloudflare-worker/worker-configuration.d.ts
+      - name: Test public backend secret scanner
+        run: npm run test:public-backend-secrets
+
+      - name: Build and verify isolated public backend artifact
+        shell: pwsh
+        run: |
+          $artifact = Join-Path $env:RUNNER_TEMP "spotify-wallpaper-public-backend-artifact"
+          node scripts/build-public-backend-artifact.mjs $artifact $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/check-public-backend-secrets.mjs $artifact
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:SWP_ARTIFACT_OUTPUT = $artifact
+          npm run test:public-backend-artifact
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test wallpaper
         run: npm run test -w @spotify-wallpaper/wallpaper
@@ -76,52 +102,24 @@ jobs:
       - name: Check wallpaper
         run: npm run check -w @spotify-wallpaper/wallpaper
 
+      - name: Build legacy release artifacts for secret scan
+        shell: pwsh
+        run: |
+          npm run build -w @spotify-wallpaper/spotify-auth
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build -w @spotify-wallpaper/configurator
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Test Rust workspace
         run: cargo test --workspace
 
-      - name: Build Worker artifact
-        run: npm run build -w @spotify-wallpaper/cloudflare-worker
-        env:
-          TOKEN_ENCRYPTION_KEYRING: SWPB_CI_WORKER_KEY_CANARY
-          PAIRING_HMAC_KEYRING: SWPB_CI_WORKER_KEY_CANARY
-          OAUTH_STATE_HMAC_KEY: SWPB_CI_WORKER_KEY_CANARY
-
-      - name: Dry-run generated preview Worker config
-        shell: pwsh
-        env:
-          CLOUDFLARE_DEPLOY_ENV: preview
-          CLOUDFLARE_PREVIEW_PUBLIC_BASE_URL: https://preview-ci-worker.example
-          CLOUDFLARE_PREVIEW_PRIMARY_D1_ID: 11111111-1111-4111-8111-111111111111
-          CLOUDFLARE_PREVIEW_DELETION_D1_ID: 22222222-2222-4222-8222-222222222222
-          CLOUDFLARE_PRODUCTION_PUBLIC_BASE_URL: https://ci-worker.example
-          CLOUDFLARE_PRODUCTION_PRIMARY_D1_ID: 33333333-3333-4333-8333-333333333333
-          CLOUDFLARE_PRODUCTION_DELETION_D1_ID: 44444444-4444-4444-8444-444444444444
-        run: |
-          npm run prepare:deploy:preview -w @spotify-wallpaper/cloudflare-worker
-          npx wrangler deploy --dry-run --env preview --config apps/cloudflare-worker/.wrangler.preview.generated.json --outdir dist-preview
-
-      - name: Dry-run generated production Worker config
-        shell: pwsh
-        env:
-          CLOUDFLARE_DEPLOY_ENV: production
-          CLOUDFLARE_PRODUCTION_PUBLIC_BASE_URL: https://ci-worker.example
-          CLOUDFLARE_PRODUCTION_PRIMARY_D1_ID: 33333333-3333-4333-8333-333333333333
-          CLOUDFLARE_PRODUCTION_DELETION_D1_ID: 44444444-4444-4444-8444-444444444444
-          CLOUDFLARE_PREVIEW_PUBLIC_BASE_URL: https://preview-ci-worker.example
-          CLOUDFLARE_PREVIEW_PRIMARY_D1_ID: 11111111-1111-4111-8111-111111111111
-          CLOUDFLARE_PREVIEW_DELETION_D1_ID: 22222222-2222-4222-8222-222222222222
-        run: |
-          npm run prepare:deploy:production -w @spotify-wallpaper/cloudflare-worker
-          npx wrangler deploy --dry-run --env production --config apps/cloudflare-worker/.wrangler.production.generated.json --outdir dist-production
-
       - name: Build Workshop artifact
-        run: npm run build:workshop -w @spotify-wallpaper/wallpaper
+        shell: pwsh
         env:
-          VITE_SPOTIFY_BACKEND_ORIGIN: https://ci-worker.example
-          VITE_SPOTIFY_ACCESS_TOKEN: SWPB_CI_ACCESS_TOKEN_CANARY
-          VITE_SPOTIFY_REFRESH_TOKEN: SWPB_CI_REFRESH_TOKEN_CANARY
-          VITE_SPOTIFY_PKCE_VERIFIER: SWPB_CI_PKCE_VERIFIER_CANARY
-          VITE_SPOTIFY_WORKER_KEY: SWPB_CI_WORKER_KEY_CANARY
+          VITE_SPOTIFY_BACKEND_ORIGIN: https://ciel-spotify-wallpaper.duckdns.org
+        run: |
+          npm run build:workshop -w @spotify-wallpaper/wallpaper
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Scan release artifacts for secrets
         run: npm run scan:public-backend-secrets:all
@@ -136,3 +134,21 @@ jobs:
           } else {
             git diff --check "${{ github.event.before }}...${{ github.sha }}"
           }
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Build Linux integration image
+        run: docker build -f deploy/public-backend/test/Dockerfile.synthetic-e2e -t spotify-wallpaper-public-backend-integration .
+
+      - name: Run synthetic OAuth integration
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" spotify-wallpaper-public-backend-integration sh /repo/deploy/public-backend/test/synthetic-e2e.sh
+
+      - name: Run restore and reconcile integration
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" spotify-wallpaper-public-backend-integration sh /repo/deploy/public-backend/test/restore-reconcile-integration.sh
+
+      - name: Run release integration
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/repo:ro" spotify-wallpaper-public-backend-integration sh /repo/deploy/public-backend/test/release-integration.sh

@@ -1,494 +1,269 @@
-# Cloudflare Worker Deployment Runbook
-
-## Scope
-
-This runbook deploys the optional public Spotify backend to Cloudflare
-Workers. Preview and production are separate security boundaries. Never reuse a
-D1 database, key, Rate Limiting namespace, Analytics Engine dataset, Worker
-name, or hostname between them.
-
-Production deployment is allowed only when:
-
-- the Cloudflare account uses Workers Paid;
-- the production hostname is a fixed HTTPS Custom Domain in a zone controlled
-  by the operator;
-- Spotify is configured with the exact callback
-  `$selectedPublicBaseUrl/auth/callback`;
-- invocation logs remain disabled;
-- both D1 migration gates pass; and
-- the preview release has completed its verification and soak gates.
-
-Do not use a `workers.dev` URL as the production Spotify redirect URI.
-
-## Operator environment
-
-Obtain values from the deployment inventory or secret manager and expose them
-only to the current PowerShell process. Do not write them to a tracked file.
-The generated configuration consumes these variables:
-
-```text
-CLOUDFLARE_DEPLOY_ENV
-CLOUDFLARE_PREVIEW_PUBLIC_BASE_URL
-CLOUDFLARE_PREVIEW_PRIMARY_D1_ID
-CLOUDFLARE_PREVIEW_DELETION_D1_ID
-CLOUDFLARE_PRODUCTION_PUBLIC_BASE_URL
-CLOUDFLARE_PRODUCTION_PRIMARY_D1_ID
-CLOUDFLARE_PRODUCTION_DELETION_D1_ID
-```
-
-`CLOUDFLARE_DEPLOY_ENV` is mandatory. The generator reads all six
-environment-specific values, rejects any missing value, and rejects origins or
-D1 IDs shared across preview and production before selecting the requested
-environment.
-
-The deployment inventory also supplies:
-
-```text
-CLOUDFLARE_ACCOUNT_ID
-CLOUDFLARE_API_TOKEN
-CLOUDFLARE_PRIMARY_D1_NAME
-CLOUDFLARE_DELETION_D1_NAME
-CLOUDFLARE_CUSTOM_DOMAIN
-CLOUDFLARE_GENERATED_CONFIG
-CLOUDFLARE_AUTH_RATE_LIMIT_NAMESPACE_ID
-CLOUDFLARE_PRE_AUTH_RATE_LIMIT_NAMESPACE_ID
-CLOUDFLARE_PLAYBACK_RATE_LIMIT_NAMESPACE_ID
-CLOUDFLARE_CONTROL_RATE_LIMIT_NAMESPACE_ID
-CLOUDFLARE_ANALYTICS_DATASET
-CLOUDFLARE_MONTHLY_BUDGET_USD
-```
-
-Use `preview` or `production` for `CLOUDFLARE_DEPLOY_ENV`. Each public base URL
-must be exactly `https://` plus its Custom Domain on standard port 443, with no
-explicit port, path, query, fragment, user information, trailing slash, or
-redirect.
-
-Check presence without printing values:
-
-```powershell
-$deployEnvironment = $env:CLOUDFLARE_DEPLOY_ENV
-if ($deployEnvironment -notin @('preview', 'production')) {
-  throw 'CLOUDFLARE_DEPLOY_ENV must be preview or production.'
-}
-$environmentPrefix = "CLOUDFLARE_$($deployEnvironment.ToUpperInvariant())"
-$publicBaseUrlVariable = "${environmentPrefix}_PUBLIC_BASE_URL"
-$primaryD1IdVariable = "${environmentPrefix}_PRIMARY_D1_ID"
-$deletionD1IdVariable = "${environmentPrefix}_DELETION_D1_ID"
-$required = @(
-  'CLOUDFLARE_DEPLOY_ENV',
-  'CLOUDFLARE_PREVIEW_PUBLIC_BASE_URL',
-  'CLOUDFLARE_PREVIEW_PRIMARY_D1_ID',
-  'CLOUDFLARE_PREVIEW_DELETION_D1_ID',
-  'CLOUDFLARE_PRODUCTION_PUBLIC_BASE_URL',
-  'CLOUDFLARE_PRODUCTION_PRIMARY_D1_ID',
-  'CLOUDFLARE_PRODUCTION_DELETION_D1_ID',
-  'CLOUDFLARE_PRIMARY_D1_NAME',
-  'CLOUDFLARE_DELETION_D1_NAME',
-  'CLOUDFLARE_CUSTOM_DOMAIN',
-  'CLOUDFLARE_GENERATED_CONFIG',
-  'CLOUDFLARE_AUTH_RATE_LIMIT_NAMESPACE_ID',
-  'CLOUDFLARE_PRE_AUTH_RATE_LIMIT_NAMESPACE_ID',
-  'CLOUDFLARE_PLAYBACK_RATE_LIMIT_NAMESPACE_ID',
-  'CLOUDFLARE_CONTROL_RATE_LIMIT_NAMESPACE_ID',
-  'CLOUDFLARE_ANALYTICS_DATASET',
-  'CLOUDFLARE_MONTHLY_BUDGET_USD'
-)
-$missing = $required.Where({ [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) })
-if ($missing.Count -ne 0) { throw "Missing deployment variables: $($missing -join ', ')" }
-$selectedPublicBaseUrl = [Environment]::GetEnvironmentVariable($publicBaseUrlVariable)
-$selectedPrimaryD1Id = [Environment]::GetEnvironmentVariable($primaryD1IdVariable)
-$selectedDeletionD1Id = [Environment]::GetEnvironmentVariable($deletionD1IdVariable)
-$publicUri = [uri]$selectedPublicBaseUrl
-if (
-  $publicUri.Scheme -ne 'https' -or
-  -not $publicUri.IsDefaultPort -or
-  $publicUri.Port -ne 443 -or
-  $publicUri.UserInfo -or
-  $publicUri.AbsolutePath -ne '/' -or
-  $publicUri.Query -or
-  $publicUri.Fragment -or
-  $selectedPublicBaseUrl -ne "https://$($publicUri.DnsSafeHost)"
-) { throw 'Public origin must be a canonical HTTPS origin on standard port 443.' }
-$expectedPrimaryName = "spotify-wallpaper-$deployEnvironment"
-$expectedDeletionName = "spotify-wallpaper-deletion-$deployEnvironment"
-if ($env:CLOUDFLARE_PRIMARY_D1_NAME -ne $expectedPrimaryName) { throw 'Primary D1 name must match the generated binding.' }
-if ($env:CLOUDFLARE_DELETION_D1_NAME -ne $expectedDeletionName) { throw 'Deletion D1 name must match the generated binding.' }
-if ($env:CLOUDFLARE_CUSTOM_DOMAIN -ne $publicUri.DnsSafeHost) { throw 'Custom Domain must match the public origin.' }
-$monthlyBudgetUsd = 0.0
-$budgetIsValid = [double]::TryParse(
-  $env:CLOUDFLARE_MONTHLY_BUDGET_USD,
-  [Globalization.NumberStyles]::Float,
-  [Globalization.CultureInfo]::InvariantCulture,
-  [ref]$monthlyBudgetUsd
-)
-if (
-  -not $budgetIsValid -or
-  [double]::IsNaN($monthlyBudgetUsd) -or
-  [double]::IsInfinity($monthlyBudgetUsd) -or
-  $monthlyBudgetUsd -le 0
-) { throw 'CLOUDFLARE_MONTHLY_BUDGET_USD must be a positive finite number.' }
-```
-
-Never print the process environment in CI.
-
-## One-time provisioning
-
-### Account and domain
-
-1. Enable Workers Paid and confirm the Standard usage model in the Cloudflare
-   dashboard.
-2. Add the preview and production hostnames to separate Worker environments.
-3. Configure each hostname as a Custom Domain, not a wildcard route. The
-   generated config must contain:
-
-   ```json
-   {
-     "routes": [
-       {
-         "pattern": "$env:CLOUDFLARE_CUSTOM_DOMAIN",
-         "custom_domain": true
-       }
-     ]
-   }
-   ```
-
-   The snippet is illustrative: the generator substitutes the environment
-   value. Do not commit a real hostname to generated output.
-4. Wait for the Custom Domain certificate to become active before configuring
-   Spotify.
-
-### D1 databases
-
-Create two D1 databases for the selected environment. Store the returned IDs
-in the deployment inventory, then expose them through the selected environment
-variables, for example `CLOUDFLARE_PREVIEW_PRIMARY_D1_ID` and
-`CLOUDFLARE_PREVIEW_DELETION_D1_ID`.
-
-```powershell
-npx wrangler d1 create $env:CLOUDFLARE_PRIMARY_D1_NAME
-npx wrangler d1 create $env:CLOUDFLARE_DELETION_D1_NAME
-```
-
-Repeat for the other environment with different names and IDs. Do not rely on
-automatic provisioning in preview or production.
-
-### Rate Limiting and Analytics Engine
-
-Reserve four distinct Rate Limiting namespace IDs for each environment:
-authentication, pre-authentication API traffic, authenticated playback, and
-controls. Preview IDs must not appear in the production generated config.
-
-`PRE_AUTH_RATE_LIMITER` limits unauthenticated work by source IP before D1
-lookups. Give it a substantially higher limit than the per-credential playback
-limit so several legitimate Wallpaper Engine clients behind one NAT do not
-consume the shared IP budget. The generated configuration must keep its limit
-at least ten times the playback limit; select the final value from NAT/load-test
-evidence rather than lowering it to the per-user polling budget.
-
-Cloudflare Rate Limiting is per location and permissive. It is abuse mitigation,
-not a globally strict distributed-DoS control or Spotify upstream budget.
-Before public traffic, configure reviewed zone-level WAF/rate-limiting controls
-and complete distributed invalid-token, shared-NAT, authenticated-token, Spotify
-upstream, and Worker/D1/Analytics cost tests. Record these as external release
-gates; a successful Worker deploy does not close them.
-
-Use one Analytics Engine dataset per environment. The dataset is created on
-first write after the binding is deployed. Only aggregate dimensions are
-allowed:
-
-- route class;
-- HTTP status class;
-- latency bucket;
-- rate-limit event class;
-- token-refresh outcome class; and
-- numeric latency and billable Worker invocation counts. Use Cloudflare's
-  built-in Worker and D1 metrics for CPU and rows-read/written cost inputs.
-
-Do not write URL, query string, callback URL, Client ID, IP address, `publicId`,
-OAuth state, authorization code, PKCE verifier, Spotify token, Pairing Token,
-key material, track metadata, or exception text.
-
-## Generate and validate deployment configuration
-
-From the repository root:
-
-```powershell
-$prepareScript = "prepare:deploy:$($env:CLOUDFLARE_DEPLOY_ENV)"
-npm run $prepareScript -w @spotify-wallpaper/cloudflare-worker
-$env:CLOUDFLARE_GENERATED_CONFIG = (
-  Resolve-Path "apps/cloudflare-worker/.wrangler.$($env:CLOUDFLARE_DEPLOY_ENV).generated.json"
-).Path
-```
-
-The generated config is environment-specific and must contain only the selected
-environment under `env`. It is a disposable artifact and must not be committed.
-Set `CLOUDFLARE_GENERATED_CONFIG` to that generated file's absolute path.
-
-Validate the generated file without printing its full contents:
-
-```powershell
-$config = Get-Content -Raw $env:CLOUDFLARE_GENERATED_CONFIG | ConvertFrom-Json
-$selected = $config.env.PSObject.Properties[$deployEnvironment].Value
-if ($config.env.PSObject.Properties.Count -ne 1) { throw 'Generated config contains another environment.' }
-if ($selected.vars.ENVIRONMENT -ne $deployEnvironment) { throw 'Environment mismatch.' }
-if ($selected.vars.PUBLIC_BASE_URL -ne $selectedPublicBaseUrl) { throw 'Public origin mismatch.' }
-if ($selected.d1_databases[0].database_id -ne $selectedPrimaryD1Id) { throw 'Primary D1 mismatch.' }
-if ($selected.d1_databases[1].database_id -ne $selectedDeletionD1Id) { throw 'Deletion D1 mismatch.' }
-if ($config.observability.logs.invocation_logs -ne $false) { throw 'Invocation logs must be disabled.' }
-if ($selected.routes.Count -ne 1 -or $selected.routes[0].custom_domain -ne $true) { throw 'Custom Domain is required.' }
-if ($selected.routes[0].pattern -ne $env:CLOUDFLARE_CUSTOM_DOMAIN) { throw 'Custom Domain mismatch.' }
-$rateLimitBindings = @{}
-foreach ($binding in $selected.ratelimits) { $rateLimitBindings[$binding.name] = $binding }
-if ($rateLimitBindings.AUTH_RATE_LIMITER.namespace_id -ne $env:CLOUDFLARE_AUTH_RATE_LIMIT_NAMESPACE_ID) { throw 'Auth Rate Limit namespace mismatch.' }
-if ($rateLimitBindings.PRE_AUTH_RATE_LIMITER.namespace_id -ne $env:CLOUDFLARE_PRE_AUTH_RATE_LIMIT_NAMESPACE_ID) { throw 'Pre-auth Rate Limit namespace mismatch.' }
-if ($rateLimitBindings.PLAYBACK_RATE_LIMITER.namespace_id -ne $env:CLOUDFLARE_PLAYBACK_RATE_LIMIT_NAMESPACE_ID) { throw 'Playback Rate Limit namespace mismatch.' }
-if ($rateLimitBindings.CONTROL_RATE_LIMITER.namespace_id -ne $env:CLOUDFLARE_CONTROL_RATE_LIMIT_NAMESPACE_ID) { throw 'Control Rate Limit namespace mismatch.' }
-if (
-  $rateLimitBindings.PRE_AUTH_RATE_LIMITER.simple.limit -lt
-  (10 * $rateLimitBindings.PLAYBACK_RATE_LIMITER.simple.limit)
-) { throw 'Pre-auth Rate Limit must be at least ten times the playback limit.' }
-if ($selected.analytics_engine_datasets.Count -ne 1) { throw 'Analytics Engine binding is required.' }
-if ($selected.analytics_engine_datasets[0].dataset -ne $env:CLOUDFLARE_ANALYTICS_DATASET) { throw 'Analytics Engine dataset mismatch.' }
-```
-
-Compare the selected namespace IDs, D1 IDs, dataset, and hostname with the
-other environment's inventory. Stop if any value is shared.
-
-Validate both generated environment configs with Wrangler before migration or
-deployment. Preserve the selected target, generate and dry-run preview and
-production independently, then regenerate the selected target:
-
-```powershell
-$targetEnvironment = $env:CLOUDFLARE_DEPLOY_ENV
-foreach ($environment in @('preview', 'production')) {
-  $env:CLOUDFLARE_DEPLOY_ENV = $environment
-  $prepareScript = "prepare:deploy:$environment"
-  npm run $prepareScript -w @spotify-wallpaper/cloudflare-worker
-  if ($LASTEXITCODE -ne 0) { throw "Config generation failed for $environment." }
-  $generatedConfig = (
-    Resolve-Path "apps/cloudflare-worker/.wrangler.$environment.generated.json"
-  ).Path
-  npx wrangler deploy --dry-run --env $environment --config $generatedConfig
-  if ($LASTEXITCODE -ne 0) { throw "Wrangler dry-run failed for $environment." }
-}
-$env:CLOUDFLARE_DEPLOY_ENV = $targetEnvironment
-$prepareScript = "prepare:deploy:$targetEnvironment"
-npm run $prepareScript -w @spotify-wallpaper/cloudflare-worker
-if ($LASTEXITCODE -ne 0) { throw 'Selected deployment config regeneration failed.' }
-$env:CLOUDFLARE_GENERATED_CONFIG = (
-  Resolve-Path "apps/cloudflare-worker/.wrangler.$targetEnvironment.generated.json"
-).Path
-```
-
-Do not print or commit either generated config. The dry-run must show the
-expected environment-specific D1, Analytics Engine, and four Rate Limiting
-bindings, and invocation logs must remain disabled.
-
-## Migration gate
-
-Use binding names with the generated config so Wrangler selects each binding's
-`migrations_dir`. Run `list`, `apply`, then `list` again for both databases:
-
-```powershell
-npx wrangler d1 migrations list DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-npx wrangler d1 migrations apply DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-npx wrangler d1 migrations list DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-
-npx wrangler d1 migrations list DELETION_DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-npx wrangler d1 migrations apply DELETION_DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-npx wrangler d1 migrations list DELETION_DB --remote --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-The second `list` for each database must report no unapplied migrations.
-Record command status and migration names in the release record, but do not
-store database exports or row contents as CI artifacts.
-
-## Configure Worker secrets
-
-Configure secrets independently for preview and production:
-
-```powershell
-$secretNames = @(
-  'TOKEN_ENCRYPTION_KEYRING',
-  'TOKEN_ENCRYPTION_ACTIVE_KEY_ID',
-  'PAIRING_HMAC_KEYRING',
-  'PAIRING_HMAC_ACTIVE_KEY_ID',
-  'OAUTH_STATE_HMAC_KEY'
-)
-foreach ($secretName in $secretNames) {
-  npx wrangler secret put $secretName --env $env:CLOUDFLARE_DEPLOY_ENV `
-    --config $env:CLOUDFLARE_GENERATED_CONFIG
-  if ($LASTEXITCODE -ne 0) { throw "Secret update failed for $secretName" }
-}
-```
-
-Enter each value only at Wrangler's prompt. Do not pass a secret on the command
-line, pipe it from shell history, place it in `.env`, or capture the prompt.
-Encryption, Pairing HMAC, and OAuth-state keys must be independent CSPRNG
-values. Follow the key-rotation runbook for an existing deployment.
-
-## Pre-deploy gates
-
-```powershell
-h5i capture run -- npm run test -w @spotify-wallpaper/cloudflare-worker
-h5i capture run -- npm run check -w @spotify-wallpaper/cloudflare-worker
-h5i capture run -- npm run test -w @spotify-wallpaper/wallpaper
-h5i capture run -- npm run check -w @spotify-wallpaper/wallpaper
-h5i capture run -- cargo test
-git diff --check
-```
-
-Build the Workshop artifact with the same exact production origin:
-
-```powershell
-$env:VITE_SPOTIFY_BACKEND_ORIGIN = $selectedPublicBaseUrl
-h5i capture run -- npm run build:workshop -w @spotify-wallpaper/wallpaper
-h5i capture run -- npm run scan:public-backend-secrets:all
-```
-
-Inspect `apps/wallpaper/dist/project.json` and the generated JavaScript bundle
-for the expected origin. Confirm that neither contains a Pairing Token or any
-Worker secret.
-
-## Deploy
-
-Deploy preview first:
-
-```powershell
-h5i capture run -- npx wrangler deploy --strict --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-npx wrangler deployments list --env $env:CLOUDFLARE_DEPLOY_ENV --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
-
-Record the deployed version ID outside the repository. Do not promote the same
-generated file to production; regenerate it from the production environment
-inventory and repeat all gates.
-
-## Smoke tests
-
-Use non-verbose requests. Never use a real Pairing Token in a shell command.
-
-```powershell
-$health = Invoke-RestMethod -Method Get -Uri "$selectedPublicBaseUrl/health"
-if ($health.value.service -ne 'spotify-wallpaper-backend') { throw 'Health check failed.' }
-
-$setup = Invoke-WebRequest -Method Get -Uri "$selectedPublicBaseUrl/setup"
-if ($setup.StatusCode -ne 200) { throw 'Setup page failed.' }
-
-$unauthorized = Invoke-WebRequest -SkipHttpErrorCheck -Method Get `
-  -Uri "$selectedPublicBaseUrl/api/playback" `
-  -Headers @{ Authorization = 'Bearer invalid' }
-if ($unauthorized.StatusCode -ne 401) { throw 'Unauthorized API gate failed.' }
-```
-
-In an isolated browser profile, complete one preview OAuth flow using a
-dedicated Spotify test app. Do not copy the callback URL, inspect it with
-remote logging, or save the one-time Pairing Token outside Wallpaper Engine's
-property. Verify playback, every control, reauthorization, and account deletion.
-
-## Monitoring and alerts
-
-Invocation logs must stay disabled in source, generated config, dashboard, and
-every deployed version. Do not use `wrangler tail` on this Worker.
-
-Query aggregate Analytics Engine data through an approved dashboard or SQL API
-client. Alerts must cover:
-
-- 5xx/status-class increase;
-- refresh failure and `invalid_grant` outcome increase;
-- rate-limit increase;
-- scheduled reconciliation failure or pending deletion growth;
-- D1 rows read/written and Worker request/CPU cost; and
-- absence of expected aggregate metrics.
-
-For the initial beta, configure and test these minimum thresholds:
-
-- at least five Worker 5xx responses in five minutes;
-- at least five refresh `failed` or `network_error` outcomes in ten minutes;
-- at least twenty Worker rate-limit responses in five minutes;
-- any scheduled `failed` or `partial_failure` outcome;
-- deletion `oldestPendingAgeMs >= 1800000` (two 15-minute cron intervals),
-  `maxRetryCount >= 2`, or pending count increasing across two consecutive
-  scheduled points; and
-- no scheduled reconciler metric for 30 minutes, or no request metric for ten
-  minutes while the synthetic health check is active.
-
-The reconciler metric doubles are ordered as attempted, reconciled, failed,
-pending, oldest-pending age in milliseconds, maximum retry count, and event
-count. It contains no `publicId` or other credential identifier.
-
-Set three account budget alerts at 50%, 80%, and 100% of the approved monthly
-budget. Cloudflare budget alerts use dollar thresholds, so calculate the three
-amounts from `CLOUDFLARE_MONTHLY_BUDGET_USD` and configure each in the
-Cloudflare Billing dashboard:
-
-```powershell
-$budget = 0.0
-$budgetIsValid = [double]::TryParse(
-  $env:CLOUDFLARE_MONTHLY_BUDGET_USD,
-  [Globalization.NumberStyles]::Float,
-  [Globalization.CultureInfo]::InvariantCulture,
-  [ref]$budget
-)
-if (
-  -not $budgetIsValid -or
-  [double]::IsNaN($budget) -or
-  [double]::IsInfinity($budget) -or
-  $budget -le 0
-) { throw 'Monthly budget must be a positive finite number.' }
-$thresholds = 0.50, 0.80, 1.00 | ForEach-Object { [math]::Round($budget * $_, 2) }
-if ($thresholds.Count -ne 3) { throw 'Budget threshold calculation failed.' }
-```
-
-Route alerts to at least two maintainers and test delivery before production.
-Record delivery evidence for every non-budget alert above as well as the 50%,
-80%, and 100% budget alerts. A configured but untested alert does not satisfy
-the release gate.
+# Public Backend VPS Deployment Runbook
+
+> The filename is retained temporarily to avoid a path-only staging change.
+> This content is the current Node.js/PostgreSQL VPS runbook; it does not
+> authorize a Cloudflare deployment.
+
+## Scope and release state
+
+Deploy the optional backend to the operator-controlled Linux VPS at
+`https://ciel-spotify-wallpaper.duckdns.org`. The production stack is
+Node.js 22, PostgreSQL 17, Caddy, OAuth2 Proxy, systemd, and two
+permission-separated AF_UNIX sockets.
+
+Production must set `SPOTIFY_MODE=policy_locked`. The deployment proves the
+locked stack only. Do not register a Spotify callback, use a real Spotify
+credential, issue a Pairing Token, or expose `synthetic_test`.
+
+Stop unless all of these are true:
+
+- the artifact checksum and reviewed release ID are recorded;
+- Node.js major version is 22 and PostgreSQL major version is 17;
+- DNS and TLS resolve only the fixed production origin;
+- the PostgreSQL migration and two independent backup-validation gates pass;
+- Caddy/OAuth2 Proxy request/auth/access logging is disabled;
+- Node production has no TCP listener;
+- public/admin socket users, groups, directories, and modes match tracked
+  systemd/proxy configuration; and
+- rollback and fail-closed restore procedures have been reviewed.
+
+## Filesystem and service boundaries
+
+Install immutable application-and-configuration generations beneath
+`/opt/spotify-wallpaper/generations/` and point
+`/opt/spotify-wallpaper/current` to one verified generation. Store
+root-owned configuration and systemd credentials beneath
+`/etc/spotify-wallpaper/`. Runtime sockets belong beneath
+`/run/spotify-wallpaper/` and are recreated by systemd.
+
+Build the source artifact only from the clean reviewed `HEAD`, passing that
+exact 40-character Git SHA to the builder. The builder rebuilds both ignored
+`dist` trees and writes the SHA to `RELEASE_ID`; release validation requires
+that file to match the deployment release ID and its `SHA256SUMS` entry. The
+remaining allowlist is the root manifest/lock, public-backend
+manifest/compiled dist/migrations/legal files, and shared-types manifest/dist.
+It must not contain `node_modules`, deployment configuration, TypeScript
+source, source maps, tests, fixtures, dumps, `.env` files, logs, secrets, or
+tool caches.
+The only external runtime npm dependency is `pg`; the local
+`@spotify-wallpaper/shared-types` package remains a product dependency.
+
+Systemd, Caddy, OAuth2 Proxy, PostgreSQL, and timer files are a separate config
+bundle generated from tracked deployment files at the same reviewed Git SHA.
+Record and verify its sorted SHA-256 manifest independently. Never install
+configuration directly from a mutable working checkout.
+Build it with
+`deploy/public-backend/scripts/build-config-bundle.sh <reviewed-HEAD-SHA> <new-output.tar.gz>`;
+the builder archives an explicit production-file allowlist and excludes its
+own builder and every deployment test.
+
+The release tool installs fixed root-owned links from the live operating-system
+paths into
+`/opt/spotify-wallpaper/current/config/deploy/public-backend/`.
+One atomic `current` switch therefore activates or rolls back the application
+and all non-secret configuration together. The fixed mappings are:
+
+- `/etc/caddy/Caddyfile` and
+  `/etc/spotify-wallpaper/oauth2-proxy.cfg`;
+- `/etc/postgresql/17/swp/postgresql.conf`, `pg_hba.conf`, and `pg_ident.conf`;
+- every tracked `swp-*.service` and `swp-*.timer` beneath
+  `/etc/systemd/system/`;
+- the tracked sysusers and tmpfiles definitions; and
+- the runtime SQL and shell files beneath
+  `/usr/local/libexec/spotify-wallpaper/`.
+
+The real `/etc/spotify-wallpaper/public-backend.env` and
+`oauth2-proxy.env` files contain local secrets and are deliberately not links
+and not bundle members. Their tracked `.example` files are reference material
+only. The link installer refuses an existing regular file or a link to any
+other source; it never overwrites a package or operator file.
+
+Never print environment variables or systemd credentials. Deployment records
+contain only release ID, artifact checksum, fixed component versions, fixed
+migration names, timestamps, and pass/fail outcomes.
+
+## Database gate
+
+PostgreSQL uses exactly:
+
+- `spotify_wallpaper`;
+- `spotify_wallpaper_deletion_ledger`.
+
+The application, migration, backup, and restore roles are separate and
+least-privilege. Credentials are supplied by root-owned PostgreSQL service
+definitions or systemd credentials, never command-line passwords or tracked
+files.
+The peer-authenticated local `postgres` role is reachable only from the OS
+`postgres` account and is used solely by the root-run primary-loss recovery
+procedure to establish the reviewed owner and ACL boundary. No service process
+uses that role.
+
+Before service restart:
+
+1. set a root-only `umask 077`, place traffic in maintenance, and stop Node;
+2. run the tracked primary migrations with `ON_ERROR_STOP=1`;
+3. run the tracked ledger migrations independently with `ON_ERROR_STOP=1`;
+4. verify both schema-version tables contain exactly the release migrations;
+5. create each custom-format dump through a root-owned temporary file on the
+   same VPS, verify owner root and mode `0600`, validate with
+   `pg_restore --list`, and calculate its checksum without renaming it;
+6. restore that still-temporary dump into its own isolated temporary
+   validation database;
+7. build a clean expected database from every tracked migration, compare its
+   full schema, constraints, indexes, and privileges with the restored copy,
+   reject unexpected objects or public write privileges, and run fixed
+   aggregate checks without selecting credential contents; and
+8. only after every validation succeeds, atomically rename the dump into that
+   database's independent backup series, then drop only the explicitly named
+   temporary validation database. On failure, delete the temporary dump by
+   its exact verified path and never give it a retained-backup name.
+
+No normal, emergency, or validation dump is copied off the VPS. Temporary
+files and expired 35-day backups are deleted only by exact absolute path after
+owner/mode/path validation. Same-VPS backup cannot recover VPS/disk loss.
+
+A primary success cannot substitute for a ledger success. Any migration,
+dump, checksum, validation-restore, or schema mismatch keeps traffic closed.
+Do not build a D1 import step; no live D1 data has been evidenced.
+
+## Install
+
+1. Create the fresh PostgreSQL `17/swp` cluster in stopped state. Preserve any
+   package-created Caddy and PostgreSQL configuration at separately named,
+   root-only paths, leaving only the exact reviewed link targets absent. Do not
+   remove an active configuration or use this first-install step for an
+   existing cluster.
+2. Verify the config-bundle transport checksum, extract it into a root-only
+   temporary directory, and verify `CONFIG-MANIFEST.sha256` before executing
+   anything from it.
+3. Invoke that extracted bundle's `release.sh deploy` command with the source
+   artifact, config bundle, both transport checksums, and exact release SHA.
+   The command re-verifies both archives, extracts the allowlisted artifact
+   into a new empty directory, and rejects unexpected files, symlinks, source
+   maps, writable executables, or secret-bearing files.
+4. The release command runs workspace-scoped
+   `npm ci --omit=dev --ignore-scripts`, then verifies shared-type import,
+   startup, and health.
+5. The release command writes and verifies a
+   sorted SHA-256 manifest over the complete runtime tree including
+   `node_modules`, grants non-root services only read/directory-traverse access,
+   removes every write bit, stores the application and configuration together
+   under the exact release SHA, installs only the fixed links above, and
+   atomically switches `current`. A completely prepared existing generation is
+   verified and reused after an interrupted promotion. On an already installed
+   host, every fixed link must already point through `current`; any other file
+   or link stops deployment.
+6. After the release smoke passes, reload systemd and start only the
+   PostgreSQL cluster while Node, OAuth2 Proxy, and Caddy remain stopped.
+   `release.sh` applies the verified sysusers and tmpfiles definitions before
+   its non-root smoke, so the service accounts and socket directories already
+   exist when startup is checked.
+7. As the local `postgres` OS user, execute the linked
+   `/usr/local/libexec/spotify-wallpaper/bootstrap.sql` against the `postgres`
+   database. It idempotently creates or resets the five login roles to the
+   exact passwordless, least-privilege attributes and creates both fixed
+   databases before applying owners and database privileges.
+8. Configure the VPS/provider firewall to allow inbound TCP 443 and deny
+   inbound TCP 80. Verify that an HTTP probe is blocked or never returns a
+   redirect/`Location` header before opening traffic.
+9. Run `systemd-analyze verify` against every installed unit, then run
+   `swp-migrate.service`. It is a non-resident oneshot; its completion is
+   ordered before Node without leaving the migration unit active.
+10. Validate Caddy and OAuth2 Proxy configuration without dumping secrets, then
+   start Node, OAuth2 Proxy, and Caddy in that order.
+
+The Node unit must set `SPOTIFY_MODE=policy_locked`, use an unprivileged user,
+apply the tracked sandbox, and create only the two AF_UNIX sockets. Any
+unknown mode must fail startup. A production TCP `LISTEN` owned by the Node
+process is an immediate deployment failure.
+
+## Route and socket verification
+
+Verify locally without credentials:
+
+- public socket accepts only `GET /health`, `GET /privacy`, `GET /terms`,
+  `GET /auth/callback`, `GET /api/playback`, `POST /api/control`,
+  `DELETE /api/account`, and
+  `OPTIONS /api/playback|/api/control`;
+- admin socket accepts only `GET /setup`, `POST /auth/start`,
+  `GET|POST /auth/confirm`, and `POST /auth/reauthorize`;
+- every wrong-socket, wrong-method, unknown-path, and trailing-slash request is
+  rejected;
+- `/health` succeeds while both databases are intentionally unavailable;
+- every exact allowed Spotify route/method returns the identical no-store 503
+  without Node reading body, Cookie, Authorization, database, rate limiter,
+  randomness, or outbound state;
+- every wrong-socket, wrong-method, unknown-path, and trailing-slash request is
+  rejected.
+
+Verify socket ownership/mode. Production Caddy forwards only the exact public
+route table, the exact admin table through OAuth2 Proxy, and the reviewed GET
+OAuth2 endpoint families. Validate the authenticated setup body only in an
+externally unreachable synthetic environment; production Node remains locked.
+Do not weaken permissions to make a smoke test pass.
+
+## External smoke
+
+Use the exact origin and non-verbose clients. Do not record query strings,
+headers, redirect locations, or credentials.
+
+Expected results:
+
+- `GET /health`: fixed successful liveness response;
+- `GET /privacy`: current Privacy Notice;
+- `GET /terms`: current EULA;
+- unauthenticated `GET /setup`: redirect into the reviewed GitHub login path;
+- authenticated allowed-user `GET /setup`: fixed no-store 503 from the
+  policy-locked Node route;
+- `GET /auth/callback`: fixed no-store 503;
+- `GET /api/playback`: fixed no-store 503;
+- `POST /api/control`: fixed no-store 503;
+- `DELETE /api/account`: fixed no-store 503.
+
+Confirm no Caddy/OAuth2 Proxy request/auth/access record was created and Node
+emitted only approved fixed events/counts. Do not run an OAuth flow or send a
+Bearer token.
+
+## Local readiness and alerts
+
+Run local fixed-output checks for:
+
+- Node process and socket state;
+- PostgreSQL connectivity and exact migration versions for both databases;
+- backup age, size, checksum, and isolated validation-restore outcome for each
+  database;
+- deletion-ledger pending/oldest/retry aggregate state;
+- disk/inode capacity;
+- TLS certificate lifetime;
+- failed systemd units and timer freshness; and
+- absence of a Node TCP listener.
+
+Alerts use secret-free fixed subjects/bodies through the approved local
+Postfix relay. Test delivery to the reviewed recipients. No readiness check
+adds an HTTP route or prints a URL, header, Client ID, IP, row, or secret.
 
 ## Rollback
 
-Worker rollback does not roll back D1. Verify schema compatibility before
-rolling back:
+Application rollback does not roll back either database.
 
-```powershell
-$env:CLOUDFLARE_ROLLBACK_VERSION_ID = [Environment]::GetEnvironmentVariable('CLOUDFLARE_ROLLBACK_VERSION_ID')
-if ([string]::IsNullOrWhiteSpace($env:CLOUDFLARE_ROLLBACK_VERSION_ID)) { throw 'Rollback version is required.' }
-npx wrangler rollback $env:CLOUDFLARE_ROLLBACK_VERSION_ID `
-  --message 'Operational rollback' `
-  --env $env:CLOUDFLARE_DEPLOY_ENV `
-  --config $env:CLOUDFLARE_GENERATED_CONFIG
-```
+1. return to maintenance and stop Node;
+2. confirm the previous artifact is compatible with both current schemas;
+3. invoke `release.sh rollback <release-sha>`; it re-verifies the immutable
+   generation, atomically repoints the single `current` link, and runs
+   `systemctl daemon-reload` before returning;
+4. restart Node, OAuth2 Proxy, and Caddy in order;
+5. repeat socket, policy-lock, external smoke, and local readiness checks; and
+6. keep traffic closed if data integrity is uncertain.
 
-Repeat the smoke tests and monitor aggregate metrics. If data integrity is in
-question, stop traffic and use the restore runbook instead of a code rollback.
+Use the restore runbook for data recovery. Never compensate for a schema or
+ledger problem by exposing a previous binary.
 
-## Soak and promotion
+## Acceptance
 
-Preview must pass the complete integration suite. Production then starts as a
-limited beta and runs for at least 72 continuous hours across:
+Record the immutable release ID/checksum, fixed component versions, migration
+names, both backup-validation results, socket permissions, policy-lock matrix,
+local readiness results, alert delivery, rollback test, and soak result.
 
-- playing, paused, stopped, and track changes;
-- Access Token refresh and Spotify 429;
-- `invalid_grant` and reauthorization;
-- account deletion and scheduled reconciliation;
-- Worker deploy and rollback;
-- network and D1 failures; and
-- Wallpaper Engine restart and backend outage recovery.
-
-Before promotion, attach evidence that zone-level WAF controls are active and
-that shared-NAT, distributed invalid-token, authenticated-token, Spotify
-upstream, and Worker/D1/Analytics cost tests passed. Cloudflare binding limits
-and budget-alert configuration alone are not sufficient for public release.
-
-The 72-hour gate restarts after a security, persistence, OAuth, CORS, binding,
-or release-origin change. General Workshop publication remains blocked until
-the separate Spotify policy gate is closed.
-
-## References
-
-- [Wrangler environments and generated configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)
-- [Cloudflare Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
-- [D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)
-- [Worker Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
-- [Workers Analytics Engine](https://developers.cloudflare.com/analytics/analytics-engine/get-started/)
-- [Cloudflare usage-based billing and budget alerts](https://developers.cloudflare.com/billing/understand/usage-based-billing/)
-- [Worker rollbacks](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/)
+The dormant hardened OAuth acceptance line is tested separately in an
+externally unreachable synthetic environment. A successful locked deployment
+and synthetic OAuth suite still do not authorize real Spotify traffic.
