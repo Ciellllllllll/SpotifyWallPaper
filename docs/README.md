@@ -29,7 +29,8 @@ This directory splits the project specification into small files so Codex and Su
 - `22-performance.md`: performance rules.
 - `23-test-qa.md`: tests, mocks, manual QA.
 - `24-docs-and-reporting.md`: documentation and phase reports.
-- `25-public-backend.md`: optional Cloudflare Worker backend, OAuth, pairing, storage, API, and operations.
+- `25-public-backend.md`: optional Node.js 22/PostgreSQL 17 VPS backend,
+  policy lock, OAuth, pairing, socket boundaries, API, and operations.
 - `30-subagent-matrix.md`: SubAgent ownership and handoff rules.
 
 ## Release and QA documents
@@ -51,11 +52,13 @@ same-named file under `phase-reports/` is historical execution evidence.
 
 - `how-to-use-h5i.md`: required safe command-capture workflow for
   resource-intensive verification.
-- `operations/cloudflare-worker-deploy.md`: preview/production deployment.
-- `operations/cloudflare-worker-key-rotation.md`: encryption and HMAC key
+- `operations/cloudflare-worker-deploy.md`: VPS deployment and rollback. The
+  legacy filename is retained temporarily; its contents are current.
+- `operations/cloudflare-worker-key-rotation.md`: VPS encryption and HMAC key
   rotation.
-- `operations/cloudflare-worker-incident-response.md`: incident handling.
-- `operations/cloudflare-worker-restore.md`: restore and recovery.
+- `operations/cloudflare-worker-incident-response.md`: VPS incident handling.
+- `operations/cloudflare-worker-restore.md`: two-PostgreSQL-database restore
+  and recovery.
 
 ## Designs and implementation plans
 

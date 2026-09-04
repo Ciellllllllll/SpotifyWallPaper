@@ -82,18 +82,27 @@ The implementation must never print or persist secrets unintentionally. The foll
 - any future API key
 - public-backend Pairing Token
 - OAuth state and PKCE verifier
-- Worker encryption and Pairing HMAC keys
+- public-backend encryption and Pairing HMAC keys
 
 Debug display may show whether a token exists and token expiry time, but not the token value.
 
-For the public Worker:
+For the public VPS backend:
 
-- Cloudflare invocation logs must be disabled.
+- Caddy and OAuth2 Proxy request/auth/access logging must be disabled.
+- Node logs contain fixed event names and aggregate counts only. They never
+  contain URLs, query strings, callback data, headers, Client ID, IP address,
+  exception text, or secrets.
 - OAuth and setup pages use no-store, no-referrer, and restrictive CSP headers.
-- Refresh and Access Tokens are encrypted before D1 storage.
+- Refresh and Access Tokens are encrypted before PostgreSQL storage.
 - Pairing secrets are stored only as keyed HMAC digests.
 - Arbitrary HTTPS origins and redirects never receive Pairing Tokens.
 - Account deletion invalidates the Pairing Token before returning success.
+- Production accepts only `SPOTIFY_MODE=policy_locked`; unknown modes fail
+  startup. Every exact allowed Spotify route/method returns the fixed no-store
+  503 before Node inspects request or external state; methods and paths outside
+  the socket allowlists remain rejected.
+- Node production binds only the exact public/admin AF_UNIX sockets and each
+  socket rejects every method/path outside its allowlist.
 
 ## Stability gate
 
@@ -106,7 +115,7 @@ The wallpaper must start even if:
 - album image is missing.
 - settings JSON is malformed.
 - Wallpaper Engine audio listener is unavailable.
-- public backend or D1 is unavailable.
+- public backend or either PostgreSQL database is unavailable.
 - Spotify Refresh Token requires reauthorization.
 
 ## Performance gate

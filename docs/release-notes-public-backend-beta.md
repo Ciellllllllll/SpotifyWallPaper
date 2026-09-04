@@ -1,76 +1,93 @@
-# Public Backend Beta Release Notes
+# Public Backend VPS Migration Release Notes
 
 ## Status
 
-The optional Cloudflare Worker backend and Wallpaper integration are
-implemented for private staging and limited-beta preparation. General
-Wallpaper Engine Workshop publication is not approved. Spotify-connected
-Limited beta distribution is also blocked by the external policy, legal,
-infrastructure, and operations gates below; local/mock-only staging remains
-permitted.
+This document records the approved migration target; it is not a shipped
+release note until implementation, deployment, and the locked acceptance line
+pass. The current public-backend authority targets Node.js 22 ESM on a Linux VPS with
+PostgreSQL 17, Caddy, OAuth2 Proxy, and two permission-separated AF_UNIX
+sockets. The fixed production origin is
+`https://ciel-spotify-wallpaper.duckdns.org`.
 
-## Added
+When deployed, production is intentionally `SPOTIFY_MODE=policy_locked`. Every
+exact allowed Spotify route/method, including `GET /auth/callback`, returns a
+fixed no-store 503 before Node reads body, Cookie, Authorization, database,
+rate-limit, randomness, or outbound state. Spotify-connected Limited beta and general
+Workshop publication are not approved.
 
-- BYO Spotify Client ID authorization with Authorization Code and PKCE.
-- One-time `swpb1.` Pairing Token issuance without exposing Spotify tokens to
-  the wallpaper.
-- Encrypted D1 credential storage, Access Token refresh, Spotify 429 backoff,
-  reauthorization, controls, and account deletion.
-- Pre-authorization Privacy/EULA consent pages and Development Mode
-  restrictions on `/setup`.
-- Row-isolated deletion reconciliation with retry/backlog aggregate metrics.
-- Direct, loopback Rust, public Worker, and mock provider compatibility.
-- Separate preview and production deployment inventories, rate limits,
-  aggregate metrics, CI, secret scanning, and operations runbooks.
+This planned release has two separate acceptance lines: the locked VPS deployment and
+the dormant hardened OAuth protocol tested only with externally unreachable
+synthetic inputs. Completing either line does not authorize real Spotify
+traffic.
 
-## User Setup
+## Architecture contract
 
-Each beta user creates a Spotify Developer application, registers the exact
-production callback URI, opens the backend `/setup` page, authorizes Spotify,
-and pastes the one-time-displayed Pairing Token into Wallpaper Engine. The
-Pairing Token remains reusable until deletion or revocation and must not be
-shared or placed in URLs, screenshots, logs, or support messages.
+- Caddy terminates TLS and forwards only the exact public table, the exact
+  admin table through OAuth2 Proxy, and the five reviewed GET OAuth2 endpoint
+  families; every other method/path is 404.
+- OAuth2 Proxy protects the exact admin allowlist in production. Policy-locked
+  Node still returns 503 for authenticated Spotify setup routes; their working
+  bodies are exercised only in the externally unreachable synthetic line.
+- Node production opens no TCP listener and binds only the public/admin
+  AF_UNIX sockets.
+- `GET /health` is DB-independent liveness.
+- PostgreSQL readiness, migrations, backups, restore validation, disk, and
+  deletion reconciliation are local/systemd checks, not extra HTTP routes.
+- `spotify_wallpaper` and
+  `spotify_wallpaper_deletion_ledger` are migrated, dumped, validated,
+  retained, and restored independently.
+- Account deletion and restore safety remain ledger-first and fail closed.
+- Caddy/OAuth2 Proxy request/auth/access logs are disabled. Node emits fixed
+  event names/counts only, never URLs, query/callback data, headers, Client
+  ID, IP address, exception text, or secrets.
 
-Spotify Development Mode currently requires a Premium app owner, permits one
-Client ID per new developer and up to five allowlisted authenticated users per
-app, and is not a scalable public managed-app path. Existing resources may be
-grandfathered. Playback controls can additionally depend on Premium and device
-restrictions.
+The public route allowlist is `GET /health`, `GET /privacy`, `GET /terms`,
+`GET /auth/callback`, `GET /api/playback`, `POST /api/control`,
+`DELETE /api/account`, and `OPTIONS /api/playback|/api/control`. The admin
+allowlist is `GET /setup`, `POST /auth/start`, `GET|POST /auth/confirm`, and
+`POST /auth/reauthorize`. Wrong socket/path/method and trailing-slash variants
+are rejected.
 
-## Reauthorization And Deletion
+## Dormant protocol
 
-Authorization is treated as expiring six months after the original
-authorization. The wallpaper preserves its last safe display and reports
-authorization required. Reauthorization from `/setup` retains the same Pairing
-Token.
+The retained future protocol uses BYO public Spotify Client ID,
+Authorization Code with PKCE, encrypted Spotify tokens, one-time `swpb1.`
+Pairing Token issuance, HMAC-only Pairing secret storage, single-flight
+refresh, normalized playback/controls, reauthorization, and ledger-first
+account deletion.
 
-Account deletion invalidates the Pairing Token and removes live credential
-data. A non-secret deletion tombstone remains for 35 days for restore safety.
-Users should also disconnect the application from Spotify account settings.
+Only `__Host-swp-setup`, `__Host-swp-oauth-v2`, and
+`__Host-swp-confirm` are permitted as short-lived, strictly necessary
+first-party cookies in synthetic tests. Production policy lock neither reads
+nor emits them.
 
-## Legacy Compatibility
+There is no evidence of live D1 data, so this migration does not include or
+authorize a D1 import utility. Historical Cloudflare plans and reports remain
+unchanged as evidence.
 
-Direct mode and `swpt1.` tokens remain available for developer and compatibility
-testing. The static authorization helper is local developer-only legacy
-infrastructure. Its manual workflow checks/builds but no longer deploys to
-GitHub Pages.
+## Provider compatibility
 
-## Known External Gates
+Browser mock, legacy direct `swpt1.`, loopback Rust, and backend provider
+contracts remain independent. The wallpaper retains the shared normalized
+playback model. A locked backend response preserves the wallpaper's last safe
+display/status and never downgrades to direct mode or sends a Pairing Token to
+another origin.
 
-- Spotify approval or a documented policy-compatible redesign covering BYO
-  authorization, sound-recording/visual synchronization, product naming, and
-  Spotify Mark usage.
-- Original unmodified artwork with no crop, blur, animation, distortion, or
-  overlay, plus required Spotify logo attribution and Spotify link.
-- Published privacy notice with real operator and incident contacts.
-- Published operator-reviewed EULA and verified pre-authorization consent.
-- Fixed production custom domain and exact registered callback.
-- Non-budget operational alert configuration and delivery tests.
-- Spotify-connected Limited beta completion.
-- 72-hour Wallpaper Engine soak completion.
-- Verified cost, abuse, reconciliation, and incident alerts.
+## Known gates
 
-Until the policy/legal/infrastructure/alert gates are evidenced in the phase
-report, the build must not be distributed to Spotify-connected Limited beta
-users. General publication additionally requires the completed Limited beta
-and 72-hour soak.
+- Spotify approval or a policy-compatible redesign covering authorization,
+  sound-recording/visual synchronization, product naming, and Spotify Mark
+  usage.
+- Original unmodified artwork and required Spotify attribution/link.
+- Published dated Privacy Notice/EULA with operator identity and monitored
+  private contacts.
+- Separately reviewed production application-mode and systemd/network change.
+- Exact callback registration only after that unlock is approved.
+- Verified migration, backup, isolated restore, ledger replay, disk,
+  certificate, cost, abuse, and alert-delivery evidence.
+- Security and SpecGuard approval.
+- Spotify-connected Limited beta and required soak.
+
+Until every applicable gate is evidenced and the unlock is separately
+approved, do not register the callback, connect a real Spotify account, issue
+a Pairing Token, invite users, or publish a Spotify-connected build.

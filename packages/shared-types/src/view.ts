@@ -1,8 +1,8 @@
-import type { VisualizerFrame, VisualizerMotionState } from './audio';
-import type { NormalizedPlayback } from './playback';
-import type { PlaybackCommand, ProviderSelection } from './provider';
-import type { WallpaperPreferences } from './settings';
-import type { WallpaperTheme } from './theme';
+import type { VisualizerFrame, VisualizerMotionState } from './audio.js';
+import type { NormalizedPlayback } from './playback.js';
+import type { PlaybackCommand, ProviderSelection } from './provider.js';
+import type { WallpaperPreferences } from './settings.js';
+import type { WallpaperTheme } from './theme.js';
 
 type DeepReadonly<T> = T extends (...args: never[]) => unknown
   ? T

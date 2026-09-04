@@ -1,4 +1,4 @@
-import type { WallpaperPreferences } from './settings';
+import type { WallpaperPreferences } from './settings.js';
 
 const VISUALIZER_RESPONSE_EXPONENT = 0.72;
 const VISUALIZER_RESPONSE_CAP = 1.35;

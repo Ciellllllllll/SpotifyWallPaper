@@ -27,16 +27,32 @@ Do not log tokens or full callback URLs.
 
 - `direct`: legacy browser-side PKCE refresh using Client ID and Refresh Token.
 - `backend` with loopback HTTP: optional local Rust backend.
-- `backend` with the exact official HTTPS origin: optional Cloudflare Worker.
+- `backend` with exact origin
+  `https://ciel-spotify-wallpaper.duckdns.org`: optional Node.js/PostgreSQL
+  VPS backend. Production is policy-locked and cannot currently provide
+  Spotify data.
 - no usable provider: browser mock or last safe display.
 
 An explicitly selected but invalid backend configuration must not silently fall back to direct credentials.
 
 ## Public backend OAuth
 
-The public Worker uses each user's own Spotify Client ID with Authorization Code + PKCE. It does not use a Client Secret. OAuth state is single-use and stored only as a digest; the PKCE verifier is encrypted and expires within ten minutes.
+The dormant public-backend protocol uses each user's own Spotify Client ID
+with Authorization Code + PKCE. It does not use a Client Secret. OAuth state
+is single-use and stored only as a digest; the PKCE verifier is encrypted and
+expires within ten minutes. This protocol is testable only in externally
+unreachable `synthetic_test` mode.
 
-After successful token exchange, issue `swpb1.<publicId>.<secret>`. `publicId` has at least 128 bits of entropy and `secret` at least 256 bits. D1 stores only `publicId` and a keyed HMAC digest of `secret`.
+After a synthetic successful token exchange, issue
+`swpb1.<publicId>.<secret>`. `publicId` has at least 128 bits of entropy and
+`secret` at least 256 bits. PostgreSQL stores only `publicId` and a keyed HMAC
+digest of `secret`.
+
+Production runs only as `SPOTIFY_MODE=policy_locked`. Every exact allowed
+Spotify route/method, including `GET /auth/callback`, returns the fixed
+no-store 503 before Node reads body, Cookie, Authorization, database,
+rate-limit, random, or outbound-network state. Unknown paths, wrong methods,
+and unknown modes fail closed.
 
 Spotify Refresh Tokens expire six months after authorization. `invalid_grant` must delete stored Spotify tokens, stop retrying, mark reauthorization required, and allow reauthorization with the existing Pairing Token.
 
@@ -80,7 +96,7 @@ The dependency-free `normalizeSpotifyPlaybackPayload(raw, fetchedAt)` in
 integers for numeric fields, `progressMs <= durationMs`, at most 32 artists and
 8 image URLs, and the `none` invariant (`id/uri=null`, zero duration/progress,
 not playing). Direct mode wraps its result to retain the `item_null` warning;
-the Worker uses the result directly. Rust normalization is intentionally kept
+the public backend uses the result directly. Rust normalization is intentionally kept
 at the language boundary and is aligned through provider-v1 fixtures.
 
 ## Polling

@@ -1,5 +1,5 @@
-import type { NormalizedPlayback, PlaybackDeviceState, SpotifyRepeatState } from './playback';
-import type { ProviderResult } from './provider';
+import type { NormalizedPlayback, PlaybackDeviceState, SpotifyRepeatState } from './playback.js';
+import type { ProviderResult } from './provider.js';
 
 const FALLBACK_ALBUM_IMAGE = 'mock/album-placeholder.svg';
 

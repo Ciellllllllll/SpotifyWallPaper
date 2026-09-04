@@ -38,7 +38,10 @@ Do not include Lyrics/LRC settings, layout items, Wallpaper Engine properties, o
 Do not bypass Spotify API restrictions.
 Do not require Spotify Premium for passive display features.
 Do not require Spotify Premium except for playback control operations that Spotify itself restricts.
-Do not make the approved Cloudflare backend mandatory for wallpaper startup. Browser mock, legacy direct, and local Rust backend paths remain supported.
+Do not make the optional Node.js/PostgreSQL VPS backend mandatory for wallpaper
+startup. Browser mock, legacy direct, and local Rust backend paths remain
+supported. Production public-backend Spotify routes stay policy-locked until a
+separate reviewed unlock.
 Do not ship a shared Spotify Client ID or Client Secret before Spotify Extended Quota approval and a dedicated managed-app security review.
 
 ## Product priority

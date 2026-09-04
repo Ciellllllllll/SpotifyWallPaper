@@ -2,6 +2,10 @@ import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const targets = process.argv.slice(2).map((target) => resolve(target));
+const safeViteEnvironmentNames = new Set([
+  'VITE_SPOTIFY_BACKEND_ORIGIN',
+  'VITE_SPOTIFY_CLIENT_ID'
+]);
 const forbiddenPatterns = [
   {
     label: 'pairing-token',
@@ -43,6 +47,15 @@ if (targets.length === 0) {
       const bytes = await readFile(file);
       const text = bytes.toString('utf8');
       const scanVariants = normalizedScanVariants(text);
+      if (
+        scanVariants.some((variant) =>
+          (variant.match(/\bVITE_[A-Za-z0-9_]+\b/g) ?? []).some(
+            (name) => !safeViteEnvironmentNames.has(name)
+          )
+        )
+      ) {
+        findings.push({ file, label: 'vite-spotify-secret' });
+      }
       for (const { label, pattern } of forbiddenPatterns) {
         if (scanVariants.some((variant) => pattern.test(variant))) {
           findings.push({ file, label });

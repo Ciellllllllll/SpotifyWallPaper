@@ -20,7 +20,10 @@
 - Spotify integration notes
 - WASM core notes
 - phase reports
-- Cloudflare deployment, key rotation, incident, cost, and restore runbooks
+- VPS deployment, key rotation, incident, cost, two-database backup, and
+  fail-closed restore runbooks. Existing `cloudflare-worker-*` filenames are
+  temporary path compatibility only and do not make Cloudflare current
+  authority.
 
 ## Phase report template
 

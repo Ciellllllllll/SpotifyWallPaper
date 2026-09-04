@@ -1,0 +1,85 @@
+{
+	admin off
+	auto_https disable_redirects
+	log {
+		output discard
+	}
+}
+
+https://ciel-spotify-wallpaper.duckdns.org {
+	route {
+		@public_get {
+			method GET
+			path /health /privacy /terms /auth/callback /api/playback
+		}
+		reverse_proxy @public_get unix//run/spotify-wallpaper/public/public.sock {
+			header_up -X-SWP-Client-IP
+			header_up X-SWP-Client-IP {remote_host}
+			header_up Host {host}
+		}
+
+		@public_post {
+			method POST
+			path /api/control
+		}
+		reverse_proxy @public_post unix//run/spotify-wallpaper/public/public.sock {
+			header_up -X-SWP-Client-IP
+			header_up X-SWP-Client-IP {remote_host}
+			header_up Host {host}
+		}
+
+		@public_delete {
+			method DELETE
+			path /api/account
+		}
+		reverse_proxy @public_delete unix//run/spotify-wallpaper/public/public.sock {
+			header_up -X-SWP-Client-IP
+			header_up X-SWP-Client-IP {remote_host}
+			header_up Host {host}
+		}
+
+		@public_options {
+			method OPTIONS
+			path /api/playback /api/control
+		}
+		reverse_proxy @public_options unix//run/spotify-wallpaper/public/public.sock {
+			header_up -X-SWP-Client-IP
+			header_up X-SWP-Client-IP {remote_host}
+			header_up Host {host}
+		}
+
+		@admin_get {
+			method GET
+			path /setup /auth/confirm
+		}
+		reverse_proxy @admin_get unix//run/spotify-wallpaper/oauth/oauth2-proxy.sock {
+			header_up -X-SWP-Client-IP
+			header_up X-SWP-Client-IP {remote_host}
+			header_up Host {host}
+		}
+
+		@admin_post {
+			method POST
+			path /auth/start /auth/confirm /auth/reauthorize
+		}
+		reverse_proxy @admin_post unix//run/spotify-wallpaper/oauth/oauth2-proxy.sock {
+			header_up -X-SWP-Client-IP
+			header_up X-SWP-Client-IP {remote_host}
+			header_up Host {host}
+		}
+
+		@oauth2_get {
+			method GET
+			path /oauth2/sign_in /oauth2/start /oauth2/callback /oauth2/sign_out /oauth2/static/*
+		}
+		reverse_proxy @oauth2_get unix//run/spotify-wallpaper/oauth/oauth2-proxy.sock {
+			header_up -X-SWP-Client-IP
+			header_up X-SWP-Client-IP {remote_host}
+			header_up Host {host}
+		}
+
+		@oauth2_private path /oauth2/*
+		respond @oauth2_private 404
+		respond 404
+	}
+}

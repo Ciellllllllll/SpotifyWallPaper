@@ -1,6 +1,6 @@
 # Spotify Wallpaper
 
-Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-previewable mock wallpaper plus Spotify playback polling, Wallpaper Engine property customization, an optional BYO Client ID Cloudflare backend, visualizer, transitions, player controls, an optional Tauri configurator, and optional Rainmeter JSON export.
+Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-previewable mock wallpaper plus Spotify playback polling, Wallpaper Engine property customization, an optional BYO Client ID VPS backend, visualizer, transitions, player controls, an optional Tauri configurator, and optional Rainmeter JSON export.
 
 ## Guides And Repository Notes
 
@@ -14,7 +14,9 @@ Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-
 ## Technical Stack
 
 - Wallpaper app: Svelte, TypeScript, Vite, Wallpaper Engine Web Wallpaper APIs.
-- Optional public backend: TypeScript Cloudflare Worker with D1, Authorization Code with PKCE, encrypted Spotify credentials, and Pairing Tokens.
+- Optional public backend: Node.js 22 ESM on a VPS with PostgreSQL 17, Caddy,
+  OAuth2 Proxy, Authorization Code with PKCE, encrypted Spotify credentials,
+  and Pairing Tokens.
 - Legacy direct auth page: static Vite + TypeScript app for developer testing with GitHub Pages.
 - Shared model types: TypeScript workspace package.
 - Visual core: Rust compiled to WebAssembly for typed-array visual normalization and readability helpers.
@@ -28,7 +30,9 @@ preview without requiring Tauri, Rainmeter, or a live Spotify connection.
 
 Spotify authorization is intentionally split from the wallpaper runtime:
 
-- The optional Workshop-compatible beta path uses each user's own Spotify Client ID and the public backend's `/setup` page. It does not use a shared Spotify application or Client Secret.
+- The dormant Workshop-compatible path uses each user's own Spotify Client ID
+  and the public backend's hardened OAuth flow. It does not use a shared
+  Spotify application or Client Secret.
 - The public backend keeps Spotify Access and Refresh Tokens out of Wallpaper Engine. It returns a `swpb1.` Pairing Token once after authorization; Wallpaper Engine stores that Pairing Token as its backend credential.
 - Browser mock mode, the loopback Rust backend, and legacy direct mode remain available without the public backend.
 - The static `@spotify-wallpaper/spotify-auth` GitHub Pages app and its `swpt1.` bundle remain developer-only legacy compatibility paths. They are not the managed public or default Workshop setup path.
@@ -61,55 +65,41 @@ npm run dev -w @spotify-wallpaper/wallpaper
 
 Open `http://127.0.0.1:5173/`. Without Spotify settings, the wallpaper stays in browser mock mode.
 
-## Public Backend Beta Setup
+## Public Backend Policy Lock
 
-The optional public backend beta uses BYO Client ID: each user creates one Spotify Developer app and authorizes it with
-Authorization Code and PKCE. Do not create or paste a Client Secret.
+The approved target production origin is
+`https://ciel-spotify-wallpaper.duckdns.org`. Production runs only with
+`SPOTIFY_MODE=policy_locked`; no other hostname or mode is selected
+automatically. Once deployed, the origin serves `/health`, `/privacy`, and
+`/terms`. Exact allowed Spotify route/method pairs, including
+`GET /auth/callback`, reach Node and return a fixed `503` response with
+`Cache-Control: no-store` before Node reads a body, Cookie, Authorization
+header, database state, rate limiter, random source, or outbound network.
+Unknown paths, wrong methods, wrong sockets, and trailing-slash variants are
+rejected instead.
 
-Spotify Development Mode currently requires the app owner to have Spotify
-Premium, limits new Client ID creation to one per developer, and limits an app
-to five authorized users. Only existing resources above those limits are
-grandfathered, so a new BYO app cannot assume another Client ID is available.
-Passive wallpaper display does not otherwise require Premium, but Spotify
-restricts playback controls and the Development Mode app itself.
+Consequently, production setup, Spotify authorization, reauthorization,
+playback, controls, account deletion, and Pairing Token issuance are not
+available. Do not register the production callback, connect a real Spotify
+account, or distribute a `swpb1.` credential. The hardened OAuth and deletion
+protocol is dormant and may be tested only in externally unreachable
+`synthetic_test` mode with synthetic credentials.
 
-The production backend must have a fixed custom HTTPS origin before setup is published. No production URL is included in
-this repository until that release gate is complete. When the operator publishes the official origin:
+The implementation target runs as Node.js 22 ESM behind Caddy and OAuth2 Proxy. Node listens
+only on two permission-separated AF_UNIX sockets with exact public/admin
+route allowlists and uses PostgreSQL 17 databases named `spotify_wallpaper`
+and `spotify_wallpaper_deletion_ledger`. A future Spotify unlock requires a
+separately reviewed application-mode change, systemd unit/network change,
+policy approval, and complete release-gate evidence.
 
-1. Create one app in the Spotify Developer Dashboard and copy its Client ID.
-2. Register exactly the backend callback URI: the published production origin followed by `/auth/callback`. It must use
-   the same scheme and host as the official `/setup` page, with no added trailing slash, query, or fragment.
-3. Open the official production origin followed by `/setup`.
-4. Read the served Privacy Notice and EULA, explicitly accept both, enter the
-   Client ID, and complete Spotify authorization.
-5. Copy the `swpb1.` Pairing Token shown on the success page. It is displayed only once.
-6. In Wallpaper Engine, set Spotify Playback Provider to `Backend Proxy`, keep the release-provided backend origin, and
-   paste the token into Spotify Backend Pairing Token / `spotify_pairing_token`.
-
-The Pairing Token is a bearer credential. Never share it, send it to maintainers, place it in a URL, or include it in a
-screenshot, recording, log, issue, or committed file. The token remains valid until account deletion or explicit
-revocation even though the setup page displays it only once.
-
-Spotify authorization expires six months after authorization. When the wallpaper reports `unauthorized` or requests
-reauthorization, return to the same official `/setup` page, use Reauthorize Spotify, and enter the existing Pairing
-Token. Successful reauthorization keeps that same Pairing Token; it does not display or require a replacement.
-
-To delete the backend account, open the same `/setup` page, use Delete backend account, and enter the Pairing Token. The
-page sends authenticated `DELETE /api/account`. The Worker first records a 35-day non-secret `publicId` tombstone, then
-deletes OAuth sessions, encrypted Spotify tokens, Client ID, Pairing digest, leases, and cached data from the primary
-database. The tombstone prevents a backup restore from reactivating the
-deleted credential. Separately remove the BYO app from Spotify account
-settings using the app name you registered; backend deletion cannot perform
-that Spotify-side disconnect.
-
-See `docs/privacy.md` for data handling and deletion retention and
-`docs/eula.md` for the beta EULA.
+See `docs/privacy.md`, `docs/eula.md`, and `docs/25-public-backend.md` for the
+current locked data-handling and architecture contract.
 
 ## Legacy Direct Authorization
 
 Direct browser-side authorization remains available for compatibility and local developer testing. Its token format is
 `swpt1.<base64url-json>` and contains the Spotify Client ID and Refresh Token. A `swpt1.` token is accepted only by
-legacy direct mode and is never accepted by the public Worker.
+legacy direct mode and is never accepted by the public backend.
 
 The static GitHub Pages auth app is not the public backend and must not be presented as the Workshop default. Its
 deployment workflow is manual-only for developer testing:
@@ -151,8 +141,9 @@ the developer-owned Spotify app; do not reuse the public backend callback.
 
 ## Publication Status
 
-The public backend is implemented for private local/mock staging and
-limited-beta preparation. A Spotify-connected Limited beta and general
+The Node/VPS backend is an approved target architecture under implementation;
+it is not yet a deployed or operator-verified service. Private local/mock
+staging may continue. A Spotify-connected Limited beta and general
 Workshop publication are blocked until the applicable items below have
 recorded evidence:
 
@@ -163,7 +154,9 @@ recorded evidence:
   overlay, plus the required Spotify logo attribution and Spotify link.
 - Published privacy notice with real operator and private incident contacts.
 - Published EULA and verified pre-authorization consent flow.
-- Fixed production custom domain and exact callback registration.
+- Fixed production origin and verified `policy_locked` response behavior.
+- Separately reviewed application and systemd/network changes before any
+  future Spotify unlock or callback registration.
 - Verified non-budget operational alert configuration and delivery.
 - Completed Spotify-connected limited beta.
 - Completed 72-hour Wallpaper Engine soak.
@@ -435,9 +428,12 @@ cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml
 npm audit --audit-level=moderate
 ```
 
-CI runs independent web, visual-core Rust, Tauri, and loopback jobs. The web job generates WASM and shared-types before
-consumer tests/builds, runs the browser characterization suite, and audits the complete dependency tree. The Cloudflare
-Worker test toolchain is pinned independently in its workspace, including the fixed `undici` override in the lockfile.
+CI runs independent web, visual-core Rust, Tauri, loopback, and public-backend
+jobs. The web job generates WASM and shared-types before consumer tests/builds,
+runs the browser characterization suite, and audits the complete dependency
+tree. The public-backend job targets Node.js 22 ESM and PostgreSQL behavior;
+runtime packaging must not include source maps, tests, fixtures, or operator
+secrets.
 
 For Wallpaper Engine development, run `npm run wallpaper:dev-build`. The first
 run creates `projects/myprojects/spotify-wallpaper-dev` as a Windows junction
@@ -467,9 +463,9 @@ Wallpaper Engine manual QA before release candidate:
 | --- | --- |
 | Run `npm run wallpaper:dev-build`, select `spotify-wallpaper-dev` once, then reload after another build | The same project shows the new build without another import and starts without Tauri, Spotify, or Rainmeter. |
 | `settings_json` | Entered as single-line JSON; valid JSON applies settings; empty or malformed JSON falls back safely and reports a debug warning. |
-| `spotify_playback_provider` | Select `Backend Proxy` for the public beta, or `Direct` only for legacy compatibility and developer testing. |
+| `spotify_playback_provider` | Production backend requests are policy-locked. Use `Direct` only for legacy compatibility/developer testing, or keep mock mode. |
 | `spotify_backend_url` | For a Workshop build, retain the exact release-configured production origin. Arbitrary HTTPS origins are rejected before a Pairing Token is sent. |
-| `spotify_pairing_token` | Accepts the one-time-displayed `swpb1.` Pairing Token for backend mode. Debug only shows configured/not configured. Never expose a real value in screenshots or logs. |
+| `spotify_pairing_token` | The field retains `swpb1.` compatibility, but production cannot issue or use one while policy-locked. Debug only shows configured/not configured. Never expose a real value in screenshots or logs. |
 | `spotify_client_id` | Legacy direct mode only. Optional for `swpt1.` tokens. Empty and dummy values can be entered without logging the value. |
 | `spotify_refresh_token` | Legacy direct mode only. Accepts a `swpt1.` bundle or raw Refresh Token for manual testing. Never expose a real value in screenshots or logs. |
 | `visualizer_enabled` | Enables/disables visualizer rendering and clears visualizer state when disabled. |
@@ -499,10 +495,11 @@ Do not capture screenshots, logs, or sample files containing Access Tokens, Refr
 
 ## Optional Configurator
 
-The configurator is optional and is not required for the Wallpaper Engine wallpaper runtime. The public backend beta
-setup uses the official `/setup` page and the Wallpaper Engine `spotify_pairing_token` property. The configurator remains
-useful for local development, Rainmeter output, and alternate PKCE testing; its direct token flow is not the managed
-Workshop path.
+The configurator is optional and is not required for the Wallpaper Engine
+wallpaper runtime. Production public-backend setup is unavailable while
+`SPOTIFY_MODE=policy_locked`. The configurator remains useful for local
+development, Rainmeter output, and alternate PKCE testing; its direct token
+flow is not a managed Workshop path.
 
 Run the browser version:
 
@@ -587,7 +584,9 @@ The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 - `debug_enabled`
 
 `spotify_client_id`, `spotify_refresh_token`, `spotify_backend_url`, `spotify_pairing_token`, and `settings_json` are
-Wallpaper Engine `textinput` properties. `spotify_pairing_token` is the public-backend beta credential.
+Wallpaper Engine `textinput` properties. `spotify_pairing_token` is a dormant
+public-backend compatibility credential; production cannot issue or use it
+while policy-locked.
 `spotify_refresh_token` and `spotify_client_id` remain legacy direct fields. Paste `settings_json` as single-line JSON
 because Wallpaper Engine Web Wallpaper user properties do not provide a textarea type.
 

@@ -4,11 +4,14 @@
 This repository implements a Spotify-linked Wallpaper Engine Web Wallpaper with high customization, Rust/WASM visual logic, and an optional Tauri configurator. This file is the mandatory entry point for Codex and all SubAgents.
 
 ## Required working directory
-All implementation, verification commands, git operations, commits, and phase work must be performed in:
+All implementation, verification commands, git operations, commits, and phase work must be performed in one checkout for this repository. The primary checkout is:
 
 `D:\Git\SpotifyWallPaper`
 
-Do not use Codex temporary worktrees such as `C:\Users\cielg\.codex\worktrees\...\SpotifyWallPaper` for repository work. If such a worktree exists from a prior run, migrate any needed commits back to `D:\Git\SpotifyWallPaper` and remove the temporary worktree.
+Use `D:\Git\SpotifyWallPaper` by default. Use a Codex-managed worktree only
+when Codex explicitly assigned it as the working location when the current
+task started. Do not manually choose a worktree or use a stale or another
+task's worktree. Do not split one task across multiple checkouts.
 
 ## Mandatory reading order
 Before changing files, every agent must read:
@@ -38,10 +41,10 @@ Public backend work must also read `docs/25-public-backend.md`.
 
 ## Hard rules
 Do not embed Spotify Client Secret in the Web Wallpaper.
-Do not log Access Token, Refresh Token, Pairing Token, authorization code, OAuth state, PKCE verifier, Worker encryption/HMAC keys, or full OAuth callback URL.
+Do not log Access Token, Refresh Token, Pairing Token, authorization code, OAuth state, PKCE verifier, public-backend encryption/HMAC keys, or full OAuth callback URL.
 Do not put Spotify tokens, Pairing Tokens, authorization codes, OAuth state, PKCE verifiers, or callback URLs in URL parameters outside Spotify's required authorization callback.
 Do not store a public-backend Pairing Token in plaintext outside Wallpaper Engine's user property and the one-time no-store authorization success response.
-Disable Cloudflare invocation logs for any Worker that handles Spotify OAuth callbacks.
+Disable Caddy access logs and OAuth2 Proxy request/auth logs, and never record callback URLs or query strings in Node, systemd, PostgreSQL, or backup logs.
 Do not record, store, transform, or redistribute Spotify audio.
 Do not bundle lyrics data.
 Do not make the Tauri configurator mandatory for the Wallpaper Engine wallpaper to run.
@@ -96,7 +99,7 @@ source mismatch, indeterminate version, or update with unknown compatibility.
 ## Architectural rule
 The wallpaper display is a Web Wallpaper. Rendering belongs to the web frontend. Rust is used for pure logic through WASM and for the optional Tauri configurator backend.
 
-The optional public Spotify proxy is a separate TypeScript Cloudflare Worker. It may own Spotify HTTP calls, OAuth PKCE, encrypted token persistence, and proxy API routes. It must not become required for browser mock mode, direct legacy mode, or the loopback Rust backend.
+The optional public Spotify proxy is a separate Node.js TypeScript service backed by PostgreSQL and exposed through Caddy plus OAuth2 Proxy. It may own Spotify HTTP calls, OAuth PKCE, encrypted token persistence, and proxy API routes. Production remains `SPOTIFY_MODE=policy_locked` until a separately reviewed policy decision permits real Spotify traffic. It must not become required for browser mock mode, direct legacy mode, or the loopback Rust backend.
 
 The Rust/WASM core must not own Spotify HTTP calls, DOM mutation, Canvas/WebGL drawing, Wallpaper Engine API registration, settings, or layout. TypeScript owns settings and layout authority. Rust/WASM is limited to typed-array visual normalization and readability calculations.
 

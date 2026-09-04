@@ -26,7 +26,7 @@ Review roles are read-only: they inspect the requested scope but do not edit
 files or run Git operations. The current task or reviewed plan assigns
 implementation ownership and any required model or reasoning level. Completed
 plans do not reserve an agent. Security remains an independent perspective for
-credential, provider, Worker, and Tauri work.
+credential, provider, public-backend, and Tauri work.
 
 ## SpecGuard Agent
 
@@ -56,9 +56,12 @@ Reads:
 - `04-quality-gates.md`
 - `19-player-clock.md` when controls are touched
 
-## Public Worker Agent
+## Public Backend Agent
 
-Owns Cloudflare Worker routing, D1 schema, OAuth PKCE, encryption, Pairing Tokens, refresh coordination, Spotify proxying, reauthorization, deletion, and deployment tests.
+Owns Node.js 22 ESM routing, PostgreSQL 17 schemas, public/admin AF_UNIX
+socket boundaries, Caddy/OAuth2 Proxy integration, OAuth PKCE, encryption,
+Pairing Tokens, refresh coordination, policy lock, Spotify proxying,
+reauthorization, deletion, packaging, and deployment tests.
 
 Reads:
 
@@ -70,7 +73,11 @@ Reads:
 
 ## Security Reviewer
 
-Independently reviews secret surfaces, OAuth state/callback handling, cryptography, D1 persistence, Pairing Token verification, CORS, CSRF, redirects, rate limits, logging, reauthorization, deletion, and restore behavior. It does not implement the reviewed task.
+Independently reviews secret surfaces, OAuth state/callback handling,
+cryptography, PostgreSQL persistence, Pairing Token verification, CORS, CSRF,
+redirects, rate limits, socket permissions, reverse-proxy logging,
+reauthorization, deletion, and restore behavior. It does not implement the
+reviewed task.
 
 Required for strict-gated changes involving credentials, authentication,
 public backend, OAuth, cryptography, logging, redirects, or Tauri. A

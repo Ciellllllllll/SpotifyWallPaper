@@ -21,8 +21,14 @@ import the view; apps must not use relative imports across app boundaries.
 - `apps/backend/`
   Optional loopback-only Rust Spotify backend for local development.
 
-- `apps/cloudflare-worker/`
-  Optional public Spotify proxy. TypeScript Cloudflare Worker owning OAuth PKCE, encrypted D1 credentials, access-token refresh, playback/control proxying, reauthorization, and account deletion.
+- `apps/public-backend/`
+  Optional public Spotify proxy. Node.js 22 ESM owns the dormant OAuth PKCE
+  protocol, encrypted PostgreSQL credentials, access-token refresh,
+  playback/control proxying, reauthorization, and account deletion. It runs
+  behind Caddy and OAuth2 Proxy and listens only on permission-separated
+  public/admin AF_UNIX sockets. During migration,
+  `apps/cloudflare-worker/` is a temporary legacy source location, not current
+  deployment authority.
 
 - `crates/visual-core/`
   Rust pure logic crate. The current boundary exposes only measured visual
@@ -75,17 +81,20 @@ The configurator owns setup workflows, settings editing, export/import, OAuth as
 Shared types define boundaries. Avoid passing raw Spotify API responses deep into UI components.
 
 `packages/shared-types/src/spotifyPlayback.ts` is the TypeScript normalization
-authority used by the direct provider and Cloudflare Worker. Provider modules
+authority used by the direct provider and public backend. Provider modules
 keep transport, fallback, and warning policy; the Rust normalizer remains a
 separate language-boundary implementation checked against provider-v1 fixtures.
 
-The public Worker owns network and persistence concerns only. It does not render the wallpaper, process audio, mutate the DOM, or replace Rust/WASM visual logic.
+The public backend owns network and persistence concerns only. It does not
+render the wallpaper, process audio, mutate the DOM, or replace Rust/WASM
+visual logic.
 
 Repository authority is owned by `config/repository-authority.json` and the
 dependency-free scripts under `scripts/`. Git-tracked files are clean-clone
 truth. Generated output, dependency caches, local evidence, local secrets, and
-agent state remain ignored only through explicit owned rules. The Worker type
-declaration is the sole tracked generated-source exception.
+agent state remain ignored only through explicit owned rules. The retired
+Cloudflare local outputs are classified only as ignored local residue and are
+never release inputs or VPS authority.
 
 ## Required boundaries
 
