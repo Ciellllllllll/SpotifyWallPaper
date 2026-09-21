@@ -58,16 +58,10 @@
       "name": "operator-and-user-documents",
       "classification": "operational",
       "paths": [
-        "docs/eula.md",
         "docs/how-to-use-h5i.md",
-        "docs/operations/cloudflare-worker-deploy.md",
-        "docs/operations/cloudflare-worker-incident-response.md",
-        "docs/operations/cloudflare-worker-key-rotation.md",
-        "docs/operations/cloudflare-worker-restore.md",
         "docs/post-v0.0.1-stabilization.md",
         "docs/privacy.md",
         "docs/qa-checklist.md",
-        "docs/release-notes-public-backend-beta.md",
         "docs/user-guide.md"
       ]
     },
@@ -142,7 +136,20 @@
         "docs/phase-reports/rc-2-wallpaper-engine-property-types.md",
         "docs/phase-reports/spotify-playback-virtual-volume-boost.md",
         "docs/phase-reports/system-wide-refactor-phase-0-repository-specification-truth.md",
-        "docs/phase-reports/wallpaper-engine-update-flow.md"
+        "docs/phase-reports/wallpaper-engine-update-flow.md",
+        "docs/phase-reports/hosted-backend-retirement.md"
+      ]
+    },
+    {
+      "name": "retired-backend-documents",
+      "classification": "historical-evidence",
+      "paths": [
+        "docs/operations/cloudflare-worker-deploy.md",
+        "docs/operations/cloudflare-worker-incident-response.md",
+        "docs/operations/cloudflare-worker-key-rotation.md",
+        "docs/operations/cloudflare-worker-restore.md",
+        "docs/release-notes-public-backend-beta.md",
+        "docs/eula.md"
       ]
     }
   ],

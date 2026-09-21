@@ -11,7 +11,7 @@
 - Troubleshooting guide
 - privacy and data-deletion policy
 - static Pages setup, reauthorization, local credential deletion, and disconnect guide
-- optional legacy public-backend operations, clearly separated from standard setup
+- retired infrastructure status, clearly separated from standard setup
 
 ## Required developer docs
 
@@ -21,10 +21,7 @@
 - Spotify integration notes
 - WASM core notes
 - phase reports
-- VPS deployment, key rotation, incident, cost, two-database backup, and
-  fail-closed restore runbooks. Existing `cloudflare-worker-*` filenames are
-  temporary path compatibility only and do not make Cloudflare current
-  authority.
+- Historical backend runbooks are archived evidence, not active procedures.
 
 ## Phase report template
 

@@ -129,30 +129,8 @@ Completion:
 - README setup is usable.
 - All quality gates pass.
 
-## Post-v0.0.1: Optional public backend
+## Retired public backend
 
-Implement the formally approved Node.js 22/PostgreSQL 17 VPS backend after the
-local backend and direct provider contracts are stable. Production completes
-in `SPOTIFY_MODE=policy_locked`; dormant OAuth is acceptance-tested only with
-externally unreachable synthetic inputs.
-
-Order:
-
-1. Public-backend specification and policy gate.
-2. Node ESM/PostgreSQL test scaffold and exact public/admin socket allowlists.
-3. OAuth session, pairing, and encrypted storage.
-4. Spotify refresh, normalized playback, controls, and backoff.
-5. Trusted-origin wallpaper integration.
-6. Operations, privacy, staging, soak, and release review.
-
-Completion:
-
-- Browser mock, direct legacy, and loopback Rust backend still work.
-- Independent PostgreSQL dumps and all fixed-event logs contain no plaintext
-  credentials.
-- The locked VPS deployment and dormant hardened OAuth test line are accepted
-  separately; neither authorizes real Spotify traffic.
-- Refresh is single-flight under concurrency.
-- Six-month reauthorization and deletion work.
-- Security and SpecGuard reviews have no unresolved valid findings.
-- General Workshop publication remains blocked until the Spotify policy gate is closed.
+The hosted proxy was removed after the Pages/direct migration. Historical
+plans describe its former construction only; they do not authorize rebuilding
+or deploying it. Keep the original product construction order above.

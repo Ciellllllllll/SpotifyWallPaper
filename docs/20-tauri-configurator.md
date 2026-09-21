@@ -13,7 +13,6 @@ state exposes only presence/status or fixed error codes, never raw secrets.
 ## Responsibilities
 
 - Spotify OAuth PKCE setup assistance
-- dormant public-backend setup-page handoff after a separately approved unlock
 - Refresh Token acquisition assistance
 - settings editor
 - layout preview
@@ -48,10 +47,8 @@ it never returns raw credentials, callback material, or upstream bodies. There
 is no generic settings/export path for credentials, and public-backend Pairing
 Tokens are never exported.
 
-Production public-backend authorization is unavailable while
-`SPOTIFY_MODE=policy_locked`; the configurator must not present `/setup` as an
-active path. If a future unlock is separately approved, the fixed-origin
-Node.js VPS setup page, not Tauri, is the public-backend authorization path.
+The public backend is retired; the configurator must not present its `/setup`
+route as an active path.
 Tauri remains optional and must not be required to authorize or run the
 Wallpaper Engine wallpaper.
 

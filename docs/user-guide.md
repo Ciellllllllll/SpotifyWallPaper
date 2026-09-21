@@ -97,17 +97,16 @@ Fake clockの24/72時間相当テストは実機72時間連続稼働試験では
 ### 旧構成からの移行
 
 既存`swpt1.`を互換読み込みできます。`swpb1.`はRefresh TokenではないのでPagesで一度再認証してください。
-VPS/D1のTokenは抽出・移送しません。新しいdirectデータを取り込むと旧backendへの通常通信を終了します。
-任意loopback/Tauri/Rainmeterは維持します。public backendは引き続きpolicy-lockedな任意互換機能です。
-
-VPS停止・Cloudflare削除は自動化しません。利用者が直接接続の再起動・更新・操作を検証後、
-必要な旧データの保持・削除方針を確認し、対象サービスの停止、DNS/公開ルート撤去、バックアップを含むデータ処理を
-既存[運用手順](operations/cloudflare-worker-deploy.md)と各管理画面で行ってください。
-切り戻し用に旧設定は機密を共有せず保管し、検証完了前に旧リソースを破壊しないでください。
+旧`swpb1.`は固定の再認証案内を表示し、有効な直接接続の認証情報を上書きしません。
+任意loopback/Tauri/Rainmeterは維持します。公開バックエンドは廃止しました。
+2026-09-21に利用者の承認を得て旧Worker 1件とD1 2件を完全削除しました。
+確認したVPSには対象サービスがなかったため停止していません。
+詳細は[廃止記録](25-public-backend.md)を参照してください。旧配備手順はアーカイブです。
 
 ## GitHub Pagesの公開手順（利用者が実行）
 
-1. 公開前に[Privacy](privacy.md)・[EULA](eula.md)の運営者・連絡先・適用日を確認し、
+1. 公開前に[Privacy](privacy.md)と直接接続方式の適用規約・運営者・連絡先・適用日を確認します。
+   旧[EULA](eula.md)は廃止済みバックエンドの資料で、現在の公開規約として流用しません。
    Spotifyの[Policy](https://developer.spotify.com/policy)・[Design](https://developer.spotify.com/documentation/design)と
    GitHub Pagesの[利用制限](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)への適合を別途確認します。
    画像加工・音声と視覚の同期・商標・商用/機密取引の条件は、この技術移行で承認されたものではありません。
@@ -185,10 +184,8 @@ Visible user property keys:
 - `debug_enabled`
 
 The `spotify_refresh_token` key is displayed as Spotify Token for saved-value
-compatibility. `swpt2.` and compatible `swpt1.` select direct mode. The `swpb1.` grammar is
-retained for dormant public-backend compatibility, but production cannot issue
-or use it while policy-locked. The release build rejects arbitrary HTTPS
-origins before sending a credential. Clearing the field disconnects Spotify,
+compatibility. `swpt2.` and compatible `swpt1.` select direct mode. Old `swpb1.` input is rejected with a Pages reauthorization message.
+All public HTTPS backend origins are rejected before sending a credential. Clearing the field disconnects Spotify,
 and malformed prefixed input does not replace the active credential. Legacy
 hidden properties remain readable for existing installs, but Settings JSON
 and the separate provider, backend URL, Client ID, and Pairing Token controls
@@ -348,12 +345,7 @@ A minimal Rainmeter reader sample is available at `examples/rainmeter/SpotifyWal
 - Browser opens but no Spotify data appears: this is expected without Spotify settings; mock playback should still render.
 - Wallpaper Engine properties do not apply: reload the existing development wallpaper after rebuilding and confirm the visible property key names.
 - Spotify controls fail: passive display works without Premium, but some playback operations can be denied by Spotify or by restricted devices.
-- Public backend returns `503`: this is the required production policy lock.
-  Keep mock/legacy/local mode; do not attempt authorization or callback
-  registration.
-- A future synthetic OAuth test fails: confirm it is externally unreachable,
-  uses only synthetic credentials, and follows the exact socket/mode contract
-  in `docs/25-public-backend.md`.
+- Old public-backend credentials no longer work: authorize through the static Pages helper.
 - Lyrics/LRC settings are not available in this milestone. Remove legacy `lyrics` fields from pasted settings JSON if they appear in old samples.
 - Visualizer is idle: Wallpaper Engine audio data may be unavailable; browser preview uses mock or idle audio paths. In Wallpaper Engine, confirm Visualizer Enabled, lower Smoothing, and raise Sensitivity gradually.
 - Rainmeter write fails: confirm the configurator is running in the Tauri shell, not only the browser preview, and verify the output path is writable.

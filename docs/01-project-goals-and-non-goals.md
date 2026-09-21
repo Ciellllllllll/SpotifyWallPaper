@@ -39,10 +39,8 @@ Do not include Lyrics/LRC settings, layout items, Wallpaper Engine properties, o
 Do not bypass Spotify API restrictions.
 Do not require Spotify Premium for passive display features.
 Do not require Spotify Premium except for playback control operations that Spotify itself restricts.
-Do not make the optional Node.js/PostgreSQL VPS backend mandatory for wallpaper
-startup. Browser mock, standard direct, and local Rust backend paths remain
-supported. Production public-backend Spotify routes stay policy-locked until a
-separate reviewed unlock.
+Do not reintroduce a hosted backend dependency. Browser mock, standard direct,
+and local Rust backend paths remain supported.
 Do not ship a shared Spotify Client ID or Client Secret before Spotify Extended Quota approval and a dedicated managed-app security review.
 
 ## Product priority
@@ -60,4 +58,4 @@ Visual effects must not compromise stability or credential safety.
 
 ## Public distribution constraint
 
-The initial public-backend implementation uses each user's own Spotify Client ID with Authorization Code + PKCE and no Client Secret. Spotify Development Mode currently requires the app owner to have Premium and limits the app to five authorized users. General Workshop publication is blocked until Spotify confirms that the BYO model and the wallpaper's artwork/visualizer behavior comply with current policy, or the product is changed to comply.
+The static authorization page uses each user's own Spotify Client ID with Authorization Code + PKCE and no Client Secret. Spotify Development Mode currently requires the app owner to have Premium and limits the app to five authorized users. General Workshop publication is blocked until Spotify confirms that the BYO model and the wallpaper's artwork/visualizer behavior comply with current policy, or the product is changed to comply.

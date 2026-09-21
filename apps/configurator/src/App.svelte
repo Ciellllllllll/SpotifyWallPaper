@@ -216,13 +216,13 @@
           <select value={draft.provider} on:change={(event) => update('provider', event.currentTarget.value as ConfiguratorDraft['provider'])}>
             <option value="mock">Browser mock</option>
             <option value="direct">Spotify direct</option>
-            <option value="backend">Public backend</option>
+            <option value="backend">Local loopback backend</option>
           </select>
         </label>
         {#if draft.provider === 'backend'}
           <label>
             <span>Backend origin</span>
-            <input value={draft.backendOrigin} placeholder="https://example.workers.dev" on:input={(event) => update('backendOrigin', event.currentTarget.value)} />
+            <input value={draft.backendOrigin} placeholder="http://127.0.0.1:49320" on:input={(event) => update('backendOrigin', event.currentTarget.value)} />
           </label>
         {/if}
         <label>

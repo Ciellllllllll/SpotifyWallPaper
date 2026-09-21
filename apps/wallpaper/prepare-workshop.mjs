@@ -8,7 +8,6 @@ const metadataPath = resolve(
 );
 
 try {
-  requireOfficialHttpsOrigin(process.env.VITE_SPOTIFY_BACKEND_ORIGIN);
   const workshopId = requireWorkshopId(
     JSON.parse(await readFile(metadataPath, 'utf8'))
   );
@@ -29,26 +28,6 @@ try {
 } catch {
   console.error('Workshop project preparation failed.');
   process.exitCode = 1;
-}
-
-/** @param {string | undefined} value */
-function requireOfficialHttpsOrigin(value) {
-  if (!value) {
-    throw new Error('Official backend origin is required.');
-  }
-  const url = new URL(value);
-  if (
-    (value !== url.origin && value !== `${url.origin}/`) ||
-    url.protocol !== 'https:' ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    (url.pathname && url.pathname !== '/')
-  ) {
-    throw new Error('Official backend must be an HTTPS origin.');
-  }
-  return url.origin;
 }
 
 /** @param {unknown} value */

@@ -22,15 +22,6 @@ import the view; apps must not use relative imports across app boundaries.
 - `apps/backend/`
   Optional loopback-only Rust Spotify backend for local development.
 
-- `apps/public-backend/`
-  Optional public Spotify proxy. Node.js 22 ESM owns the dormant OAuth PKCE
-  protocol, encrypted PostgreSQL credentials, access-token refresh,
-  playback/control proxying, reauthorization, and account deletion. It runs
-  behind Caddy and OAuth2 Proxy and listens only on permission-separated
-  public/admin AF_UNIX sockets. During migration,
-  `apps/cloudflare-worker/` is a temporary legacy source location, not current
-  deployment authority.
-
 - `crates/visual-core/`
   Rust pure logic crate. The current boundary exposes only measured visual
   normalization/readability algorithms through typed arrays. Settings,
@@ -85,16 +76,15 @@ The wallpaper's direct provider owns Spotify transport; its dedicated IndexedDB
 credential store owns persistence and shared-storage refresh coordination.
 Neither credentials nor storage enter wallpaper-view or preference exports.
 The standard build/check/test path covers wallpaper, auth, shared types, and
-the presentation package. Configurator, Rainmeter, loopback Rust, and public
-backend remain optional components with their own verification paths. WASM
+the presentation package. Configurator, Rainmeter and loopback Rust remain optional components with their own verification paths. WASM
 remains part of the wallpaper build; static Pages hosts only the auth artifact.
 
 `packages/shared-types/src/spotifyPlayback.ts` is the TypeScript normalization
-authority used by the direct provider and public backend. Provider modules
+authority used by the direct provider. Provider modules
 keep transport, fallback, and warning policy; the Rust normalizer remains a
 separate language-boundary implementation checked against provider-v1 fixtures.
 
-The public backend owns network and persistence concerns only. It does not
+The local Rust backend owns network and persistence concerns only. It does not
 render the wallpaper, process audio, mutate the DOM, or replace Rust/WASM
 visual logic.
 

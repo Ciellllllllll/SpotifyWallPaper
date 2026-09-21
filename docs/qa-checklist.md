@@ -90,9 +90,9 @@ represented as completed by passing the standard product build.
 - Confirm `settings_json` is editable as single-line JSON with valid JSON, an empty value, and malformed JSON; malformed JSON must not crash the wallpaper.
 - Confirm credential input is never logged or exported into settings; only the dedicated direct IndexedDB store may persist current direct tokens outside the host property.
 - In direct mode, confirm `spotify_refresh_token` accepts dummy `swpt2.` and compatible `swpt1.` data without requiring `spotify_client_id`; raw Refresh Tokens are never entered into `settings_json`.
-- Confirm `spotify_playback_provider=backend` uses only the release-configured public origin in a Workshop build.
+- Confirm `spotify_playback_provider=backend` accepts only canonical HTTP loopback origins and never sends credentials to a public origin.
 - Confirm an explicit invalid or untrusted `spotify_backend_url` does not fall back to direct mode and never receives a Pairing Token.
-- Confirm `spotify_pairing_token` accepts a dummy `swpb1.` value without exposing it in debug, warnings, or errors.
+- Confirm local loopback credential input never exposes its value in debug, warnings, or errors.
 - Treat `play-in-window` or CLI `applyProperties` checks as diagnostics only; RC-2 pass/fail requires Wallpaper Engine UI editing and applying the wallpaper to an actual display.
 - Confirm browser fallback still works after Wallpaper Engine changes.
 - Current update-flow status: automated junction tests use isolated temporary
@@ -134,92 +134,12 @@ represented as completed by passing the standard product build.
 - Premium checks when available: play, pause, next, previous, seek, volume, shuffle, and repeat.
 - Non-Premium or restricted-device checks: controls remain disabled or show non-fatal status text without breaking passive display.
 
-## Public Backend Beta
+## Retired hosted backend
 
-- Confirm the only production origin is
-  `https://ciel-spotify-wallpaper.duckdns.org` and no fallback hostname is
-  selected.
-- Confirm production starts only as `SPOTIFY_MODE=policy_locked`, an unknown
-  mode fails startup, and `synthetic_test` has no external listener.
-- For every exact allowed Spotify route/method, confirm policy lock returns the
-  fixed no-store 503 before Node reads body, Cookie, Authorization, database,
-  rate limiter, randomness, clock-dependent state, or outbound access.
-- Confirm the public AF_UNIX socket accepts only `GET /health`,
-  `GET /privacy`, `GET /terms`, `GET /auth/callback`,
-  `GET /api/playback`, `POST /api/control`, `DELETE /api/account`, and
-  `OPTIONS /api/playback|/api/control`.
-- Confirm the admin AF_UNIX socket accepts only `GET /setup`,
-  `POST /auth/start`, `GET|POST /auth/confirm`, and
-  `POST /auth/reauthorize`.
-- Confirm wrong socket/path/method and every trailing-slash variant are
-  rejected.
-- Confirm `/health` performs no database/outbound check. Verify PostgreSQL,
-  migrations, backup freshness, disk, and reconciliation only through local
-  maintenance commands and systemd timer state.
-- Confirm production Caddy forwards only the exact public route table, the
-  exact admin table through OAuth2 Proxy, and the five reviewed `GET /oauth2/`
-  endpoint families; every other method/path is 404.
-- Confirm the admin allowlist passes through OAuth2 Proxy to the admin socket,
-  the configured GitHub allowlist is exact, and no authentication bypass route
-  exists. Exercise the setup body only in an externally unreachable synthetic
-  test because production Node remains policy locked.
-- Confirm playback/control preflight permits only `Origin: null` and
-  `http://127.0.0.1:5173`, the route method, `authorization` plus optional
-  `content-type`, and no cookie credentials. Reject duplicate/unknown headers,
-  missing authorization, unknown origins, and invalid methods without DB,
-  auth, or limiter changes.
-- Confirm account deletion rejects missing Origin and `Origin: null` and
-  requires the exact public HTTPS origin plus a valid Pairing Token.
-- Confirm Caddy/OAuth2 Proxy request/auth/access logging is disabled and Node
-  emits fixed event names/counts without URL, query, callback, header,
-  Client ID, IP, exception text, or secret.
-- Confirm Caddy overwrites `X-SWP-Client-IP`, OAuth2 Proxy does not append,
-  Node rejects missing/duplicate/malformed/spoofed values, IPv4-mapped IPv6
-  normalizes to IPv4, and only an HMAC digest reaches limiter/database state.
-- Confirm Node production opens no TCP listener and each socket has the
-  expected owner, group, and mode.
-- Confirm `spotify_wallpaper` and
-  `spotify_wallpaper_deletion_ledger` are independently migrated, dumped,
-  validated by isolated restore, retained, and restorable.
-- Confirm each dump keeps a unique temporary name through checksum, listing,
-  isolated restore, and schema/count checks; only full success atomically
-  promotes it, and any failure deletes the exact temporary file without a
-  retained-backup name.
-- Confirm primary restore keeps traffic closed until all retained ledger
-  tombstones are replayed and pending count is zero.
-- Confirm ledger-only, combined-database, cluster, and backup-only loss restore
-  no OAuth, credential, setup, confirmation, or backoff state and require all
-  users to authorize again.
-- In externally unreachable `synthetic_test` only, confirm `/setup` links
-  `/privacy` and `/terms`, explicit consent is required, and only
-  `__Host-swp-setup`, `__Host-swp-oauth-v2`, and
-  `__Host-swp-confirm` cookies can be issued with the specified attributes.
-- Confirm `swps2`, `swpo2`, and `swpc1` exact grammar, expiry, purpose, and
-  constant-time signature verification; duplicate cookies and legacy formats
-  fail closed.
-- Confirm initial callback with its OAuth cookie consumes once, initial
-  cookie-loss creates only encrypted pending confirmation, confirmation GET is
-  non-mutating/query-free, POST binds proof and cookie to one row, cross-row
-  swaps do not consume, and reauthorization never uses the fallback.
-- Confirm all eight control JSON shapes, exact field sets, numeric ranges, and
-  repeat enum; unknown/extra/non-integer/out-of-range input makes no Spotify
-  request.
-- Confirm the allowlisted source artifact excludes sources/maps/node_modules,
-  `npm ci --omit=dev --ignore-scripts` runs only in an empty staging release,
-  and the final read-only runtime tree including dependencies matches its
-  post-install SHA-256 manifest before `current` is switched.
-- In synthetic tests, confirm Pairing Token one-time display, HMAC-only
-  storage, single-flight refresh, fixed Spotify error mapping,
-  reauthorization, and ledger-first account deletion.
-- Confirm live Access/Refresh ciphertext rejects record/Client-ID/field swaps;
-  rotated Refresh Token updates atomically and an omitted token preserves the
-  existing ciphertext.
-- Confirm all OAuth HTML success/error pages use no-store, no-referrer,
-  nosniff, frame denial, exact restrictive CSP, and nonce-only inline sources.
-- Confirm the Pairing Token appears in no URL, Cookie, Web Storage, IndexedDB,
-  log, metric, screenshot, dump plaintext, or persisted secret column.
-- Confirm mock, legacy direct, loopback Rust, and policy-locked backend modes
-  remain usable independently.
+- Confirm all public backend origins are rejected before any credential is sent.
+- Confirm old `swpb1.` input retains working direct credentials and asks for Pages reauthorization.
+- Confirm local loopback, Tauri, Rainmeter, direct and mock paths remain available.
+- Confirm secret scanning still covers the Pages and wallpaper artifacts.
 
 ## Visual And Settings Regression
 
@@ -280,8 +200,7 @@ credential-free mock verification. Real Spotify authorization, third-party
 access, Limited beta, and general publication remain prohibited until the
 applicable gates below are complete and the action is separately approved.
 
-Confirm the legacy auth workflow has no Pages write/deploy capability and any
-historical Pages deployment is disabled.
+Confirm Pages publication is restricted to develop and PAGES_DEPLOY_ENABLED=true; pull requests only validate.
 
 Do not begin a Spotify-connected Limited beta until policy or a
 policy-compatible build, operator-reviewed Privacy/EULA, infrastructure,
@@ -297,10 +216,8 @@ every item:
   distortion, or overlay, plus required Spotify logo attribution and link.
 - Published privacy notice with real operator and private incident contacts.
 - Published operator-reviewed EULA and pre-authorization consent.
-- Fixed production origin and verified policy-lock behavior.
-- Separately reviewed systemd/network and application-mode change before any
-  future Spotify callback registration or unlock.
+- Exact Pages base, callback and registered Spotify Redirect URI.
 - Verified non-budget operational alert configuration and delivery.
 - Completed Spotify-connected limited beta.
 - Completed 72-hour Wallpaper Engine soak.
-- Verified cost, abuse, deletion-reconciliation, and incident alerts.
+- Verified local credential deletion, reauthorization and storage limitations.

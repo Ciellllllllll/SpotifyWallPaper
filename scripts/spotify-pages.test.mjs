@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 test('Pages is opt-in, develop-only and grants publish permissions only to deployment', () => {
@@ -37,4 +37,26 @@ test('migration evidence is classified without changing historical byte exceptio
   assert.equal(groups[0].classification, 'historical-evidence');
   assert.doesNotMatch(readFileSync('.gitattributes', 'utf8'), /github-pages-direct-migration/);
   assert.match(readFileSync('docs/phase-reports/README.md', 'utf8'), /github-pages-direct-migration/);
+});
+
+
+test('retired hosted backend is absent while optional configurator gates remain', () => {
+  const { scripts } = JSON.parse(readFileSync('package.json', 'utf8'));
+  for (const name of ['build', 'check', 'test']) {
+    assert.match(scripts[`${name}:optional`], /configurator/);
+    assert.doesNotMatch(scripts[`${name}:optional`], /public-backend/);
+  }
+  for (const path of ['apps/public-backend/package.json', 'deploy/public-backend/systemd/swp-public-backend.service', '.github/workflows/cloudflare-worker-ci.yml', 'scripts/build-public-backend-artifact.mjs']) assert.equal(existsSync(path), false);
+  assert.ok(existsSync('apps/backend/Cargo.toml'));
+  assert.ok(existsSync('scripts/check-public-backend-secrets.mjs'));
+});
+
+
+test('retired backend runbooks are historical while the retirement contract stays normative', () => {
+  const policy = JSON.parse(readFileSync('config/repository-authority.json', 'utf8'));
+  const retired = policy.documentGroups.find(group => group.name === 'retired-backend-documents');
+  assert.equal(retired.classification, 'historical-evidence');
+  assert.equal(retired.paths.length, 6);
+  assert.ok(retired.paths.includes('docs/operations/cloudflare-worker-deploy.md'));
+  assert.ok(policy.documentGroups.some(group => group.classification === 'normative' && group.paths.includes('docs/25-public-backend.md')));
 });

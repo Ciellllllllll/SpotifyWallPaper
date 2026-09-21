@@ -29,10 +29,7 @@ Do not log tokens or full callback URLs.
 
 - `direct`: standard Wallpaper Engine access to Spotify using each user's Client ID and Refresh Token.
 - `backend` with loopback HTTP: optional local Rust backend.
-- `backend` with exact origin
-  `https://ciel-spotify-wallpaper.duckdns.org`: optional Node.js/PostgreSQL
-  VPS backend. Production is policy-locked and cannot currently provide
-  Spotify data.
+- Public HTTPS backend origins are rejected, including formerly configured origins.
 - no usable provider: browser mock or last safe display.
 
 An explicitly selected but invalid backend configuration must not silently fall back to direct credentials.
@@ -87,26 +84,11 @@ Wallpaper Engine CORS, storage persistence/sharing, sleep/resume, and real
 storage contexts cannot be promised shared locking or safe token reuse;
 authorize each separately and validate real-account behavior.
 
-## Public backend OAuth
+## Retired public backend
 
-The dormant public-backend protocol uses each user's own Spotify Client ID
-with Authorization Code + PKCE. It does not use a Client Secret. OAuth state
-is single-use and stored only as a digest; the PKCE verifier is encrypted and
-expires within ten minutes. This protocol is testable only in externally
-unreachable `synthetic_test` mode.
-
-After a synthetic successful token exchange, issue
-`swpb1.<publicId>.<secret>`. `publicId` has at least 128 bits of entropy and
-`secret` at least 256 bits. PostgreSQL stores only `publicId` and a keyed HMAC
-digest of `secret`.
-
-Production runs only as `SPOTIFY_MODE=policy_locked`. Every exact allowed
-Spotify route/method, including `GET /auth/callback`, returns the fixed
-no-store 503 before Node reads body, Cookie, Authorization, database,
-rate-limit, random, or outbound-network state. Unknown paths, wrong methods,
-and unknown modes fail closed.
-
-Spotify Refresh Tokens expire six months after authorization. `invalid_grant` must delete stored Spotify tokens, stop retrying, mark reauthorization required, and allow reauthorization with the existing Pairing Token.
+The hosted proxy is removed. Old `swpb1.` input is rejected with a fixed Pages
+reauthorization message without replacing active direct credentials. The
+optional loopback Rust backend and its separate credential input remain.
 
 ## Required scopes
 
@@ -148,7 +130,7 @@ The dependency-free `normalizeSpotifyPlaybackPayload(raw, fetchedAt)` in
 integers for numeric fields, `progressMs <= durationMs`, at most 32 artists and
 8 image URLs, and the `none` invariant (`id/uri=null`, zero duration/progress,
 not playing). Direct mode wraps its result to retain the `item_null` warning;
-the public backend uses the result directly. Rust normalization is intentionally kept
+Rust normalization is intentionally kept
 at the language boundary and is aligned through provider-v1 fixtures.
 
 ## Polling
@@ -159,13 +141,6 @@ Default polling:
 - paused/stopped: slower, about 3 seconds
 - error: backoff
 - rate-limited: respect retry delay if available
-
-Public backend defaults:
-
-- playing: about 2 seconds
-- paused/stopped: about 5 seconds
-- Access Token refresh: single-flight, 60 seconds before expiry
-- Spotify 429: persist backoff by Client ID
 
 Between polls, progress display may be interpolated locally while playing.
 
@@ -183,7 +158,7 @@ Classify at least:
 
 Errors must not crash the wallpaper.
 
-Public API responses use `{ ok: true, value }` or `{ ok: false, error }`, preserve `retryAfterMs`, return normalized playback only, keep `source: 'spotify'`, and include `fetchedAt`.
+Loopback provider-v1 responses use `{ ok: true, value }` or `{ ok: false, error }`, preserve `retryAfterMs`, return normalized playback only, keep `source: 'spotify'`, and include `fetchedAt`.
 
 ## Playback controls
 

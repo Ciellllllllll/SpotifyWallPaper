@@ -279,7 +279,7 @@ describe('Spotify polling decisions', () => {
     expect(requestSignal?.aborted).toBe(true);
   });
 
-  it('accepts only the exact build-time HTTPS origin', async () => {
+  it('rejects even the former build-time HTTPS origin', async () => {
     vi.stubEnv('VITE_SPOTIFY_BACKEND_ORIGIN', 'https://api.wallpaper.example');
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const fetcher = (async (url: RequestInfo | URL, init?: RequestInit) => {
@@ -301,10 +301,9 @@ describe('Spotify polling decisions', () => {
       fetcher
     );
 
-    await expect(official.pollAt(0)).resolves.toMatchObject({ ok: true });
+    await expect(official.pollAt(0)).resolves.toMatchObject({ ok: false });
     await expect(arbitrary.pollAt(0)).resolves.toMatchObject({ ok: false });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('https://api.wallpaper.example/api/playback');
+    expect(calls).toHaveLength(0);
   });
 
   it.each([
@@ -348,7 +347,7 @@ describe('Spotify polling decisions', () => {
     ) as unknown as typeof fetch;
     const provider = new BackendPlaybackProvider(
       {
-        backendUrl: 'https://api.wallpaper.example',
+        backendUrl: 'http://127.0.0.1:49320',
         pairingToken: 'secret-pairing-token'
       },
       fetcher
@@ -358,7 +357,7 @@ describe('Spotify polling decisions', () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
-  it('uses public backend polling defaults while retaining direct and loopback defaults', () => {
+  it('keeps direct and loopback polling defaults even with retired public settings', () => {
     vi.stubEnv('VITE_SPOTIFY_BACKEND_ORIGIN', 'https://api.wallpaper.example');
     const publicSettings = {
       ...defaultSettings,
@@ -381,13 +380,13 @@ describe('Spotify polling decisions', () => {
         playback: { isPlaying: true } as never,
         settings: publicSettings
       })
-    ).toBe(2000);
+    ).toBe(1000);
     expect(
       nextPollingDelayMs({
         playback: { isPlaying: false } as never,
         settings: publicSettings
       })
-    ).toBe(5000);
+    ).toBe(3000);
     expect(
       nextPollingDelayMs({
         playback: { isPlaying: true } as never,

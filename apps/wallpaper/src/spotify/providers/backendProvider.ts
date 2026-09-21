@@ -169,29 +169,9 @@ export const normalizeBackendBaseUrl = (value: string): SpotifyResult<string> =>
       return invalidBackendUrl();
     }
     const isLoopback = url.protocol === 'http:' && isLoopbackHost(url.hostname);
-    const officialOrigin = configuredOfficialBackendOrigin();
-    const isOfficial = url.protocol === 'https:' && officialOrigin !== null && url.origin === officialOrigin;
-    return isLoopback || isOfficial ? { ok: true, value: `${url.origin}/` } : invalidBackendUrl();
+    return isLoopback ? { ok: true, value: `${url.origin}/` } : invalidBackendUrl();
   } catch {
     return invalidBackendUrl();
-  }
-};
-
-export const isTrustedPublicBackendOrigin = (value: string): boolean => {
-  const normalized = normalizeBackendBaseUrl(value);
-  return normalized.ok && normalized.value.startsWith('https://');
-};
-
-export const configuredOfficialBackendOrigin = (): string | null => {
-  const value = import.meta.env.VITE_SPOTIFY_BACKEND_ORIGIN;
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && isCanonicalOriginInput(value, url) && !url.username && !url.password && !url.search && !url.hash && (!url.pathname || url.pathname === '/')
-      ? url.origin
-      : null;
-  } catch {
-    return null;
   }
 };
 

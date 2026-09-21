@@ -93,11 +93,11 @@ describe('Wallpaper Engine project.json', () => {
     expect(properties.spotify_refresh_token?.value).toBe('');
   });
 
-  it('prepares a release project only with an exact official backend origin', () => {
+  it('prepares a release project without a backend origin', () => {
     withTemporaryProject((projectPath) => {
       const result = runWorkshopPreparation(
         projectPath,
-        'https://api.wallpaper.example'
+        undefined
       );
       const properties =
         JSON.parse(readFileSync(projectPath, 'utf8')).general?.properties ?? {};
@@ -227,11 +227,11 @@ describe('Wallpaper Engine project.json', () => {
     'https://api.wallpaper.example/?',
     'https://api.wallpaper.example/#fragment',
     'https://api.wallpaper.example/#'
-  ])('rejects a missing or non-origin release backend: %s', (origin) => {
+  ])('ignores retired backend environment values: %s', (origin) => {
     withTemporaryProject((projectPath) => {
       const result = runWorkshopPreparation(projectPath, origin);
 
-      expect(result.status).not.toBe(0);
+      expect(result.status).toBe(0);
       expect(JSON.parse(readFileSync(projectPath, 'utf8')).general.properties.spotify_refresh_token.value).toBe('');
     });
   });

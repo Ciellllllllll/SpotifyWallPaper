@@ -74,25 +74,6 @@ describe('Wallpaper Engine property adapter', () => {
     expect(result.patch.spotify).toEqual({ provider: 'direct' });
   });
 
-  it('auto-detects an swpb1 token and uses the release-configured backend', () => {
-    vi.stubEnv('VITE_SPOTIFY_BACKEND_ORIGIN', 'https://api.wallpaper.example');
-
-    const result = parseWallpaperProperties({
-      spotify_refresh_token: { value: backendPairingToken }
-    }, 'direct');
-
-    expect(result.patch.spotify).toEqual({
-      provider: 'backend',
-      backendOrigin: 'https://api.wallpaper.example'
-    });
-    expect(result.credential).toEqual({
-      kind: 'replace',
-      value: { kind: 'backend', pairingToken: backendPairingToken }
-    });
-    expect(JSON.stringify(result.patch)).not.toContain(backendPairingToken);
-    expect(result.warning).toBeNull();
-  });
-
   it('selects direct mode from swpt1 even when the previous provider was backend', () => {
     const result = parseWallpaperProperties({
       spotify_refresh_token: { value: encodeWallpaperEngineToken('bundled-client-id', 'bundled-refresh-token') }
@@ -103,26 +84,6 @@ describe('Wallpaper Engine property adapter', () => {
       kind: 'replace',
       value: { kind: 'direct', clientId: 'bundled-client-id', refreshToken: 'bundled-refresh-token' }
     });
-  });
-
-  it('keeps swpb1 selected but reports a safe warning when this build has no backend origin', () => {
-    const result = parseWallpaperProperties({
-      spotify_refresh_token: { value: backendPairingToken },
-      spotify_backend_url: { value: 'http://127.0.0.1:49320/' }
-    });
-
-    expect(result.patch.spotify).toEqual({ provider: 'backend', backendOrigin: '' });
-    expect(result.credential).toEqual({
-      kind: 'replace',
-      value: { kind: 'backend', pairingToken: backendPairingToken }
-    });
-    expect(result.warning).toBe('Spotify backend is unavailable in this build.');
-    expect(result.warning).not.toContain(backendPairingToken);
-    const merged = applyWallpaperPreferencesPatch({
-      ...defaultSettings,
-      spotify: { ...defaultSettings.spotify, provider: 'backend', backendOrigin: 'http://127.0.0.1:49320/' }
-    }, result.patch);
-    expect(merged.spotify.backendOrigin).toBeUndefined();
   });
 
   it('ignores malformed unified tokens and clears credentials only for an empty field', () => {
@@ -146,7 +107,7 @@ describe('Wallpaper Engine property adapter', () => {
 
     expect(result.credential).toEqual({ kind: 'retain' });
     expect(result.patch.spotify).toBeUndefined();
-    expect(result.warning).toBe('Spotify Token format is invalid.');
+    expect(result.warning).toBe('Public Spotify backend has been retired. Reauthorize using the GitHub Pages authentication page.');
     expect(result.warning).not.toContain(nonCanonicalToken);
   });
 
@@ -195,14 +156,14 @@ describe('Wallpaper Engine property adapter', () => {
     });
 
     expect(results[0].settings?.spotify).toMatchObject({
-      provider: 'backend',
-      backendOrigin: 'https://api.wallpaper.example'
+      provider: 'direct',
+      backendOrigin: 'http://127.0.0.1:49320/'
     });
     expect(results[1].credential).toEqual({ kind: 'retain' });
     expect(results[1].patch.spotify).toBeUndefined();
     expect(results[1].settings?.spotify).toMatchObject({
-      provider: 'backend',
-      backendOrigin: 'https://api.wallpaper.example'
+      provider: 'direct',
+      backendOrigin: 'http://127.0.0.1:49320/'
     });
   });
 

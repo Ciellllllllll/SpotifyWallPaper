@@ -8,11 +8,9 @@ import {
 } from '@spotify-wallpaper/shared-types';
 import { loadSettings } from '../settings/loadSettings';
 import { parseWallpaperEngineSpotifyToken } from '../spotify/wallpaperEngineToken';
-import { configuredOfficialBackendOrigin } from '../spotify/providers/backendProvider';
 import type { CredentialInput } from '../settings/credentialBoundary';
 import type { CredentialUpdate, ProviderHint, WallpaperEngineProperties, WallpaperPropertyResult } from './types';
 
-const backendPairingTokenPattern = /^swpb1\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/;
 const spotifyPropertyKeys = [
   'spotify_client_id',
   'spotify_refresh_token',
@@ -91,23 +89,17 @@ export const parseWallpaperProperties = (
 
   const trimmedToken = refreshToken?.trim();
   const bundledToken = refreshToken !== undefined ? parseWallpaperEngineSpotifyToken(refreshToken) : null;
-  const unifiedBackendToken = trimmedToken && isBackendPairingToken(trimmedToken) ? trimmedToken : null;
   let unifiedCredential: CredentialUpdate | null = null;
-  if (refreshToken !== undefined && trimmedToken === '') {
-    delete patch.spotify;
-    unifiedCredential = { kind: 'clear' };
-  } else if (bundledToken) {
+  if (bundledToken) {
     patch.spotify = { provider: 'direct' };
     unifiedCredential = { kind: 'replace', value: { kind: 'direct', ...bundledToken } };
-  } else if (unifiedBackendToken) {
-    const backendOrigin = configuredOfficialBackendOrigin();
-    patch.spotify = {
-      ...patch.spotify,
-      provider: 'backend',
-      backendOrigin: backendOrigin ?? ''
-    };
-    unifiedCredential = { kind: 'replace', value: { kind: 'backend', pairingToken: unifiedBackendToken } };
-    if (!backendOrigin && warning === null) warning = 'Spotify backend is unavailable in this build.';
+  } else if (trimmedToken?.startsWith('swpb') || pairingToken?.trim().startsWith('swpb')) {
+    delete patch.spotify;
+    unifiedCredential = { kind: 'retain' };
+    if (warning === null) warning = 'Public Spotify backend has been retired. Reauthorize using the GitHub Pages authentication page.';
+  } else if (refreshToken !== undefined && trimmedToken === '') {
+    delete patch.spotify;
+    unifiedCredential = { kind: 'clear' };
   } else if (/^swp[bt]/.test(trimmedToken ?? '')) {
     delete patch.spotify;
     unifiedCredential = { kind: 'retain' };
@@ -288,6 +280,12 @@ export const registerWallpaperPropertyListener = (
         !['spotify_client_id', 'spotify_refresh_token', 'spotify_pairing_token'].some(key => Object.prototype.hasOwnProperty.call(properties, key))) {
         for (const key of ['spotify_client_id', 'spotify_refresh_token', 'spotify_pairing_token']) delete effectiveProperties[key];
       }
+      // A new standard-field edit must not inherit a retired hidden pairing value.
+      // A full legacy replay containing both fields is retained instead of disconnecting.
+      if (Object.prototype.hasOwnProperty.call(properties, 'spotify_refresh_token') &&
+        !Object.prototype.hasOwnProperty.call(properties, 'spotify_pairing_token')) {
+        delete effectiveProperties.spotify_pairing_token;
+      }
       const result = parseWallpaperProperties(effectiveProperties, providerHint?.());
       safetyGateOpen = safetyGateOpen && result.safetyGateOpen;
       const safeResult = { ...result, safetyGateOpen };
@@ -312,20 +310,4 @@ const booleanProperty = (properties: WallpaperEngineProperties, key: string): bo
 const numberProperty = (properties: WallpaperEngineProperties, key: string): number | undefined => {
   const value = properties[key]?.value;
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-};
-
-const isBackendPairingToken = (value: string): boolean => {
-  const match = backendPairingTokenPattern.exec(value);
-  return match !== null && isCanonicalBase64Url(match[1], 16) && isCanonicalBase64Url(match[2], 32);
-};
-
-const isCanonicalBase64Url = (value: string, expectedByteLength: number): boolean => {
-  try {
-    const base64 = value.replaceAll('-', '+').replaceAll('_', '/');
-    const binary = atob(base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '='));
-    return binary.length === expectedByteLength &&
-      btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '') === value;
-  } catch {
-    return false;
-  }
 };

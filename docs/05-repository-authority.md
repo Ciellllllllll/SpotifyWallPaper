@@ -189,8 +189,8 @@ release material. The explicit ownership rules in
 `config/repository-authority.json` cover residue under the retired
 `apps/cloudflare-worker` path and its `apps/public-backend` successor, so an
 ordinary checkout update cannot expose preserved ignored files during the
-directory migration. The active public-backend tests live under
-`apps/public-backend/test` and are tracked repository inputs. The retired
+directory migration. The public backend source, tests, packaging and deployment assets are retired.
+Ignored residue remains operator-owned and must not be exposed or broadly deleted. The retired
 Cloudflare `node-test` path has no ignore or authority exception.
 
 `package-lock.json`, `Cargo.lock`, and

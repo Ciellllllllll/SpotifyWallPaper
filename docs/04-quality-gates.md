@@ -69,7 +69,7 @@ For strict-gated work, confirm and freeze the latest stable Ponytail baseline:
 - No API polling loop can run every frame.
 - No unhandled settings corruption path.
 - Phase report is written.
-- Optional public-backend failures do not prevent wallpaper startup.
+- Optional loopback failures do not prevent wallpaper startup.
 
 ## Security gate
 
@@ -86,23 +86,9 @@ The implementation must never print or persist secrets unintentionally. The foll
 
 Debug display may show whether a token exists and token expiry time, but not the token value.
 
-For the public VPS backend:
-
-- Caddy and OAuth2 Proxy request/auth/access logging must be disabled.
-- Node logs contain fixed event names and aggregate counts only. They never
-  contain URLs, query strings, callback data, headers, Client ID, IP address,
-  exception text, or secrets.
-- OAuth and setup pages use no-store, no-referrer, and restrictive CSP headers.
-- Refresh and Access Tokens are encrypted before PostgreSQL storage.
-- Pairing secrets are stored only as keyed HMAC digests.
-- Arbitrary HTTPS origins and redirects never receive Pairing Tokens.
-- Account deletion invalidates the Pairing Token before returning success.
-- Production accepts only `SPOTIFY_MODE=policy_locked`; unknown modes fail
-  startup. Every exact allowed Spotify route/method returns the fixed no-store
-  503 before Node inspects request or external state; methods and paths outside
-  the socket allowlists remain rejected.
-- Node production binds only the exact public/admin AF_UNIX sockets and each
-  socket rejects every method/path outside its allowlist.
+For the retained loopback backend, credentials must never be sent to public
+origins or across redirects. The former public proxy and its deployment gates
+are retired; the shared secret scanner and all retained product gates remain.
 
 ## Stability gate
 
@@ -115,7 +101,7 @@ The wallpaper must start even if:
 - album image is missing.
 - settings JSON is malformed.
 - Wallpaper Engine audio listener is unavailable.
-- public backend or either PostgreSQL database is unavailable.
+- the optional local backend is unavailable.
 - Spotify Refresh Token requires reauthorization.
 
 ## Performance gate

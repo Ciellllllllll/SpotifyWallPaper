@@ -47,3 +47,5 @@ current v1 scope.
 
 The recovered reports began tracked history in system-wide refactor Phase 0
 without changes to their original bytes.
+
+- `hosted-backend-retirement.md`: Cloudflare resource retirement and hosted-proxy code removal.

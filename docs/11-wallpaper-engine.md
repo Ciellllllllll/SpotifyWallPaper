@@ -19,18 +19,16 @@ The native property panel exposes only:
 - performance mode
 - debug enabled
 
-The Spotify Token field auto-detects `swpt2.` or compatible `swpt1.` as direct mode and an exact
-`swpb1.` Pairing Token as public-backend mode. A release-configured official
-HTTPS backend origin is used automatically for `swpb1.`. A build without that
-origin reports a fixed non-secret configuration warning. Empty input clears
-the active credential, while malformed prefixed input is ignored instead of
-overwriting a valid process-memory credential.
+The Spotify Token field auto-detects `swpt2.` and compatible `swpt1.` as direct
+mode. Old `swpb1.` input is rejected with a fixed Pages reauthorization message
+and retains current credentials. Empty input clears the active credential;
+malformed prefixed input never overwrites a valid credential.
 
 Direct mode is the standard setup. Its dedicated IndexedDB store persists the
 latest rotated credential independently of general settings and provider
 lifetime. Repeated initial data must not overwrite it; clearing the field
 disconnects and retires that authorization. A missing property is a delta
-notification, not deletion. `swpb1.` is legacy compatibility only: migration
+notification, not deletion. `swpb1.` is rejected: migration
 requires new Pages authorization and never converts a Pairing Token to a
 Spotify Refresh Token. Wallpaper Engine storage availability, CORS, sharing
 across displays/processes, and real 72-hour operation require explicit real
@@ -42,7 +40,7 @@ installations, but they are not shown in the current native property panel.
 
 Property parsing must be isolated behind an adapter.
 
-The release build may inject one official HTTPS backend origin. Runtime validation permits that exact origin and HTTP loopback only. Pairing Tokens must never be sent to arbitrary origins or across redirects.
+Backend runtime validation permits canonical HTTP loopback origins only. All public HTTPS origins are rejected. Pairing Tokens must never be sent to arbitrary origins or across redirects.
 
 ## Browser fallback
 
@@ -134,3 +132,7 @@ mock-only. Later **Submit Update** operations use the same ID so Steam can
 distribute updates to subscribers. Spotify-connected testing, third-party
 access, Limited beta, and general publication remain blocked by the release
 gates and require separate approval.
+
+When an old hidden pairing value and an empty standard field arrive together,
+retain the current credential. A later explicit standard-field-only edit does
+not inherit the hidden pairing value; empty input then disconnects normally.

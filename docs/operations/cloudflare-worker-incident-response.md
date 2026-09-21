@@ -1,3 +1,5 @@
+> Archived on 2026-09-21: the hosted backend has been retired. This is historical evidence, not a current deployment procedure or active service agreement. See `docs/25-public-backend.md`.
+
 # Public Backend VPS Incident Response Runbook
 
 > The filename is retained temporarily for path compatibility. This is the
