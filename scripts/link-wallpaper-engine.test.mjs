@@ -8,6 +8,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,10 +25,46 @@ test('creates the development junction and accepts the same junction again', { s
     const first = run();
     assert.equal(first.status, 0, first.stderr);
     assert.equal(lstatSync(destination).isSymbolicLink(), true);
-    assert.equal(realpathSync(destination), realpathSync(dist));
+    assert.equal(realpathSync.native(destination), realpathSync.native(dist));
 
     const second = run();
     assert.equal(second.status, 0, second.stderr);
+  });
+});
+
+test('accepts an existing junction whose target uses an actual Windows short name', { skip: process.platform !== 'win32' }, () => {
+  withSyntheticRepository(({ destination, dist, run }) => {
+    const short = spawnSync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      '(New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:LINK_TEST_DIST).ShortPath'
+    ], { encoding: 'utf8', env: { ...process.env, LINK_TEST_DIST: dist } });
+    assert.equal(short.status, 0, short.stderr);
+    const shortDist = short.stdout.trim();
+    assert.notEqual(shortDist, realpathSync.native(dist), 'fixture must exercise a real 8.3 alias');
+    symlinkSync(shortDist, destination, 'junction');
+    assert.equal(realpathSync.native(destination), realpathSync.native(shortDist));
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const result = run();
+      assert.equal(result.status, 0, result.stderr);
+    }
+    // Run through the short repository spelling as well as the long spelling.
+    const result = run(resolve(shortDist, '../../../scripts/link-wallpaper-engine.ps1'));
+    assert.equal(result.status, 0, result.stderr);
+  });
+});
+
+test('does not replace a junction to a different directory', { skip: process.platform !== 'win32' }, () => {
+  withSyntheticRepository(({ destination, dist, run }) => {
+    const other = resolve(dist, '../other');
+    mkdirSync(other);
+    const marker = resolve(other, 'keep.txt');
+    writeFileSync(marker, 'keep', 'utf8');
+    symlinkSync(other, destination, 'junction');
+    const result = run();
+    assert.equal(result.status, 1);
+    assert.equal(lstatSync(destination).isSymbolicLink(), true);
+    assert.equal(realpathSync.native(destination), realpathSync.native(other));
+    assert.equal(readFileSync(marker, 'utf8'), 'keep');
   });
 });
 
@@ -76,9 +113,9 @@ const withSyntheticRepository = (runTest) => {
       destination,
       dist,
       projectPath,
-      run: () => spawnSync(
+      run: (entry = scriptPath) => spawnSync(
         'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', entry],
         {
           cwd: root,
           encoding: 'utf8',
