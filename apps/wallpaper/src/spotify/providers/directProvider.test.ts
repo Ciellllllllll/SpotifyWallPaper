@@ -4,6 +4,15 @@ import { DirectPlaybackProvider } from './directProvider';
 import type { Fetcher } from '../types';
 
 describe('DirectPlaybackProvider', () => {
+  it.each(['poll', 'control'])('returns refresh failures after an API 401: %s', async (operation) => {
+    let tokenCalls = 0;
+    const fetcher: Fetcher = async url => String(url).includes('/api/token')
+      ? (++tokenCalls === 1 ? Response.json({ access_token: 'dummy-access', expires_in: 3600 }) : new Response(null, { status: 429, headers: { 'retry-after': '7' } }))
+      : new Response(null, { status: 401 });
+    const provider = new DirectPlaybackProvider({ clientId: 'dummy-client', refreshToken: 'dummy-refresh' }, fetcher);
+    const result = await (operation === 'poll' ? provider.pollAt(0) : provider.controlAt({ type: 'next' }, 0));
+    expect(result).toMatchObject({ ok: false, error: { kind: 'rate_limited', retryAfterMs: 7000 } });
+  });
   it('shares one refresh request across concurrent polls', async () => {
     let releaseToken!: (response: Response) => void;
     const tokenResponse = new Promise<Response>((resolve) => { releaseToken = resolve; });

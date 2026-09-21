@@ -1,6 +1,6 @@
 # Spotify Wallpaper
 
-Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-previewable mock wallpaper plus Spotify playback polling, Wallpaper Engine property customization, an optional BYO Client ID VPS backend, visualizer, transitions, player controls, an optional Tauri configurator, and optional Rainmeter JSON export.
+Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-previewable mock wallpaper plus Spotify playback polling, Wallpaper Engine property customization, static GitHub Pages PKCE authorization and direct Spotify access, visualizer, transitions, player controls, an optional Tauri configurator, and optional Rainmeter JSON export.
 
 ## Guides And Repository Notes
 
@@ -17,7 +17,7 @@ Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-
 - Optional public backend: Node.js 22 ESM on a VPS with PostgreSQL 17, Caddy,
   OAuth2 Proxy, Authorization Code with PKCE, encrypted Spotify credentials,
   and Pairing Tokens.
-- Legacy direct auth page: static Vite + TypeScript app for developer testing with GitHub Pages.
+- Standard auth page: static Vite + TypeScript PKCE app hosted on GitHub Pages; each user supplies their own Client ID.
 - Shared model types: TypeScript workspace package.
 - Visual core: Rust compiled to WebAssembly for typed-array visual normalization and readability helpers.
 - Optional configurator: Svelte frontend with Tauri/Rust backend.
@@ -28,15 +28,12 @@ Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-
 The runtime wallpaper is the main product. It must work as a Wallpaper Engine Web Wallpaper and in a normal browser
 preview without requiring Tauri, Rainmeter, or a live Spotify connection.
 
-Spotify authorization is intentionally split from the wallpaper runtime:
-
-- The dormant Workshop-compatible path uses each user's own Spotify Client ID
-  and the public backend's hardened OAuth flow. It does not use a shared
-  Spotify application or Client Secret.
-- The public backend keeps Spotify Access and Refresh Tokens out of Wallpaper Engine. It returns a `swpb1.` Pairing Token once after authorization; Wallpaper Engine stores that Pairing Token as its backend credential.
-- Browser mock mode, the loopback Rust backend, and legacy direct mode remain available without the public backend.
-- The static `@spotify-wallpaper/spotify-auth` GitHub Pages app and its `swpt1.` bundle remain developer-only legacy compatibility paths. They are not the managed public or default Workshop setup path.
-- The optional Tauri configurator remains available as a companion path, but it is not required for the wallpaper runtime.
+Spotifyへの接続は、初回・再認証だけブラウザの静的Pages認証ページを使い、
+通常はローカルWeb WallpaperからSpotify Web APIとtoken endpointへ直接接続します。
+VPS、Worker、D1、GitHub Actionsによる定期更新、追加の常駐アプリ、Client Secretは不要です。
+`DirectPlaybackProvider`と専用IndexedDBがToken更新・保存・復元を担当します。
+一般設定JSONと機密保存は別で、設定exportには認証情報を含めません。
+任意のTauri/Rainmeter、loopback、policy-locked public backendは互換用途として残しています。
 
 Wallpaper Engine properties are now the normal settings surface for common modules. `settings_json` remains available for
 advanced or bulk configuration, but users should not need to paste JSON for normal module toggles.
@@ -95,80 +92,45 @@ policy approval, and complete release-gate evidence.
 See `docs/privacy.md`, `docs/eula.md`, and `docs/25-public-backend.md` for the
 current locked data-handling and architecture contract.
 
-## Legacy Direct Authorization
+## Spotify接続とGitHub Pages
 
-Direct browser-side authorization remains available for compatibility and local developer testing. Its token format is
-`swpt1.<base64url-json>` and contains the Spotify Client ID and Refresh Token. A `swpt1.` token is accepted only by
-legacy direct mode and is never accepted by the public backend.
+予定の認証ページは [Spotify認証ページ](https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/) です。
+この作業では公開していません。登録するRedirect URIは
+`https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/callback/` です。
+大文字小文字と末尾スラッシュを含めて一致させてください。
 
-The static GitHub Pages auth app is not the public backend and must not be presented as the Workshop default. Its
-deployment workflow is manual-only for developer testing:
+各利用者が自分のClient IDで認証し、生成された`swpt2.`データをWallpaper Engineの
+「Spotify Token」欄へ貼り付けます。これはRefresh Tokenを含む機密データで、
+Base64urlは暗号化ではありません。既存`swpt1.`も読めます。
+旧`swpb1.`は直接接続へ変換できないため、Pagesで一度再認証します。
 
-```sh
-npm run dev -w @spotify-wallpaper/spotify-auth
-```
-
-Build `apps/spotify-auth/dist` under `/spotify-auth/` only when testing the legacy page:
+詳しい接続・解除・復元・公開設定・実機制約は[ユーザーガイド](docs/user-guide.md)を参照してください。
+通常の`npm run build`、`npm run check`、`npm test`は主製品を検証します。
+任意機能には`build:optional`、`check:optional`、`test:optional`を使います。
+既存のバックエンド・セキュリティ検証は任意コンポーネントのCIへ保持しています。
 
 ```sh
 npm run build -w @spotify-wallpaper/spotify-auth
+node apps/spotify-auth/prepare-pages.mjs
+npx playwright test --config playwright.auth.config.ts
 ```
 
-To prefill a developer-owned public Client ID for that legacy test build:
-
-```sh
-$env:VITE_SPOTIFY_CLIENT_ID='your-public-client-id'
-npm run build -w @spotify-wallpaper/spotify-auth
-```
-
-The legacy workflow is `.github/workflows/spotify-auth-pages.yml`. It runs only
-through `workflow_dispatch`, checks/builds the legacy app, and has no Pages
-write permission or deploy job. Disable any historical GitHub Pages deployment
-before public-backend beta distribution. Because the Client ID is part of
-Spotify's authorization URL, it is treated as a public identifier. Do not
-configure or commit a Spotify Client Secret.
-
-If the repository name changes, build with the matching base path:
-
-```sh
-$env:VITE_AUTH_BASE_PATH='/<repo>/spotify-auth/'
-npm run build -w @spotify-wallpaper/spotify-auth
-```
-
-The auth build creates `index.html`, `callback/index.html`, and `404.html` so a developer-selected GitHub Pages site can
-handle its registered legacy callback path without a backend. Register the exact callback shown for that deployment in
-the developer-owned Spotify app; do not reuse the public backend callback.
+Spotifyの認証情報を設定せずにビルドできます。`VITE_SPOTIFY_CLIENT_ID`は編集可能な初期値に限ります。
+本番パスは`apps/spotify-auth/pages-config.json`が定義し、任意のURL/queryで変更できません。
+ローカル開発は`npm run dev -w @spotify-wallpaper/spotify-auth`（127.0.0.1:1430）です。
 
 ## Publication Status
 
-The Node/VPS backend is an approved target architecture under implementation;
-it is not yet a deployed or operator-verified service. Private local/mock
-staging may continue. A Spotify-connected Limited beta and general
-Workshop publication are blocked until the applicable items below have
-recorded evidence:
+実装・ローカル検証と外部公開は別です。Pagesの実公開、Spotify実アカウント接続、
+Wallpaper Engineの72時間連続稼働・再起動・複数画面は未検証です。
+公開前には運営者・連絡先を含むPrivacy/EULAの確認、Spotifyの画像・音声同期・表示・商標の
+公開条件、GitHub Pagesの商用・機密取引に関する制限を確認してください。
+既存の演出を維持したことは公開規約への適合確認を意味しません。
+任意VPSは引き続き`policy_locked`で、この移行によって解除しません。
 
-- Spotify approval or a documented policy-compatible redesign covering BYO
-  authorization, sound-recording/visual synchronization, product naming, and
-  Spotify Mark usage.
-- Original, unmodified artwork with no crop, blur, animation, distortion, or
-  overlay, plus the required Spotify logo attribution and Spotify link.
-- Published privacy notice with real operator and private incident contacts.
-- Published EULA and verified pre-authorization consent flow.
-- Fixed production origin and verified `policy_locked` response behavior.
-- Separately reviewed application and systemd/network changes before any
-  future Spotify unlock or callback registration.
-- Verified non-budget operational alert configuration and delivery.
-- Completed Spotify-connected limited beta.
-- Completed 72-hour Wallpaper Engine soak.
-- Verified cost, abuse, deletion-reconciliation, and incident alerts.
-
-Spotify's current Development Mode limits and Premium owner requirement are
-documented in [Quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes).
-The one-Client-ID/five-user changes are documented in Spotify's
-[February 2026 migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide).
-Artwork, link, and attribution requirements are documented in Spotify's
-[Developer Policy](https://developer.spotify.com/policy) and
-[Design Guidelines](https://developer.spotify.com/documentation/design).
+一次資料: [Spotify Policy](https://developer.spotify.com/policy)、
+[Design Guidelines](https://developer.spotify.com/documentation/design)、
+[GitHub Pages limits](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)。
 
 For local browser testing, keep the browser path credential-free and use the v3 mock provider:
 
@@ -185,7 +147,7 @@ localStorage.setItem(
 location.reload();
 ```
 
-Clear local test credentials with:
+Clear browser mock preferences with (this does not delete the dedicated credential store):
 
 ```js
 localStorage.removeItem('spotify-wallpaper-settings');
@@ -193,7 +155,7 @@ location.reload();
 ```
 
 Never place Spotify tokens in browser settings, a URL, screenshot, log, or committed file. Direct credentials are supplied
-only through the dedicated Wallpaper Engine properties; the Web Wallpaper must not use a Spotify Client Secret.
+through the dedicated Wallpaper Engine properties and persisted only in the dedicated credential store; the Web Wallpaper must not use a Spotify Client Secret.
 
 Layout can be selected by preset or customized with coordinate-based layout items:
 
@@ -463,11 +425,11 @@ Wallpaper Engine manual QA before release candidate:
 | --- | --- |
 | Run `npm run wallpaper:dev-build`, select `spotify-wallpaper-dev` once, then reload after another build | The same project shows the new build without another import and starts without Tauri, Spotify, or Rainmeter. |
 | `settings_json` | Entered as single-line JSON; valid JSON applies settings; empty or malformed JSON falls back safely and reports a debug warning. |
-| `spotify_playback_provider` | Production backend requests are policy-locked. Use `Direct` only for legacy compatibility/developer testing, or keep mock mode. |
+| `spotify_playback_provider` | Standard Spotify mode is `Direct`; `Mock` previews without credentials. Backend remains optional and policy-locked. |
 | `spotify_backend_url` | For a Workshop build, retain the exact release-configured production origin. Arbitrary HTTPS origins are rejected before a Pairing Token is sent. |
 | `spotify_pairing_token` | The field retains `swpb1.` compatibility, but production cannot issue or use one while policy-locked. Debug only shows configured/not configured. Never expose a real value in screenshots or logs. |
-| `spotify_client_id` | Legacy direct mode only. Optional for `swpt1.` tokens. Empty and dummy values can be entered without logging the value. |
-| `spotify_refresh_token` | Legacy direct mode only. Accepts a `swpt1.` bundle or raw Refresh Token for manual testing. Never expose a real value in screenshots or logs. |
+| `spotify_client_id` | Optional legacy raw-token input. `swpt2.`/`swpt1.` bundles already include the Client ID. |
+| `spotify_refresh_token` | Standard connection input: paste the Pages `swpt2.` bundle (`swpt1.` remains compatible). Empty input explicitly disconnects. Never expose a real value in screenshots or logs. |
 | `visualizer_enabled` | Enables/disables visualizer rendering and clears visualizer state when disabled. |
 | `glowing_objects_enabled` | Enables/disables the full-screen glowing-object Canvas; disabling it clears active particles and stops its animation loop. |
 | `visualizer_position` | Selects `around-album` or `bottom-up`; invalid Wallpaper Engine notifications keep the previous value, while invalid restored shared settings use `around-album`. |
@@ -552,7 +514,7 @@ The sample Rainmeter skin is `examples/rainmeter/SpotifyWallPaper/SpotifyWallPap
 The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 
 - `spotify_client_id`
-- `spotify_refresh_token` (`swpt1.` legacy direct bundle only; never put a raw token in settings JSON)
+- `spotify_refresh_token` (`swpt2.` or compatible `swpt1.` direct bundle; never put a raw token in settings JSON)
 - `spotify_playback_provider`
 - `spotify_backend_url`
 - `spotify_pairing_token` (`swpb1.` public-backend Pairing Token)
@@ -587,7 +549,7 @@ The Phase 2 Wallpaper Engine bridge accepts these user property keys:
 Wallpaper Engine `textinput` properties. `spotify_pairing_token` is a dormant
 public-backend compatibility credential; production cannot issue or use it
 while policy-locked.
-`spotify_refresh_token` and `spotify_client_id` remain legacy direct fields. Paste `settings_json` as single-line JSON
+`spotify_refresh_token` is the standard direct authorization input; `spotify_client_id` is a hidden legacy field. Paste `settings_json` as single-line JSON
 because Wallpaper Engine Web Wallpaper user properties do not provide a textarea type.
 
 Check Rust crates:

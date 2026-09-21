@@ -12,6 +12,7 @@ export const classifySpotifyStatus = (status: number, retryAfterHeader?: string 
   if (status === 204) {
     return { kind: 'unavailable', message: 'Spotify has no active playback device.', status };
   }
+  if (status >= 500 && status <= 599) return { kind: 'unavailable', message: 'Spotify service is temporarily unavailable.', status };
 
   if (status === 429) {
     return {
@@ -23,6 +24,20 @@ export const classifySpotifyStatus = (status: number, retryAfterHeader?: string 
   }
 
   return { kind: 'unknown_response_shape', message: 'Spotify returned an unexpected response.', status };
+};
+
+export const classifySpotifyResponse = async (response: Response): Promise<SpotifyPlaybackError> => {
+  const error = classifySpotifyStatus(response.status, response.headers.get('retry-after'));
+  if (response.status !== 429) return error;
+  const payload: unknown = await response.clone().json().catch(() => null);
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>;
+    const nested = record.error;
+    if (record.reason === 'QUOTA_EXCEEDED' || (nested && typeof nested === 'object' && (nested as Record<string, unknown>).reason === 'QUOTA_EXCEEDED')) {
+      return { ...error, quotaExceeded: true, message: 'Spotify developer account quota is exhausted.', retryAfterMs: Math.max(error.retryAfterMs ?? 0, 3_600_000) };
+    }
+  }
+  return error;
 };
 
 export const classifyNetworkError = (): SpotifyPlaybackError => ({
@@ -44,9 +59,5 @@ const parseRetryAfterMs = (value?: string | null): number | undefined => {
     return undefined;
   }
   const seconds = Number(value);
-  if (!Number.isSafeInteger(seconds) || seconds > 86_400) {
-    return undefined;
-  }
-
-  return seconds * 1000;
+  return Math.min(Number.MAX_SAFE_INTEGER, seconds * 1000);
 };

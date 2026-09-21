@@ -16,8 +16,12 @@ const forbiddenPatterns = [
     pattern: /swpt1\.[A-Za-z0-9._~-]{20,}/
   },
   {
+    label: 'direct-authorization-token',
+    pattern: /swpt2\.[A-Za-z0-9_-]{20,}/
+  },
+  {
     label: 'oauth-callback-query',
-    pattern: /\/auth\/callback\?[^\s"'<>]*(?:code|state)=/i
+    pattern: /\/(?:auth|spotify-auth)\/callback\/?\?[^\s"'<>]*(?:code|state)=/i
   },
   {
     label: 'access-token-canary',

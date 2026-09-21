@@ -256,7 +256,7 @@ describe('Spotify polling decisions', () => {
 
     await expect(provider.controlAt({ type: 'pause' }, 0)).resolves.toMatchObject({
       ok: false,
-      error: { kind: 'unknown_response_shape', status: 500 }
+      error: { kind: 'unavailable', status: 500 }
     });
   });
 
@@ -487,7 +487,7 @@ describe('Spotify polling decisions', () => {
     }
   );
 
-  it('drops an oversized retry-after header on the malformed-body fallback path', async () => {
+  it('preserves a long retry-after header on the malformed-body fallback path for chunked scheduling', async () => {
     const provider = new BackendPlaybackProvider(
       {
         backendUrl: 'http://127.0.0.1:49320/',
@@ -504,13 +504,13 @@ describe('Spotify polling decisions', () => {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.retryAfterMs).toBeUndefined();
+    expect(result.error.retryAfterMs).toBe(2_147_484_000);
     expect(
       nextPollingDelayMs({
         playback: mockPlayback,
         error: result.error,
         settings: defaultSettings
       })
-    ).toBe(5000);
+    ).toBe(2_147_484_000);
   });
 });

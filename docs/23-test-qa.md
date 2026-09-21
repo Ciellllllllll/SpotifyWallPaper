@@ -28,6 +28,30 @@ appearance.
 
 ## Unit tests
 
+Direct connection migration adds regression requirements without changing the
+visual/audio algorithms or removing the existing checks below:
+
+- PKCE transaction binding, missing/mismatched/expired/future state, replay,
+  denial, timeout, and replacement-session safety.
+- Credential-free auth build, exact trailing-slash callback, subpath assets,
+  actual callback HTTP 200, and mocked browser authorization/token E2E.
+- `swpt1.` compatibility and `swpt2.` parsing; repeated host input preserves
+  rotated tokens across provider recreation and reload.
+- Atomic import, read/write/corruption/quota failures, disconnect and
+  invalid_grant retirement, account changes, and late-response protection.
+- Same-store concurrent contexts, lease expiry and revision fencing, refresh
+  during disposal, stale 401/invalid_grant, and no duplicate control replay.
+- Distinct 403, 429/QUOTA_EXCEEDED, network, timeout, 5xx, invalid payload, and
+  no-playback handling; credential-free settings export and artifact scans.
+- Fake-clock one-hour, over-24-hour, and 72-hour refresh/rotation, omitted
+  replacement Refresh Token, and long-term authorization failure.
+
+Fake-clock and ordinary-browser tests are not Wallpaper Engine acceptance.
+Real-device CORS/Origin, storage persistence and inter-screen sharing,
+restart, sleep/resume, offline recovery, and 72-hour soak remain unverified
+until separately measured and recorded for the new build. Separate storage
+contexts require independent authorization and have no shared-lock guarantee.
+
 Rust/WASM core (current boundary):
 
 - visualizer normalization and typed-array safety

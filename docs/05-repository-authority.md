@@ -48,6 +48,11 @@ path was not declared in advance; its target is never traversed.
 
 ## Historical raw-byte boundary
 
+The GitHub Pages/direct-connection migration report is new historical evidence,
+classified in `phase-reports`. It is not a recovered document and receives no
+raw-byte or whitespace exception. Browser test output stays under the existing
+ignored `artifacts/` ownership boundary.
+
 Exactly 26 recovered historical documents are listed in the policy and have
 exact `-text` entries in `.gitattributes`. Those entries preserve their
 original worktree bytes through Git clean filters. The exception is

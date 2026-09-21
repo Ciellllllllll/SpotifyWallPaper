@@ -4,19 +4,48 @@ Use this checklist before release or when changing settings, Spotify, Wallpaper 
 
 ## Automated Gates
 
-- `npm run test --workspaces --if-present`
+- `npm test`
 - `npm run test:wallpaper-link`
 - `npm run check`
 - `npm run build`
-- `cargo check --workspace`
-- `cargo test --workspace`
-- `cargo check --manifest-path apps/configurator/src-tauri/Cargo.toml`
-- `cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml`
+- `npm run test:wasm-parity`
+- `cargo check --manifest-path crates/visual-core/Cargo.toml`
+- `cargo test --manifest-path crates/visual-core/Cargo.toml`
 - `npm audit --audit-level=moderate`
 - `git diff --check`
 - `npx playwright test tests/playwright/wallpaper-characterization.spec.ts --grep "visualizer positioning|glowing object canvas|display mode animations"`
 
 Resource-intensive commands should run through `h5i capture run`.
+
+Retained optional components are checked separately with `npm run
+check:optional`, `npm run test:optional`, `npm run build:optional`, and Cargo
+check/test for `apps/backend/Cargo.toml` and
+`apps/configurator/src-tauri/Cargo.toml`. Their checks are not removed or
+represented as completed by passing the standard product build.
+
+## Static Pages And Direct Credential Migration
+
+- Build auth without Client ID or token configuration; verify editable Client ID.
+- Serve the prepared Pages artifact under `/SpotifyWallPaper/` and verify
+  `/spotify-auth/callback/` returns 200 with correct assets and query handling.
+- Run mocked browser E2E for PKCE and immediate callback query removal.
+- Verify invalid/missing/expired/future state, replay, denial, timeout, and
+  starting a new session while an older request is pending.
+- Verify same initial host input preserves rotated tokens after recreation,
+  reload, and restart; malformed input leaves the current authorization intact.
+- Verify storage read/write/corruption failures, missing replacement token,
+  account switch, disconnect, and stale-input retirement after invalid_grant.
+- Verify concurrent contexts, lease expiry, stale revisions, disposal during
+  refresh, late 401/invalid_grant, and no automatic replay of next/previous
+  after network failure or 5xx.
+- Verify 403, 429, QUOTA_EXCEEDED, offline, timeout, and authorization failure
+  remain distinct; scan settings exports, logs, and both distribution artifacts.
+- Record fake-clock 1/24/72-hour results separately from real 72-hour operation.
+- Real Wallpaper Engine CORS/Origin, storage persistence/sharing across screens
+  and processes, restart, sleep/resume, and actual-account behavior remain
+  unverified until measured on this version. Browser results do not substitute.
+- Verify PR cannot deploy; develop deployment requires explicit
+  `PAGES_DEPLOY_ENABLED=true`. Publication itself is a user action outside this task.
 
 ## Browser Mock
 
@@ -50,7 +79,7 @@ Resource-intensive commands should run through `h5i capture run`.
 - Confirm `project.json` uses only Wallpaper Engine supported user property types: `color`, `slider`, `bool`, `combo`, `textinput`, `file`, or `directory`.
 - Confirm user properties apply:
   - `spotify_client_id`
-  - `spotify_refresh_token` (legacy `swpt1.` bundle only)
+  - `spotify_refresh_token` (`swpt2.` and compatible `swpt1.` direct data)
   - `settings_json`
   - `selected_preset`
   - `visualizer_enabled`
@@ -59,8 +88,8 @@ Resource-intensive commands should run through `h5i capture run`.
   - `performance_mode`
   - `debug_enabled`
 - Confirm `settings_json` is editable as single-line JSON with valid JSON, an empty value, and malformed JSON; malformed JSON must not crash the wallpaper.
-- Confirm `spotify_client_id` and `spotify_refresh_token` accept empty and dummy values without logging or persisting the value outside the Wallpaper Engine user property.
-- In legacy direct mode, confirm `spotify_refresh_token` accepts a dummy `swpt1.` bundle and applies its bundled Client ID and Refresh Token without requiring `spotify_client_id`; raw Refresh Tokens are never entered into `settings_json`.
+- Confirm credential input is never logged or exported into settings; only the dedicated direct IndexedDB store may persist current direct tokens outside the host property.
+- In direct mode, confirm `spotify_refresh_token` accepts dummy `swpt2.` and compatible `swpt1.` data without requiring `spotify_client_id`; raw Refresh Tokens are never entered into `settings_json`.
 - Confirm `spotify_playback_provider=backend` uses only the release-configured public origin in a Workshop build.
 - Confirm an explicit invalid or untrusted `spotify_backend_url` does not fall back to direct mode and never receives a Pairing Token.
 - Confirm `spotify_pairing_token` accepts a dummy `swpb1.` value without exposing it in debug, warnings, or errors.

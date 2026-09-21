@@ -4,11 +4,13 @@ import { MockPlaybackProvider } from './mockProvider';
 import { DirectPlaybackProvider } from './directProvider';
 import { BackendPlaybackProvider, normalizeBackendBaseUrl, type BackendPlaybackProviderConfig } from './backendProvider';
 import type { Fetcher, SpotifyCredentials, SpotifyResult } from '../types';
+import type { DirectTokenSession } from '../directTokenSession';
 
 export const selectPlaybackProvider = (
   settings: WallpaperPreferences,
   credential: CredentialInput | null,
-  fetcher: Fetcher = fetch
+  fetcher: Fetcher = fetch,
+  directSession?: DirectTokenSession
 ): ProviderSelection => {
   switch (settings.spotify.provider) {
     case 'mock':
@@ -16,7 +18,7 @@ export const selectPlaybackProvider = (
     case 'direct': {
       const credentials = credentialsFromCredential(credential);
       return credentials
-        ? { kind: 'ready', provider: new DirectPlaybackProvider(credentials, fetcher) }
+        ? { kind: 'ready', provider: new DirectPlaybackProvider(credentials, fetcher, directSession) }
         : invalid('missing-credentials', 'Spotify direct credentials are not configured.');
     }
     case 'backend': {

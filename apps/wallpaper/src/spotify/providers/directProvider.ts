@@ -3,6 +3,7 @@ import { fetchCurrentPlayback, sendPlaybackCommand } from '../client';
 import { refreshAccessToken, shouldRefreshToken } from '../token';
 import type { Fetcher, SpotifyCredentials, SpotifyResult, SpotifyTokenState } from '../types';
 import { mergeAbortSignals } from './signals';
+import type { DirectTokenSession } from '../directTokenSession';
 
 const PRIMARY_ENDPOINT_DEGRADED_COOLDOWN_MS = 5000;
 
@@ -19,9 +20,11 @@ export class DirectPlaybackProvider implements PlaybackProvider {
 
   constructor(
     private readonly credentials: SpotifyCredentials,
-    private readonly fetcher: Fetcher = fetch
+    private readonly fetcher: Fetcher = fetch,
+    private readonly session?: DirectTokenSession
   ) {
-    this.refreshToken = credentials.refreshToken;
+    this.credentials = session ? { clientId: '', refreshToken: '' } : credentials;
+    this.refreshToken = this.credentials.refreshToken;
   }
 
   async poll(signal: AbortSignal): Promise<SpotifyResult<NormalizedPlayback>> {
@@ -34,12 +37,15 @@ export class DirectPlaybackProvider implements PlaybackProvider {
     try {
       const token = await this.accessToken(nowMs, mergedSignal.signal, generation);
       if (!token.ok) return token;
+      if (generation !== this.generation || this.disposed) return disposedError();
 
       let result = await this.fetchPlayback(token.value, nowMs, mergedSignal.signal);
       if (generation !== this.generation || this.disposed) return disposedError();
       if (!result.ok && result.error.kind === 'unauthorized') {
-        this.token = null;
-        const retryToken = await this.accessToken(nowMs, mergedSignal.signal, generation);
+        if (this.token?.accessToken === token.value) this.token = null;
+        const retryToken = await this.accessToken(nowMs, mergedSignal.signal, generation, token.value);
+        if (generation !== this.generation || this.disposed) return disposedError();
+        if (!retryToken.ok) return retryToken;
         if (retryToken.ok) result = await this.fetchPlayback(retryToken.value, nowMs, mergedSignal.signal);
       }
       if (generation !== this.generation || this.disposed) return disposedError();
@@ -59,12 +65,15 @@ export class DirectPlaybackProvider implements PlaybackProvider {
     try {
       const token = await this.accessToken(nowMs, mergedSignal.signal, generation);
       if (!token.ok) return token;
+      if (generation !== this.generation || this.disposed) return disposedError();
 
       let result = await sendPlaybackCommand(token.value, command, this.fetcher, mergedSignal.signal);
       if (generation !== this.generation || this.disposed) return disposedError();
       if (!result.ok && result.error.kind === 'unauthorized') {
-        this.token = null;
-        const retryToken = await this.accessToken(nowMs, mergedSignal.signal, generation);
+        if (this.token?.accessToken === token.value) this.token = null;
+        const retryToken = await this.accessToken(nowMs, mergedSignal.signal, generation, token.value);
+        if (generation !== this.generation || this.disposed) return disposedError();
+        if (!retryToken.ok) return retryToken;
         if (retryToken.ok) result = await sendPlaybackCommand(retryToken.value, command, this.fetcher, mergedSignal.signal);
       }
       if (generation !== this.generation || this.disposed) return disposedError();
@@ -94,10 +103,11 @@ export class DirectPlaybackProvider implements PlaybackProvider {
     return result;
   }
 
-  private async accessToken(nowMs: number, signal: AbortSignal, generation: number): Promise<SpotifyResult<string>> {
+  private async accessToken(nowMs: number, signal: AbortSignal, generation: number, rejectedAccessToken?: string): Promise<SpotifyResult<string>> {
     if (this.disposed) {
       return { ok: false, error: { kind: 'unauthorized', message: 'Spotify provider is disposed.' } };
     }
+    if (this.session) return this.session.accessToken(nowMs, rejectedAccessToken);
     if (this.reauthorizationRequired) {
       return { ok: false, error: { kind: 'unauthorized', message: 'Spotify authorization is required.' } };
     }
@@ -112,7 +122,7 @@ export class DirectPlaybackProvider implements PlaybackProvider {
     if (this.disposed || generation !== this.generation) return disposedError();
     if (!refreshed.ok) {
       this.token = null;
-      if (refreshed.error.kind === 'unauthorized') this.reauthorizationRequired = true;
+      if (refreshed.invalidGrant) this.reauthorizationRequired = true;
       return refreshed;
     }
     this.token = refreshed.value;

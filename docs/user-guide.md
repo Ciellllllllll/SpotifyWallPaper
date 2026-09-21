@@ -20,131 +20,112 @@ This guide covers the current `v0.0.1` milestone. The wallpaper runs as a Wallpa
 
 Without Spotify settings, the wallpaper uses mock playback, mock audio, and safe default settings.
 
-## Spotify Developer Setup
+## Spotifyへの接続
 
-The optional public backend target uses BYO Client ID with Authorization Code
-and PKCE. It is not deployed or open for setup. Do not create an app for this
-target or register its callback yet. A future approved unlock may require one
-Spotify Developer app for your own use. Never create, paste, or store a Spotify
-Client Secret in the wallpaper or setup page.
+この移行の通常構成は、ブラウザのGitHub Pagesで初回PKCE認証を行い、その後は
+Wallpaper EngineからSpotifyへ直接通信する方式です。運営VPS、Worker、D1、追加の常駐アプリは不要です。
+以下のURLは公開予定であり、この変更で実公開したものではありません。
 
-Spotify-connected Limited beta access is not open. The production origin is
-`https://ciel-spotify-wallpaper.duckdns.org` and runs only as
-`SPOTIFY_MODE=policy_locked`. Every supported Spotify request returns a fixed
-no-store 503 before Node reads request or database state; unsupported methods
-and paths are rejected. Do not
-register its callback, connect a real account, or expect backend playback,
-controls, deletion, reauthorization, or Pairing Token issuance.
+1. Spotify Developer Dashboardで自分のアプリを用意し、Client IDを確認します。Client Secretは使いません。
+2. Redirect URIに`https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/callback/`を登録します。
+   末尾`/`も必須です。以前の`/callback`から変更した場合、途中の認可を再利用せず最初からやり直します。
+3. [認証ページ](https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/)でClient IDを入力し、Spotify公式画面で認可します。
+   パスワードはSpotify公式画面だけに入力します。
+4. 成功後の認証用データ`swpt2.`をコピーし、Wallpaper Engineの「Spotify Token」欄へ貼り付けます。
+5. 認証ページの「表示を消して終了」を押します。コピー履歴の削除は利用者自身で行います。
 
-The flow below is a dormant future protocol, not an available setup guide. It
-may become active only after a separately reviewed application-mode and
-systemd/network change plus policy, legal, infrastructure, smoke,
-alert-delivery, Security, SpecGuard, Limited beta, and soak evidence.
+権限は現在再生中の情報、再生状態、再生操作の3つです。メール・ライブラリ権限は求めません。
+Client IDは公開識別子ですが、認証用データにはRefresh Tokenが入ります。
+Base64urlは暗号化ではありません。スクリーンショット、設定JSON、ログ、issue、共有ファイルへ入れないでください。
 
-Required scopes for passive display:
+2026-09-21確認時、Development Modeはアプリ所有者のPremiumと利用者のallowlist登録が必要で、
+認証可能ユーザーは最大5人です。Client IDは開発者アカウント当たり最大25個ですがquotaはアカウント単位で共有されます。
+公開アプリとして無制限に利用できる意味ではありません。
+[Quota modes](https://developer.spotify.com/documentation/web-api/concepts/quota-modes)と
+[2026年7月更新](https://developer.spotify.com/blog/2026-07-23-web-api-quota-updates)を確認してください。
+無料化の対象は追加の運営インフラで、Spotify Premium・Wallpaper Engine・GitHubの利用制限は別です。
 
-- `user-read-currently-playing`
-- `user-read-playback-state`
+### 保存・再認証・解除
 
-Additional scope for playback controls:
+壁紙はChromiumのIndexedDBデータベース`spotify-wallpaper-direct-credentials`の
+`credentials`ストアへClient ID、最新Refresh/Access Token、有効期限、認可識別情報、更新番号を保存します。
+物理ファイルの場所はWallpaper EngineのChromiumプロファイル・インストール環境に依存し、この作業では実測していません。
+OSの秘密保管庫と同等ではなく、同一ユーザー権限のマルウェア・DevTools・改変された壁紙コードからは保護できません。
+ブラウザの通常Mock起動はこのストアを読みません。ホストのプロパティ通知から保存を有効にします。
 
-- `user-modify-playback-state`
+一般設定は別の`spotify-wallpaper-settings`です。設定JSONのexport/importは機密を扱いません。
+WEに残った同じ初回データが再通知されても、保存済みの最新Tokenを優先します。
+認可を切り替えるときは新しいデータの保存成功後に切り替えます。
+再認証でテーマ・レイアウトなどを初期化しません。
 
-Spotify Development Mode currently requires the app owner to have Spotify
-Premium, limits new Client ID creation to one per developer, and allows at most
-five authorized users per app. Only existing resources above those limits may
-be grandfathered. Check the Developer Dashboard before assuming a new BYO app
-can be created. Passive display does not otherwise require Premium, but
-playback controls can be restricted by account or device capabilities.
+Access TokenはSpotifyの`expires_in`に従って更新します。24時間固定の失効はありません。
+Refresh Tokenは元の認可から6か月で、Access Token更新では延長されません。
+180日固定で自動削除はせず、Spotifyの`invalid_grant`を失効判定に使います。
+旧`swpt1.`の元の認可時刻は不明として扱います。
+[SpotifyのToken更新仕様](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens)。
 
-The production backend has one fixed HTTPS origin. If a future unlock is
-approved, use only the origin above and this flow:
+解除はWallpaper Engineの「Spotify Token」欄を空にします。専用ストアの機密とメモリを消し、
+同じ古いデータの再通知を拒否する機密値を含まない記録を残します。`invalid_grant`も同様です。
+再接続はPagesで新しく認証して取り込みます。Spotify側の許可も取り消す場合はSpotifyアカウントのAppsで解除してください。
+設定JSONを消すだけでは認証解除になりません。
+保存領域自体を削除すると無効化記録も消えるので、先にWEの入力欄を空にし、必要ならSpotify側も解除してください。
 
-1. In the Spotify Developer Dashboard, register exactly the callback URI formed from the official production origin plus
-   `/auth/callback`. It must have the same scheme and host as the official `/setup` page and no added trailing slash,
-   query, or fragment.
-2. Open the official production origin followed by `/setup`.
-3. Read the linked Privacy Notice and EULA, explicitly accept both, enter your
-   Spotify Client ID, and choose Authorize Spotify.
-4. Log in to Spotify and approve the requested scopes.
-5. Copy the `swpb1.` Pairing Token shown after success. The page displays it only once.
-6. In Wallpaper Engine, paste the Pairing Token into the single Spotify Token
-   field. Its `swpb1.` prefix selects the release-configured backend
-   automatically.
+保存・読み込み失敗は保存エラーとして表示します。メモリだけの状態を再起動可能とは表示しません。
+更新Tokenの保存失敗や通信中断で状態が不確かになった場合は、保存領域を復旧しPagesから再認証してください。
+PC移行、壁紙の配置先変更、ブラウザデータ削除では保存領域が変わり、再認証が必要になる場合があります。
 
-The Pairing Token is a bearer credential and remains valid until account deletion or revocation. Never share it, send it
-to maintainers, or put it in a URL, screenshot, recording, log, issue, browser storage, or committed file.
+### 複数画面と長時間動作
 
-### Six-Month Reauthorization
+同一保存領域ではIndexedDBの短い原子的更新と期限付きlease・revisionで競合を制御します。
+通信中にDB transactionを開き続けません。更新処理はprovider破棄後も保存まで完了し、
+別認可へ切り替わった後の古い結果は拒否します。
+通常ブラウザの2タブでの検証はWallpaper Engine実機の共有性を証明しません。
+WEの画面・プロセス間で保存領域が共有されるか、Origin/CORS、再起動後の保存は未検証です。
+分離された画面・別PCでは同じRefresh Tokenの使い回しを保証せず、各保存領域で個別に認証してください。
+個別再認可が既存認可に与えるSpotify側の影響も実アカウントで確認が必要です。
+Fake clockの24/72時間相当テストは実機72時間連続稼働試験ではありません。
 
-Spotify authorization expires six months after the most recent authorization. The public backend also requires reauthorization
-if Spotify returns `invalid_grant`. The wallpaper keeps its last safe display and reports `unauthorized` instead of
-retrying indefinitely.
+### エラーの意味
 
-1. Return to the same official `/setup` page.
-2. Accept the current Privacy Notice and EULA, then under Reauthorize Spotify
-   enter the existing Pairing Token.
-3. Complete Spotify authorization again.
+- `invalid_grant`：現在の認可が失効。Tokenを破棄し、Pagesで再認証します。
+- 401：使用したAccess Tokenを確認して更新し、1回だけ再試行します。
+- 403：アカウント・デバイス・allowlist・操作権限を確認します。Tokenは削除しません。
+- 429：Retry-Afterに従います。`QUOTA_EXCEEDED`は開発者quotaで、再ログインでは解決しません。
+- 通信障害・timeout・5xx：待機して再試行します。次/前などの操作を通信障害だけで自動再送しません。
+- 保存エラー：ストレージの許可・容量・破損を確認します。認可失効と区別します。
 
-Successful reauthorization retains the same Pairing Token and starts a new six-month authorization period. The
-reauthorization success page does not issue a replacement token.
+### 旧構成からの移行
 
-### Delete And Disconnect
+既存`swpt1.`を互換読み込みできます。`swpb1.`はRefresh TokenではないのでPagesで一度再認証してください。
+VPS/D1のTokenは抽出・移送しません。新しいdirectデータを取り込むと旧backendへの通常通信を終了します。
+任意loopback/Tauri/Rainmeterは維持します。public backendは引き続きpolicy-lockedな任意互換機能です。
 
-1. Open the same official `/setup` page.
-2. Under Delete backend account, enter the Pairing Token.
-3. Confirm the page reports that the backend account was deleted.
-4. In Spotify account settings, open Apps and remove the BYO app using the
-   name you assigned when creating it.
+VPS停止・Cloudflare削除は自動化しません。利用者が直接接続の再起動・更新・操作を検証後、
+必要な旧データの保持・削除方針を確認し、対象サービスの停止、DNS/公開ルート撤去、バックアップを含むデータ処理を
+既存[運用手順](operations/cloudflare-worker-deploy.md)と各管理画面で行ってください。
+切り戻し用に旧設定は機密を共有せず保管し、検証完了前に旧リソースを破壊しないでください。
 
-The setup page calls authenticated `DELETE /api/account`. The backend
-first writes a 35-day non-secret `publicId` tombstone to
-`spotify_wallpaper_deletion_ledger`, then deletes OAuth sessions, encrypted
-Spotify tokens, Client ID, Pairing digest, refresh leases, and cache from
-`spotify_wallpaper`. The two PostgreSQL 17 databases are dumped, validated,
-retained, and restored independently. After a primary restore, traffic remains
-closed until all retained tombstones are replayed and pending reconciliation
-is zero. Backend deletion does not disconnect the app inside Spotify, so step
-4 remains required after any future unlock.
+## GitHub Pagesの公開手順（利用者が実行）
 
-For an incident or deletion problem, use the repository issue tracker:
-`https://github.com/Ciellllllllll/SpotifyWallPaper/issues`. Include only non-sensitive symptoms and times. Never include
-a Client ID, Pairing Token, Spotify token, authorization code, callback URL,
-header, IP address, or backend secret. For a sensitive report,
-open a non-sensitive issue asking maintainers for a private reporting channel.
+1. 公開前に[Privacy](privacy.md)・[EULA](eula.md)の運営者・連絡先・適用日を確認し、
+   Spotifyの[Policy](https://developer.spotify.com/policy)・[Design](https://developer.spotify.com/documentation/design)と
+   GitHub Pagesの[利用制限](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)への適合を別途確認します。
+   画像加工・音声と視覚の同期・商標・商用/機密取引の条件は、この技術移行で承認されたものではありません。
+2. レビュー済みdevelopを利用者がpushします。この作業ではpushしません。
+3. Repository Settings → Pages → SourceをGitHub Actionsにします。
+4. `github-pages` environmentのdeployment branchで`develop`を許可し、必要な承認規則を設定します。
+5. Repository Variable `PAGES_DEPLOY_ENABLED`を文字列`true`にします。未設定・falseでは公開しません。
+6. developへの対象push、または利用可能な場合はdevelopを指定したworkflow_dispatchで実行します。
+   default branchがmasterの場合、workflow_dispatchの登録/UI表示にはworkflowがdefault branchに存在する条件があります。
+   この作業ではmasterを変更しません。必要なら利用者が別途レビューしたworkflow登録を行うかdevelop pushを使用します。
+7. Pages設定のHTTPSと最終URL、callbackの200応答、assetsのパスを実公開後に確認します。
 
-### Legacy Direct Mode
-
-Direct mode remains available for compatibility and developer testing. A `swpt1.` token contains a Client ID and Spotify
-Refresh Token and is accepted only by direct mode; the public backend never accepts it. The static GitHub Pages auth page
-is a local developer-only legacy tool, not the Workshop default or a managed
-public authorization path. The repository workflow checks/builds it manually
-but no longer has GitHub Pages deployment permission.
-
-For local browser preview, keep the settings credential-free and select the v3 mock provider:
-
-```js
-localStorage.setItem(
-  'spotify-wallpaper-settings',
-  JSON.stringify({
-    schemaVersion: 3,
-    spotify: {
-      provider: 'mock'
-    }
-  })
-);
-location.reload();
-```
-
-Clear local test credentials after testing:
-
-```js
-localStorage.removeItem('spotify-wallpaper-settings');
-location.reload();
-```
-
-Never put Spotify tokens in browser settings, URLs, screenshots, logs, Rainmeter output, or committed files. Direct
-credentials are supplied only through the dedicated Wallpaper Engine properties.
+PRは検証のみです。deploy権限は公開jobに限定し、artifactは認証ページの静的出力だけで保存期間1日です。
+Client ID・Spotify Token・Client SecretをGitHub Secrets/Variablesへ登録する必要はありません。
+GitHubは最初のcallback HTTP要求を受けます。認可コードはPKCEで保護しますが「サーバーを一切通らない」とは説明しません。
+Pagesで独自HTTPヘッダーを自由に設定できるとは仮定せず、HTMLのCSP/meta referrerを使います。
+[公式workflow手順](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)、
+[HTTPS](https://docs.github.com/en/pages/getting-started-with-github-pages/securing-your-github-pages-site-with-https)。
 
 ## Wallpaper Engine Development and Updates
 
@@ -172,7 +153,6 @@ Normal development builds never contain a Workshop ID. Workshop builds read
 `apps/wallpaper/workshop-metadata.json` instead:
 
 ```powershell
-$env:VITE_SPOTIFY_BACKEND_ORIGIN='https://ciel-spotify-wallpaper.duckdns.org'
 npm run build:workshop -w @spotify-wallpaper/wallpaper
 ```
 
@@ -205,7 +185,7 @@ Visible user property keys:
 - `debug_enabled`
 
 The `spotify_refresh_token` key is displayed as Spotify Token for saved-value
-compatibility. `swpt1.` selects legacy direct mode. The `swpb1.` grammar is
+compatibility. `swpt2.` and compatible `swpt1.` select direct mode. The `swpb1.` grammar is
 retained for dormant public-backend compatibility, but production cannot issue
 or use it while policy-locked. The release build rejects arbitrary HTTPS
 origins before sending a credential. Clearing the field disconnects Spotify,

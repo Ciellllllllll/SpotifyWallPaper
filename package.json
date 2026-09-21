@@ -8,7 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build:wasm && npm run build:shared-types && npm run build -w @spotify-wallpaper/spotify-auth && npm run build -w @spotify-wallpaper/configurator && npm run build -w @spotify-wallpaper/wallpaper && npm run build -w @spotify-wallpaper/public-backend",
+    "build": "npm run build:wasm && npm run build:shared-types && npm run build -w @spotify-wallpaper/spotify-auth && npm run build -w @spotify-wallpaper/wallpaper",
+    "build:optional": "npm run build:shared-types && npm run build -w @spotify-wallpaper/configurator && npm run build -w @spotify-wallpaper/public-backend",
     "build:shared-types": "npm run build -w @spotify-wallpaper/shared-types",
     "build:wasm": "wasm-pack build crates/visual-core --target web --out-dir ../../apps/wallpaper/public/wasm",
     "wallpaper:link": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/link-wallpaper-engine.ps1",
@@ -23,8 +24,11 @@
     "check:repository-authority": "node scripts/check-repository-authority.mjs",
     "check:repository-preservation": "node scripts/repository-preservation.mjs verify-recovered-index",
     "verify:repository-authority": "npm run test:repository-authority && npm run check:repository-authority && npm run check:repository-preservation",
-    "check": "npm run check -w @spotify-wallpaper/shared-types && npm run check -w @spotify-wallpaper/wallpaper-view && npm run check -w @spotify-wallpaper/spotify-auth && npm run check -w @spotify-wallpaper/configurator && npm run check -w @spotify-wallpaper/wallpaper && npm run check -w @spotify-wallpaper/public-backend",
-    "test": "npm run test:repository-authority && npm run test:wallpaper-link && npm run test:public-backend-artifact && npm run test:public-backend-secrets && npm run test --workspaces --if-present"
+    "check": "npm run check -w @spotify-wallpaper/shared-types && npm run check -w @spotify-wallpaper/wallpaper-view && npm run check -w @spotify-wallpaper/spotify-auth && npm run check -w @spotify-wallpaper/wallpaper",
+    "check:optional": "npm run check -w @spotify-wallpaper/configurator && npm run check -w @spotify-wallpaper/public-backend",
+    "test": "npm run test:repository-authority && npm run test:wallpaper-link && npm run test:security && npm run test -w @spotify-wallpaper/shared-types && npm run test -w @spotify-wallpaper/wallpaper-view && npm run test -w @spotify-wallpaper/spotify-auth && npm run test -w @spotify-wallpaper/wallpaper",
+    "test:security": "node --test scripts/check-public-backend-secrets.test.mjs scripts/spotify-pages.test.mjs",
+    "test:optional": "npm run test:public-backend-artifact && npm run test -w @spotify-wallpaper/configurator && npm run test -w @spotify-wallpaper/public-backend"
   },
   "overrides": {
     "nanoid": "3.3.18",

@@ -1,57 +1,57 @@
-name: Spotify Auth Pages Legacy Check
+name: Spotify Auth Pages
 
 on:
+  push:
+    branches: [develop]
+    paths: ['apps/spotify-auth/**', 'tests/playwright/spotify-auth.spec.ts', 'playwright.auth.config.ts', 'scripts/serve-pages-test.mjs', 'scripts/check-public-backend-secrets*', 'scripts/spotify-pages.test.mjs', 'package*.json', '.github/workflows/spotify-auth-pages.yml']
+  pull_request:
+    paths: ['apps/spotify-auth/**', 'tests/playwright/spotify-auth.spec.ts', 'playwright.auth.config.ts', 'scripts/serve-pages-test.mjs', 'scripts/check-public-backend-secrets*', 'scripts/spotify-pages.test.mjs', 'package*.json', '.github/workflows/spotify-auth-pages.yml']
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: spotify-auth-pages
+  group: spotify-auth-pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
+      - run: npm ci
+      - run: npm run check -w @spotify-wallpaper/spotify-auth
+      - run: npm run test -w @spotify-wallpaper/spotify-auth
+      - run: npm run test:security
+      - run: npm run build -w @spotify-wallpaper/spotify-auth
+      - run: node apps/spotify-auth/prepare-pages.mjs
+      - run: node scripts/check-public-backend-secrets.mjs apps/spotify-auth/pages
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config playwright.auth.config.ts
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop' && vars.PAGES_DEPLOY_ENABLED == 'true'
+        with:
+          path: apps/spotify-auth/pages
+          retention-days: 1
 
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Check auth page
-        run: npm run check -w @spotify-wallpaper/spotify-auth
-
-      - name: Test auth page
-        run: npm run test -w @spotify-wallpaper/spotify-auth
-
-      - name: Configure Spotify Client ID
-        env:
-          SPOTIFY_CLIENT_ID_VARIABLE: ${{ vars.SPOTIFY_CLIENT_ID }}
-          SPOTIFY_CLIENT_ID_SECRET: ${{ secrets.SPOTIFY_CLIENT_ID }}
-        run: |
-          if [ -n "$SPOTIFY_CLIENT_ID_VARIABLE" ]; then
-            echo "VITE_SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID_VARIABLE" >> "$GITHUB_ENV"
-            echo "Using SPOTIFY_CLIENT_ID from repository Variables."
-          elif [ -n "$SPOTIFY_CLIENT_ID_SECRET" ]; then
-            echo "VITE_SPOTIFY_CLIENT_ID=$SPOTIFY_CLIENT_ID_SECRET" >> "$GITHUB_ENV"
-            echo "Using SPOTIFY_CLIENT_ID from repository Secrets."
-          else
-            echo "SPOTIFY_CLIENT_ID is not configured in repository Variables or Secrets." >&2
-            exit 1
-          fi
-
-      - name: Build auth page
-        run: npm run build -w @spotify-wallpaper/spotify-auth
-        env:
-          VITE_AUTH_BASE_PATH: /SpotifyWallPaper/spotify-auth/
-
-      - name: Prepare legacy static artifact
-        run: node apps/spotify-auth/prepare-pages.mjs
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop' && vars.PAGES_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Deploy static authorization page
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

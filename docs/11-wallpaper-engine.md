@@ -19,12 +19,22 @@ The native property panel exposes only:
 - performance mode
 - debug enabled
 
-The Spotify Token field auto-detects `swpt1.` as direct mode and an exact
+The Spotify Token field auto-detects `swpt2.` or compatible `swpt1.` as direct mode and an exact
 `swpb1.` Pairing Token as public-backend mode. A release-configured official
 HTTPS backend origin is used automatically for `swpb1.`. A build without that
 origin reports a fixed non-secret configuration warning. Empty input clears
 the active credential, while malformed prefixed input is ignored instead of
 overwriting a valid process-memory credential.
+
+Direct mode is the standard setup. Its dedicated IndexedDB store persists the
+latest rotated credential independently of general settings and provider
+lifetime. Repeated initial data must not overwrite it; clearing the field
+disconnects and retires that authorization. A missing property is a delta
+notification, not deletion. `swpb1.` is legacy compatibility only: migration
+requires new Pages authorization and never converts a Pairing Token to a
+Spotify Refresh Token. Wallpaper Engine storage availability, CORS, sharing
+across displays/processes, and real 72-hour operation require explicit real
+machine evidence; browser tests alone do not establish these properties.
 
 Legacy Client ID, provider, backend URL, Pairing Token, settings JSON, preset,
 and display property keys remain accepted by the adapter for existing

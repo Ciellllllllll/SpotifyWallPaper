@@ -31,6 +31,7 @@ System-wide designs, plans, and reports remain historical evidence.
 - `one-click-spotify-auth-token.md`
 - `spotify-playback-virtual-volume-boost.md`
 - `wallpaper-engine-update-flow.md`
+- `github-pages-direct-migration.md`
 
 The old lyrics and numeric phase sequence has been superseded where current
 specifications say otherwise. In particular, Lyrics/LRC is deferred from the

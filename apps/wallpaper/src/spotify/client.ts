@@ -1,7 +1,8 @@
 import type { NormalizedPlayback, PlaybackCommand, SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
-import { classifyNetworkError, classifySpotifyStatus } from './errors';
+import { classifyNetworkError, classifySpotifyStatus, classifySpotifyResponse } from './errors';
 import { normalizeSpotifyPlayback } from './normalize';
 import type { Fetcher, SpotifyResult } from './types';
+import { spotifyFetch } from './request';
 
 const CURRENT_PLAYBACK_ENDPOINT = 'https://api.spotify.com/v1/me/player';
 const CURRENTLY_PLAYING_ENDPOINT = 'https://api.spotify.com/v1/me/player/currently-playing';
@@ -24,7 +25,7 @@ export const fetchCurrentPlayback = async (
 
   let response: Response;
   try {
-    response = await fetcher(CURRENT_PLAYBACK_ENDPOINT, {
+    response = await spotifyFetch(fetcher, CURRENT_PLAYBACK_ENDPOINT, {
       headers: {
         authorization: `Bearer ${accessToken}`
       },
@@ -45,7 +46,7 @@ export const fetchCurrentPlayback = async (
   }
 
   if (!response.ok) {
-    const error = classifySpotifyStatus(response.status, response.headers.get('retry-after'));
+    const error = await classifySpotifyResponse(response);
     if (error.kind === 'unauthorized' || error.kind === 'forbidden' || error.kind === 'rate_limited') {
       return { ok: false, error };
     }
@@ -71,7 +72,7 @@ const fetchCurrentlyPlayingFallback = async (
 ): Promise<SpotifyResult<NormalizedPlayback>> => {
   let response: Response;
   try {
-    response = await fetcher(CURRENTLY_PLAYING_ENDPOINT, {
+    response = await spotifyFetch(fetcher, CURRENTLY_PLAYING_ENDPOINT, {
       headers: {
         authorization: `Bearer ${accessToken}`
       },
@@ -82,11 +83,11 @@ const fetchCurrentlyPlayingFallback = async (
   }
 
   if (response.status === 204) {
-    return { ok: false, error: classifySpotifyStatus(response.status, response.headers.get('retry-after')) };
+    return { ok: false, error: await classifySpotifyResponse(response) };
   }
 
   if (!response.ok) {
-    return { ok: false, error: classifySpotifyStatus(response.status, response.headers.get('retry-after')) };
+    return { ok: false, error: await classifySpotifyResponse(response) };
   }
 
   const payload = await response.json().catch(() => null);
@@ -105,7 +106,7 @@ export const sendPlaybackCommand = async (
   const request = playbackCommandRequest(command);
   let response: Response;
   try {
-    response = await fetcher(request.url, {
+    response = await spotifyFetch(fetcher, request.url, {
       method: request.method,
       headers: {
         authorization: `Bearer ${accessToken}`
@@ -120,7 +121,7 @@ export const sendPlaybackCommand = async (
     return { ok: true, value: undefined };
   }
 
-  return { ok: false, error: classifySpotifyStatus(response.status, response.headers.get('retry-after')) };
+  return { ok: false, error: await classifySpotifyResponse(response) };
 };
 
 const playbackCommandRequest = (command: PlaybackCommand): { method: string; url: string } => {

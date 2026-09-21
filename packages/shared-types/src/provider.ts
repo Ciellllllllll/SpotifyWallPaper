@@ -5,6 +5,12 @@ export type PlaybackProviderKind = 'mock' | 'direct' | 'backend';
 export type ProviderError = SpotifyPlaybackError;
 export type ProviderErrorKind = SpotifyErrorKind;
 
+/** Stable provider-v1 transport contract; local persistence/quota diagnostics stay local. */
+export type ProviderWireError = Omit<SpotifyPlaybackError, 'kind' | 'quotaExceeded'> & {
+  kind: Exclude<SpotifyErrorKind, 'storage_error'>;
+};
+export type ProviderWireResult<T> = { ok: true; value: T } | { ok: false; error: ProviderWireError };
+
 export type ProviderConfigurationErrorCode =
   | 'missing-credentials'
   | 'invalid-origin'
@@ -42,7 +48,7 @@ export interface PlaybackProvider {
   dispose(): void;
 }
 
-const providerErrorKinds: readonly ProviderErrorKind[] = [
+const providerErrorKinds: readonly ProviderWireError['kind'][] = [
   'unauthorized',
   'forbidden',
   'rate_limited',
@@ -56,7 +62,7 @@ const providerErrorKinds: readonly ProviderErrorKind[] = [
  * Checks the provider-v1 wire envelope without interpreting the payload.
  * Exact top-level keys keep Worker and loopback drift observable.
  */
-export const isProviderResultEnvelope = (value: unknown): value is ProviderResult<unknown> => {
+export const isProviderResultEnvelope = (value: unknown): value is ProviderWireResult<unknown> => {
   if (!isRecord(value) || typeof value.ok !== 'boolean') {
     return false;
   }
@@ -72,7 +78,7 @@ export const isProviderResultEnvelope = (value: unknown): value is ProviderResul
   const error = value.error;
   if (
     typeof error.kind !== 'string' ||
-    !providerErrorKinds.includes(error.kind as ProviderErrorKind) ||
+    !providerErrorKinds.includes(error.kind as ProviderWireError['kind']) ||
     typeof error.message !== 'string'
   ) {
     return false;
@@ -85,7 +91,7 @@ export const isProviderResultEnvelope = (value: unknown): value is ProviderResul
   );
 };
 
-export const isNormalizedPlaybackResultEnvelope = (value: unknown): value is ProviderResult<NormalizedPlayback> => {
+export const isNormalizedPlaybackResultEnvelope = (value: unknown): value is ProviderWireResult<NormalizedPlayback> => {
   if (!isProviderResultEnvelope(value)) {
     return false;
   }

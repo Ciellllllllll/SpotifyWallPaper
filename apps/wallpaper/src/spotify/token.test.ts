@@ -3,6 +3,36 @@ import { refreshAccessToken, shouldRefreshToken } from './token';
 import type { Fetcher } from './types';
 
 describe('Spotify token refresh', () => {
+  it.each([
+    { access_token: '', expires_in: 3600 },
+    { access_token: 'dummy-access', expires_in: 0 },
+    { access_token: 'dummy-access', expires_in: -1 },
+    { access_token: 'dummy-access', expires_in: 1e20 }
+  ])('rejects malformed successful token responses', async (payload) => {
+    const result = await refreshAccessToken({ clientId: 'dummy-client', refreshToken: 'dummy-refresh' }, async () => Response.json(payload), 0);
+    expect(result).toMatchObject({ ok: false, error: { kind: 'unknown_response_shape' } });
+  });
+
+  it('does not immediately refresh a short-lived token', async () => {
+    const result = await refreshAccessToken({ clientId: 'dummy-client', refreshToken: 'dummy-refresh' }, async () => Response.json({ access_token: 'dummy-access', expires_in: 10 }), 0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(shouldRefreshToken(result.value, 0)).toBe(false);
+    expect(shouldRefreshToken(result.value, 10_000)).toBe(true);
+  });
+
+  it.each([null, ''])('retains the existing refresh token for an empty optional rotation', async (refresh_token) => {
+    const result = await refreshAccessToken({ clientId: 'dummy-client', refreshToken: 'dummy-refresh' }, async () => Response.json({ access_token: 'dummy-access', expires_in: 3600, refresh_token }), 0);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.refreshToken).toBeUndefined();
+  });
+
+  it('distinguishes invalid_grant from an ordinary unauthorized response', async () => {
+    const run = (response: Response) => refreshAccessToken({ clientId: 'dummy-client', refreshToken: 'dummy-refresh' }, async () => response, 0);
+    expect(await run(Response.json({ error: 'invalid_grant' }, { status: 400 }))).toMatchObject({ ok: false, invalidGrant: true });
+    expect(await run(new Response(null, { status: 401 }))).not.toHaveProperty('invalidGrant');
+  });
+
   it('refreshes with PKCE-compatible public client fields only', async () => {
     let bodyText = '';
     const fetcher: Fetcher = async (_input, init) => {

@@ -33,6 +33,8 @@ import {
 import { calculateVisualizerMotion, neutralVisualizerMotion, releaseVisualizerMotion } from '../visualizer/motion';
 import { createSilentAudioFrame, startAudioBridge, type AudioBridgeSource } from '../wallpaperEngine/audio';
 import type { CredentialUpdate } from '../wallpaperEngine/types';
+import type { DirectCredentialStore, CredentialRecord } from '../spotify/credentialStore';
+import { DirectTokenSession } from '../spotify/directTokenSession';
 
 const SILENCE_RELEASE_MS = 450;
 const FALLBACK_VISUALIZER_COLOR = '#ffffff';
@@ -72,6 +74,7 @@ type DeepReadonly<T> = T extends (...args: never[]) => unknown
 export type ReadonlyWallpaperRuntimeSnapshot = DeepReadonly<WallpaperRuntimeSnapshot>;
 
 export interface WallpaperRuntime {
+  enableCredentialStore(store: DirectCredentialStore): void;
   start(): void;
   subscribe(listener: (snapshot: ReadonlyWallpaperRuntimeSnapshot) => void): () => void;
   applyConfiguration(settings: WallpaperPreferences, credential: CredentialUpdate, safetyGateOpen: boolean): void;
@@ -82,6 +85,7 @@ export interface WallpaperRuntime {
 }
 
 export interface WallpaperRuntimeDependencies {
+  credentialStore?: DirectCredentialStore;
   selectProvider?: typeof selectPlaybackProvider;
   startAudioBridge?: typeof startAudioBridge;
   extractTheme?: typeof extractAlbumTheme;
@@ -95,6 +99,12 @@ export const createWallpaperRuntime = (
   const connectAudio = dependencies.startAudioBridge ?? startAudioBridge;
   const extractTheme = dependencies.extractTheme ?? extractAlbumTheme;
   const credentialClosure = createProcessMemoryCredentialClosure();
+  let credentialStore = dependencies.credentialStore;
+  let directSession: DirectTokenSession | undefined;
+  let authorizationId: string | undefined;
+  let credentialEpoch = 0;
+  let credentialQueue = Promise.resolve();
+  let applyingStoredCredential = false;
   const listeners = new Set<(snapshot: ReadonlyWallpaperRuntimeSnapshot) => void>();
   let provider: PlaybackProvider | null = null;
   let providerAbortController: AbortController | null = null;
@@ -366,7 +376,18 @@ export const createWallpaperRuntime = (
     snapshot = { ...snapshot, lastPollingDelayMs: delay };
     emit();
     if (typeof window !== 'undefined') {
-      pollingTimeout = window.setTimeout(() => void poll(runId, currentProvider, signal), delay);
+      if (delay <= 2_147_483_647) {
+        pollingTimeout = window.setTimeout(() => void poll(runId, currentProvider, signal), delay);
+        return;
+      }
+      const retryAt = Math.min(Number.MAX_SAFE_INTEGER, Date.now() + delay);
+      const wait = () => {
+        if (disposed || runId !== pollingRunId) return;
+        const remaining = retryAt - Date.now();
+        if (remaining <= 0) { void poll(runId, currentProvider, signal); return; }
+        pollingTimeout = window.setTimeout(wait, Math.min(remaining, 2_147_483_647));
+      };
+      wait();
     }
   };
 
@@ -387,7 +408,7 @@ export const createWallpaperRuntime = (
       emit();
       return;
     }
-    const selection = selectProvider(settings, credentialClosure.read());
+    const selection = selectProvider(settings, credentialClosure.read(), undefined, directSession);
     snapshot = {
       ...snapshot,
       providerSelection: selection.kind,
@@ -416,7 +437,46 @@ export const createWallpaperRuntime = (
     safetyGateOpen
   });
 
+  const storageFailed = () => {
+    if (disposed) return;
+    clearProvider();
+    directSession = undefined;
+    authorizationId = undefined;
+    credentialClosure.clear();
+    snapshot = { ...snapshot, providerSelection: 'invalid', providerConfigurationError: 'Spotify認証情報を保存・復元できません。保存領域を確認してください。' };
+    emit();
+  };
+  const acceptStored = (record: CredentialRecord | null, epoch: number, activate = true) => {
+    if (disposed || epoch !== credentialEpoch || !safetyGateOpen) return;
+    if (!activate && snapshot.settings.spotify.provider !== 'direct') return;
+    if (record && credentialStore && (record.id !== authorizationId || !directSession)) {
+      const recordId = record.id;
+      directSession = new DirectTokenSession(credentialStore, recordId, fetch, () => {
+        if (disposed || authorizationId !== recordId) return;
+        credentialClosure.clear();
+        emit();
+      });
+      authorizationId = record.id;
+    }
+    if (!record) { directSession = undefined; authorizationId = undefined; }
+    applyingStoredCredential = true;
+    try {
+      runtime.applyConfiguration({ ...snapshot.settings, spotify: { ...snapshot.settings.spotify, provider: 'direct' } }, record ? {
+        kind: 'replace', value: { kind: 'direct', clientId: record.clientId, refreshToken: record.refreshToken, authorizationId: record.authorizationId, authorizedAtMs: record.authorizedAtMs }
+      } : { kind: 'clear' }, safetyGateOpen);
+    } finally { applyingStoredCredential = false; }
+  };
+
   const runtime: WallpaperRuntime = {
+    enableCredentialStore(store) {
+      if (credentialStore || disposed) return;
+      credentialStore = store;
+      const epoch = credentialEpoch;
+      credentialQueue = credentialQueue.then(async () => {
+        const record = await store.read();
+        if (record) acceptStored(record, epoch, false);
+      }).catch(storageFailed);
+    },
     start() {
       if (started || disposed) return;
       started = true;
@@ -432,6 +492,14 @@ export const createWallpaperRuntime = (
         startVisualizers();
       }
       configureProvider();
+      if (credentialStore && safetyGateOpen) {
+        const store = credentialStore;
+        const epoch = credentialEpoch;
+        credentialQueue = credentialQueue.then(async () => {
+          const record = await store.read();
+          if (record) acceptStored(record, epoch, false);
+        }).catch(storageFailed);
+      }
     },
     subscribe(listener) {
       if (disposed) return () => undefined;
@@ -441,6 +509,39 @@ export const createWallpaperRuntime = (
     },
     applyConfiguration(settings, credential, gateOpen) {
       if (disposed) return;
+      if (credentialStore && !applyingStoredCredential && gateOpen && safetyGateOpen) {
+        const store = credentialStore;
+        if (credential.kind === 'replace' && credential.value.kind === 'direct') {
+          const input = credential.value;
+          const epoch = ++credentialEpoch;
+          credentialQueue = credentialQueue.then(async () => {
+            const record = await store.import(input);
+            // A retired notification cannot displace the current account.
+            if (record) acceptStored(record, epoch);
+            else acceptStored(await store.read(), epoch);
+          }).catch(() => {
+            if (disposed || epoch !== credentialEpoch) return;
+            snapshot = { ...snapshot, providerConfigurationError: '新しいSpotify認証情報を保存できません。現在の接続を保持しています。' };
+            emit();
+          });
+          credential = { kind: 'retain' };
+          settings = { ...settings, spotify: { ...settings.spotify, provider: snapshot.settings.spotify.provider } };
+        } else if (credential.kind === 'clear') {
+          credentialEpoch += 1;
+          directSession = undefined;
+          authorizationId = undefined;
+          credentialQueue = credentialQueue.then(() => store.disconnect()).catch(storageFailed);
+        } else if (credential.kind === 'replace' && credential.value.kind === 'backend') {
+          credentialEpoch += 1;
+          directSession = undefined;
+          authorizationId = undefined;
+        } else if (credential.kind === 'retain' && settings.spotify.provider !== snapshot.settings.spotify.provider) {
+          const epoch = ++credentialEpoch;
+          if (settings.spotify.provider === 'direct') {
+            credentialQueue = credentialQueue.then(async () => acceptStored(await store.read(), epoch)).catch(storageFailed);
+          }
+        }
+      }
       safetyGateOpen = safetyGateOpen && gateOpen;
       const previousProvider = snapshot.settings.spotify.provider;
       const previousVisualizerEnabled = snapshot.settings.visualizer.enabled;
@@ -665,12 +766,13 @@ const sanitizeProviderError = (error: SpotifyPlaybackError): SpotifyPlaybackErro
   const status = error.status;
   const retryAfterMs = error.retryAfterMs;
   const safeStatus = typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
-  const safeRetryAfterMs = typeof retryAfterMs === 'number' && Number.isFinite(retryAfterMs) && retryAfterMs >= 0 && retryAfterMs <= 86_400_000
+  const safeRetryAfterMs = typeof retryAfterMs === 'number' && Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0
     ? Math.round(retryAfterMs)
     : undefined;
   return {
     kind: error.kind,
-    message: safeProviderErrorMessage(error.kind),
+    message: error.kind === 'rate_limited' && error.quotaExceeded === true ? 'Spotify開発者アカウントのquota上限です。再認証せず時間をおいてください。' : safeProviderErrorMessage(error.kind),
+    ...(error.quotaExceeded === true ? { quotaExceeded: true } : {}),
     ...(safeStatus === undefined ? {} : { status: safeStatus }),
     ...(safeRetryAfterMs === undefined ? {} : { retryAfterMs: safeRetryAfterMs })
   };
@@ -682,6 +784,7 @@ const safeProviderErrorMessage = (kind: SpotifyPlaybackError['kind']): string =>
     case 'forbidden': return 'Spotify playback access was denied.';
     case 'rate_limited': return 'Spotify rate limit reached.';
     case 'network_error': return 'Spotify network request failed.';
+    case 'storage_error': return 'Spotify認証情報を保存・復元できません。保存領域を確認して再接続してください。';
     case 'unavailable': return 'Spotify is temporarily unavailable.';
     case 'unknown_response_shape': return 'Spotify returned an unsupported response.';
     case 'item_null': return 'Spotify is not currently playing an item.';

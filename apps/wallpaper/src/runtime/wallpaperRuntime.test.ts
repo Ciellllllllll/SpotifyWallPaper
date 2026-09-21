@@ -14,6 +14,35 @@ const settingsForProvider = (provider: WallpaperPreferences['spotify']['provider
 });
 
 describe('WallpaperRuntime', () => {
+  it('splits long rate-limit waits without an early network request', async () => {
+    const timers: { callback: () => void; delay: number }[] = [];
+    let now = 0;
+    const date = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.stubGlobal('window', {
+      setTimeout: (callback: () => void, delay: number) => { timers.push({ callback, delay }); return timers.length; },
+      clearTimeout: vi.fn(), setInterval: vi.fn(() => 1), clearInterval: vi.fn()
+    });
+    const poll = vi.fn(async () => ({ ok: false as const, error: { kind: 'rate_limited' as const, message: 'dummy', retryAfterMs: 3_000_000_000 } }));
+    const runtime = createWallpaperRuntime(settingsForProvider('direct'), {
+      selectProvider: () => ({ kind: 'ready', provider: { kind: 'direct', poll, control: async () => ({ ok: true, value: undefined }), dispose: () => {} } }),
+      startAudioBridge: () => ({ source: 'mock', stop: () => {} })
+    });
+    try {
+      runtime.start();
+      await flushMicrotasks();
+      const first = timers.find(timer => timer.delay === 2_147_483_647)!;
+      expect(first).toBeDefined();
+      now = 2_147_483_647;
+      first.callback();
+      expect(poll).toHaveBeenCalledTimes(1);
+      const second = timers.at(-1)!;
+      expect(second.delay).toBe(3_000_000_000 - now);
+      now = 3_000_000_000;
+      second.callback();
+      await flushMicrotasks();
+      expect(poll).toHaveBeenCalledTimes(2);
+    } finally { runtime.dispose(); date.mockRestore(); vi.unstubAllGlobals(); }
+  });
   it('starts in mock mode without exposing credential values', () => {
     const runtime = createWallpaperRuntime();
     let snapshot = runtimeSnapshot(runtime);

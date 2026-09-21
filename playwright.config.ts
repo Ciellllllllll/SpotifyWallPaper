@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/playwright',
+  outputDir: './artifacts/playwright',
+  testIgnore: 'spotify-auth.spec.ts',
   snapshotDir: './tests/playwright/__snapshots__',
   timeout: 30_000,
   expect: {

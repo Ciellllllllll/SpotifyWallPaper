@@ -1,7 +1,7 @@
 import type { PlaybackProviderKind } from '@spotify-wallpaper/shared-types';
 
 export type CredentialInput =
-  | { kind: 'direct'; clientId: string; refreshToken: string }
+  | { kind: 'direct'; clientId: string; refreshToken: string; authorizationId?: string; authorizedAtMs?: number }
   | { kind: 'backend'; pairingToken: string };
 
 export interface CredentialStatus {
@@ -77,12 +77,12 @@ const cloneCredential = (credential: CredentialInput | null): CredentialInput | 
   credential === null
     ? null
     : credential.kind === 'direct'
-      ? { kind: 'direct', clientId: credential.clientId, refreshToken: credential.refreshToken }
+      ? { ...credential }
       : { kind: 'backend', pairingToken: credential.pairingToken };
 
 const sameCredential = (left: CredentialInput | null, right: CredentialInput): boolean =>
   left !== null &&
   left.kind === right.kind &&
   (right.kind === 'direct'
-    ? left.kind === 'direct' && left.clientId === right.clientId && left.refreshToken === right.refreshToken
+    ? left.kind === 'direct' && left.clientId === right.clientId && left.refreshToken === right.refreshToken && left.authorizationId === right.authorizationId
     : left.kind === 'backend' && left.pairingToken === right.pairingToken);

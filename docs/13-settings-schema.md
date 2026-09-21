@@ -13,7 +13,9 @@ Its default provider is `mock` and its default display mode is `album-only`.
 It preserves existing display, performance, Rainmeter, and debug preferences,
 but never serializes Client ID, Refresh Token, Pairing Token, or
 `hasRefreshToken`. Credentials are process-memory/provider inputs, not settings
-fields.
+fields. Standard Wallpaper Engine direct mode additionally persists them in
+the dedicated IndexedDB credential store described in `10-spotify-integration.md`;
+this limited exception does not permit credentials in settings JSON or exports.
 
 ## Required top-level categories
 

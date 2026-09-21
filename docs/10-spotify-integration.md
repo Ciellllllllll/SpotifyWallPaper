@@ -15,8 +15,10 @@ credential state. No provider is required for deterministic browser mock mode.
 
 Use Authorization Code with PKCE. Do not use Client Secret in the Web Wallpaper.
 
-The wallpaper may accept Client ID and Refresh Token only through a dedicated
-Wallpaper Engine property snapshot or explicit process-memory session input.
+The wallpaper accepts Client ID and Refresh Token through its dedicated
+Wallpaper Engine property or explicit process-memory session input. Standard
+Wallpaper Engine direct mode persists credentials in its dedicated IndexedDB
+store as the limited exception described below.
 Settings JSON is preference-only: embedded credentials are ignored and are
 never migrated or exported. The configurator may help the user obtain a
 Refresh Token, but raw credentials stay in the native/provider boundary.
@@ -25,7 +27,7 @@ Do not log tokens or full callback URLs.
 
 ## Provider modes
 
-- `direct`: legacy browser-side PKCE refresh using Client ID and Refresh Token.
+- `direct`: standard Wallpaper Engine access to Spotify using each user's Client ID and Refresh Token.
 - `backend` with loopback HTTP: optional local Rust backend.
 - `backend` with exact origin
   `https://ciel-spotify-wallpaper.duckdns.org`: optional Node.js/PostgreSQL
@@ -34,6 +36,56 @@ Do not log tokens or full callback URLs.
 - no usable provider: browser mock or last safe display.
 
 An explicitly selected but invalid backend configuration must not silently fall back to direct credentials.
+
+## Static authorization and direct credential persistence
+
+Initial authorization and reauthorization use the static Pages helper at
+`https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/` with exact
+Redirect URI `https://ciellllllllll.github.io/SpotifyWallPaper/spotify-auth/callback/`.
+These are deployment targets, not a claim that this migration published them.
+Each user enters an editable Client ID; no build-time Spotify credential is
+required. PKCE S256 state, verifier, Client ID, Redirect URI, and creation time
+belong to one single-use, ten-minute sessionStorage transaction. Callback
+parameters are removed from the browser URL before network completion.
+
+The helper hands off `swpt2.` data containing the minimum credentials and
+authorization identity/time. Compatible `swpt1.` input remains accepted with
+unknown original authorization time. Base64url is encoding, not encryption;
+both formats contain a secret Refresh Token, unlike a backend `swpb1.` token.
+The helper keeps successful credentials only in page memory for explicit copy.
+GitHub receives the initial callback request containing its short-lived code;
+this is not an entirely server-free OAuth exchange.
+
+Wallpaper Engine uses IndexedDB `spotify-wallpaper-direct-credentials`, store
+`credentials`, separately from settings. It contains plaintext Client ID,
+latest Refresh/Access Tokens, expiry, authorization identity, revision, and a
+bounded refresh lease. The host controls its physical profile location.
+This is not an OS secret vault and does not protect against same-user malware,
+DevTools, or modified wallpaper code. Browser mock startup does not restore it.
+
+Repeated initial property data must retain the latest saved token. New valid
+authorization replaces the old one only after persistence succeeds. Empty
+explicit input disconnects; absent properties retain state. Disconnect and a
+current-revision `invalid_grant` delete active secrets and retain non-secret
+retirement digests so stale properties cannot resurrect an authorization.
+Deleting the whole storage area removes that protection; clear the host input
+and revoke Spotify access when appropriate before clearing storage.
+
+Short atomic transactions, lease identity, authorization identity, and revision
+protect shared-storage refresh. No transaction spans a network request.
+Provider disposal must not discard a completed token rotation, but an older
+authorization cannot overwrite a replacement. A late 401 retries once with the
+current token; only current `invalid_grant` retires credentials. Persistence
+failure is distinct from revoked authorization and is not a restart guarantee.
+
+Spotify's Refresh Token lifetime is six months from original authorization,
+not extended by Access Token refresh. Do not impose a 24-hour lifetime or
+convert six months into an automatic 180-day deletion rule. See the
+[Spotify refresh documentation](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens).
+Wallpaper Engine CORS, storage persistence/sharing, sleep/resume, and real
+72-hour operation remain separate real-machine acceptance checks. Separate
+storage contexts cannot be promised shared locking or safe token reuse;
+authorize each separately and validate real-account behavior.
 
 ## Public backend OAuth
 

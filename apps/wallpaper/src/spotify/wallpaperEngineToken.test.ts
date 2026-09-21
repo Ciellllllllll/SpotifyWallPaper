@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { isWallpaperEngineSpotifyToken, parseWallpaperEngineSpotifyToken } from './wallpaperEngineToken';
 
+it('accepts versioned authorization identity and rejects malformed v2 without downgrading', () => {
+  const data = { v: 2, clientId: 'dummy-client', refreshToken: 'dummy-refresh', authorizationId: 'a'.repeat(32), authorizedAtMs: 1000 };
+  const encode = (value: unknown) => 'swpt2.' + btoa(JSON.stringify(value)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+  expect(isWallpaperEngineSpotifyToken(encode(data))).toBe(true);
+  expect(parseWallpaperEngineSpotifyToken(encode(data))).toEqual({ clientId: data.clientId, refreshToken: data.refreshToken, authorizationId: data.authorizationId, authorizedAtMs: 1000 });
+  expect(parseWallpaperEngineSpotifyToken(encode({ ...data, authorizationId: '' }))).toBeNull();
+  expect(parseWallpaperEngineSpotifyToken(encode({ ...data, authorizedAtMs: -1 }))).toBeNull();
+});
+
 const encodeToken = (clientId: string, refreshToken: string): string => {
   const json = JSON.stringify({ v: 1, clientId, refreshToken });
   return encodeTokenBytes(new TextEncoder().encode(json));

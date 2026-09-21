@@ -9,6 +9,7 @@
   import { initVisualCore, visualCoreStatus } from './wasm/visualCore';
   import { createWallpaperRuntime, type ReadonlyWallpaperRuntimeSnapshot } from './runtime/wallpaperRuntime';
   import { toWallpaperViewModel } from './viewModel';
+  import { DirectCredentialStore, indexedCredentialDatabase } from './spotify/credentialStore';
 
   let settingsWarning: string | null = null;
   let settingsSource = 'defaults/browser';
@@ -43,6 +44,9 @@
     wallpaperRuntime.applyConfiguration(loaded.settings, { kind: 'retain' }, loaded.safetyGateOpen);
     wallpaperRuntime.start();
     registerWallpaperPropertyListener((result) => {
+      // Host property delivery, not audio availability, activates credential persistence.
+      // Ordinary browser mock startup never reads this store.
+      wallpaperRuntime.enableCredentialStore(new DirectCredentialStore(indexedCredentialDatabase(() => window.indexedDB)));
       const safetyAllowed = configurationSafetyGateOpen && result.safetyGateOpen;
       configurationSafetyGateOpen = safetyAllowed;
       settingsWarning = result.warning;

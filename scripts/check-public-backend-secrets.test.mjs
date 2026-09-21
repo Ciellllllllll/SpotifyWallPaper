@@ -17,6 +17,8 @@ test('rejects every forbidden artifact pattern with a failing exit code', () => 
   const cases = [
     ['pairing-token', `swpb1.${'a'.repeat(22)}.${'b'.repeat(43)}`],
     ['legacy-pairing-token', `swpt1.${'a'.repeat(20)}`],
+    ['direct-authorization-token', `swpt2.${'a'.repeat(20)}`],
+    ['oauth-callback-query', '/spotify-auth/callback/?code=fixture'],
     ['oauth-callback-query', '/auth/callback?code=fixture'],
     [
       'vite-spotify-secret',

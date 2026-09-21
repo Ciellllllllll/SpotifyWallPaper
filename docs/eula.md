@@ -1,4 +1,21 @@
-# Public Backend Beta EULA
+# Spotify Wallpaper EULA Draft
+
+## Standard direct configuration
+
+Static GitHub Pages authorization and Wallpaper Engine direct Spotify access
+are the standard setup. Users supply their own Client ID, keep authorization
+data confidential, and comply with Spotify account, Development Mode, quota,
+content-display, and synchronization policies. Removing operator infrastructure
+cost does not remove Spotify Premium, Wallpaper Engine, or GitHub restrictions.
+Token refresh does not extend Spotify's original authorization lifetime or
+guarantee uninterrupted service. Base64-encoded authorization data is not
+encrypted; local credential storage has the limitations in `privacy.md`.
+
+This remains a draft requiring operator identity, effective date, applicable
+legal terms, and privacy contact before release. Implementing a Pages workflow
+does not approve publication or establish acceptance of these terms. The
+Spotify minimum terms below apply to the application; the retained backend
+status and consent paragraphs concern only the optional legacy service.
 
 ## Status
 

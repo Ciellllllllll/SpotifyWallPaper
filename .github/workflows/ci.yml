@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - master
+      - develop
 
 jobs:
   web:
@@ -48,6 +48,15 @@ jobs:
       - name: Web builds and generated WASM
         run: npm run build
 
+      - name: Optional application checks
+        run: npm run check:optional
+
+      - name: Optional application tests
+        run: npm run test:optional
+
+      - name: Optional application builds
+        run: npm run build:optional
+
       - name: Actual WASM parity
         run: npm run test:wasm-parity
 
@@ -55,7 +64,7 @@ jobs:
         run: npx playwright install chromium
 
       - name: Browser characterization
-        run: npx playwright test tests/playwright/wallpaper-characterization.spec.ts
+        run: npx playwright test tests/playwright/wallpaper-characterization.spec.ts tests/playwright/direct-credentials.spec.ts
 
   rust:
     runs-on: windows-latest

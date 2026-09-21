@@ -149,8 +149,9 @@ const backendErrorFromPayload = (payload: unknown, response: Response) => {
 const validRetryAfterMs = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 86_400_000 ? value : undefined;
 
-const backendErrorMessage = (kind: 'unauthorized' | 'forbidden' | 'rate_limited' | 'network_error' | 'unavailable' | 'unknown_response_shape' | 'item_null'): string => {
+const backendErrorMessage = (kind: 'unauthorized' | 'forbidden' | 'rate_limited' | 'network_error' | 'storage_error' | 'unavailable' | 'unknown_response_shape' | 'item_null'): string => {
   switch (kind) {
+    case 'storage_error': return 'Spotify credential storage failed.';
     case 'unauthorized': return 'Spotify authorization is required.';
     case 'forbidden': return 'Spotify playback access was denied.';
     case 'rate_limited': return 'Spotify rate limit reached.';

@@ -1,6 +1,7 @@
 import { copyFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
+import pages from './pages-config.json';
 
 const githubPagesFallback = (): Plugin => ({
   name: 'github-pages-fallback',
@@ -17,7 +18,7 @@ const githubPagesFallback = (): Plugin => ({
 });
 
 export default defineConfig({
-  base: process.env.VITE_AUTH_BASE_PATH ?? '/SpotifyWallPaper/spotify-auth/',
+  base: pages.base,
   plugins: [githubPagesFallback()],
   server: {
     host: '127.0.0.1',

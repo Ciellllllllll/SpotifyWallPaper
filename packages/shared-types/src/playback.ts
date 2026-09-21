@@ -9,6 +9,7 @@ export type SpotifyErrorKind =
   | 'forbidden'
   | 'rate_limited'
   | 'network_error'
+  | 'storage_error'
   | 'unavailable'
   | 'unknown_response_shape'
   | 'item_null';
@@ -18,6 +19,8 @@ export interface SpotifyPlaybackError {
   message: string;
   retryAfterMs?: number;
   status?: number;
+  /** Local direct-provider quota classification; not part of provider-v1 wire input. */
+  quotaExceeded?: boolean;
 }
 
 export interface PlaybackDeviceState {

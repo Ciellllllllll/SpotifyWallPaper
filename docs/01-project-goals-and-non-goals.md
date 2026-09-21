@@ -7,7 +7,8 @@ Create a highly customizable Wallpaper Engine Web Wallpaper that reacts to Spoti
 ## Core requirements
 
 - Spotify current playback integration.
-- Optional public Spotify proxy for Workshop-compatible deployment.
+- Static GitHub Pages PKCE authorization and direct Spotify access from Wallpaper Engine.
+- Optional legacy public proxy, independent of the standard product path.
 - Album-art-based background.
 - Theme generation from album artwork.
 - Coordinate-based UI customization.
@@ -39,7 +40,7 @@ Do not bypass Spotify API restrictions.
 Do not require Spotify Premium for passive display features.
 Do not require Spotify Premium except for playback control operations that Spotify itself restricts.
 Do not make the optional Node.js/PostgreSQL VPS backend mandatory for wallpaper
-startup. Browser mock, legacy direct, and local Rust backend paths remain
+startup. Browser mock, standard direct, and local Rust backend paths remain
 supported. Production public-backend Spotify routes stay policy-locked until a
 separate reviewed unlock.
 Do not ship a shared Spotify Client ID or Client Secret before Spotify Extended Quota approval and a dedicated managed-app security review.

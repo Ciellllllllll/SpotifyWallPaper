@@ -121,6 +121,7 @@
       "classification": "historical-evidence",
       "paths": [
         "docs/phase-reports/cloudflare-worker-public-backend.md",
+        "docs/phase-reports/github-pages-direct-migration.md",
         "docs/phase-reports/final-implementation-report.md",
         "docs/phase-reports/lyrics-deferred-spec-update.md",
         "docs/phase-reports/one-click-spotify-auth-token.md",

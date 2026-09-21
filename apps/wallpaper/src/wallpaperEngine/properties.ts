@@ -87,9 +87,6 @@ export const parseWallpaperProperties = (
         : {}),
       ...(backendUrl !== undefined ? { backendOrigin: backendUrl } : {})
     };
-    if (playbackProvider === 'mock' || playbackProvider === 'direct' || playbackProvider === 'backend') {
-      credential = { kind: 'clear' };
-    }
   }
 
   const trimmedToken = refreshToken?.trim();
@@ -111,7 +108,7 @@ export const parseWallpaperProperties = (
     };
     unifiedCredential = { kind: 'replace', value: { kind: 'backend', pairingToken: unifiedBackendToken } };
     if (!backendOrigin && warning === null) warning = 'Spotify backend is unavailable in this build.';
-  } else if (trimmedToken?.startsWith('swpt1.') || trimmedToken?.startsWith('swpb1.')) {
+  } else if (/^swp[bt]/.test(trimmedToken ?? '')) {
     delete patch.spotify;
     unifiedCredential = { kind: 'retain' };
     if (warning === null) warning = 'Spotify Token format is invalid.';
@@ -120,7 +117,7 @@ export const parseWallpaperProperties = (
   const directCredential = unifiedCredential === null && (clientId !== undefined || refreshToken !== undefined)
     ? clientId && refreshToken
       ? { kind: 'replace', value: { kind: 'direct', clientId, refreshToken } } as CredentialUpdate
-      : refreshToken
+      : refreshToken || refreshToken === undefined
         ? { kind: 'retain' } as CredentialUpdate
         : { kind: 'clear' } as CredentialUpdate
     : null;
@@ -286,6 +283,10 @@ export const registerWallpaperPropertyListener = (
       }
       if (!spotifyPropertyKeys.some((key) => Object.prototype.hasOwnProperty.call(properties, key))) {
         for (const key of spotifyPropertyKeys) delete effectiveProperties[key];
+      }
+      if (Object.prototype.hasOwnProperty.call(properties, 'spotify_playback_provider') &&
+        !['spotify_client_id', 'spotify_refresh_token', 'spotify_pairing_token'].some(key => Object.prototype.hasOwnProperty.call(properties, key))) {
+        for (const key of ['spotify_client_id', 'spotify_refresh_token', 'spotify_pairing_token']) delete effectiveProperties[key];
       }
       const result = parseWallpaperProperties(effectiveProperties, providerHint?.());
       safetyGateOpen = safetyGateOpen && result.safetyGateOpen;

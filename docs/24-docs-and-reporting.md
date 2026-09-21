@@ -10,7 +10,8 @@
 - Rainmeter integration guide
 - Troubleshooting guide
 - privacy and data-deletion policy
-- public-backend setup, reauthorization, and disconnect guide
+- static Pages setup, reauthorization, local credential deletion, and disconnect guide
+- optional legacy public-backend operations, clearly separated from standard setup
 
 ## Required developer docs
 

@@ -2,6 +2,12 @@
 
 ## Status and purpose
 
+The standard product now uses static GitHub Pages authorization followed by
+direct Spotify requests from Wallpaper Engine. This document governs the
+retained optional backend only. It is not a prerequisite for normal build,
+authentication, playback, or token refresh. Migration does not unlock this
+service or authorize deployment, shutdown, token extraction, or data deletion.
+
 The optional public backend is a Node.js 22 ESM service on a Linux VPS. It
 runs behind Caddy and OAuth2 Proxy, persists encrypted credential state in
 PostgreSQL 17, and preserves the wallpaper's normalized playback/control

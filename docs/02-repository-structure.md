@@ -16,7 +16,8 @@ import the view; apps must not use relative imports across app boundaries.
   Optional Tauri configurator. Svelte frontend and Rust backend.
 
 - `apps/spotify-auth/`
-  Static Spotify authorization helper for direct/Wallpaper Engine setup.
+  Standard static GitHub Pages PKCE helper for direct/Wallpaper Engine setup.
+  It exchanges the initial code in the user's browser, with no API backend.
 
 - `apps/backend/`
   Optional loopback-only Rust Spotify backend for local development.
@@ -79,6 +80,14 @@ The Rust/WASM core owns pure calculations only.
 The configurator owns setup workflows, settings editing, export/import, OAuth assistance, and optional Rainmeter output.
 
 Shared types define boundaries. Avoid passing raw Spotify API responses deep into UI components.
+
+The wallpaper's direct provider owns Spotify transport; its dedicated IndexedDB
+credential store owns persistence and shared-storage refresh coordination.
+Neither credentials nor storage enter wallpaper-view or preference exports.
+The standard build/check/test path covers wallpaper, auth, shared types, and
+the presentation package. Configurator, Rainmeter, loopback Rust, and public
+backend remain optional components with their own verification paths. WASM
+remains part of the wallpaper build; static Pages hosts only the auth artifact.
 
 `packages/shared-types/src/spotifyPlayback.ts` is the TypeScript normalization
 authority used by the direct provider and public backend. Provider modules

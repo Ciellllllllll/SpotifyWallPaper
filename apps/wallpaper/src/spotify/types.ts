@@ -3,6 +3,7 @@ import type { SpotifyPlaybackError } from '@spotify-wallpaper/shared-types';
 export interface SpotifyTokenState {
   accessToken: string;
   expiresAtMs: number;
+  refreshAtMs?: number;
   refreshToken?: string;
 }
 
@@ -22,6 +23,8 @@ export type SpotifyResult<T> =
   | {
       ok: false;
       error: SpotifyPlaybackError;
+      /** Internal token endpoint classification, never derived from an API 401. */
+      invalidGrant?: boolean;
     };
 
 export interface SpotifyPlaybackResponse {
