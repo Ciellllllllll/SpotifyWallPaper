@@ -56,7 +56,7 @@ this is not an entirely server-free OAuth exchange.
 Wallpaper Engine uses IndexedDB `spotify-wallpaper-direct-credentials`, store
 `credentials`, separately from settings. It contains plaintext Client ID,
 latest Refresh/Access Tokens, expiry, authorization identity, revision, and a
-bounded refresh lease. The host controls its physical profile location.
+refresh lease with a bounded waiting deadline. The host controls its physical profile location.
 This is not an OS secret vault and does not protect against same-user malware,
 DevTools, or modified wallpaper code. Browser mock startup does not restore it.
 
@@ -81,10 +81,26 @@ settings alone retain the saved authorization. An explicit provider selection
 supersedes pending authorization activation even when the displayed provider
 has not changed; appearance-only notifications do not cancel activation.
 
-If persisting an explicit HTTP failure/cooldown fails, the same session may
-retry storage after the refresh lease, backoff, and Retry-After have elapsed.
-Failed persistence after rotation, invalid_grant, or an ambiguous response
-remains fail-closed to avoid resending potentially obsolete credentials.
+The lease is persisted before the token request and remains until its result
+is confirmed in storage. Deadline expiry is an unknown outcome, not permission
+for another session to retry with the old Refresh Token. All sessions sharing
+that database fail closed until the original result is saved or a new
+authorization is imported. No module-global memory registry is required.
+
+After a completion write fails, the original session retains the response and
+its completion timestamp in memory. It retries that write before another
+Spotify request, preserving authorization/revision/lease checks and the original
+Retry-After deadline. Rotation and invalid_grant can therefore recover by saving
+the original response without resending the old token. A lost acknowledgement
+is handled by rereading the committed record. Ordinary persisted HTTP failures
+still use the shared cooldown and backoff.
+
+The original response cannot be recovered after its process ends. An orphaned
+lease, lost token-endpoint response, or malformed successful token response
+requires reauthorization if the original session cannot resolve it. This
+conservative stop concerns token refresh, not ordinary playback API outages.
+Do not promise permanent automatic recovery or coordination across different
+storage areas. Existing version-1 leases use the same fail-closed rule.
 
 Spotify's Refresh Token lifetime is six months from original authorization,
 not extended by Access Token refresh. Do not impose a 24-hour lifetime or

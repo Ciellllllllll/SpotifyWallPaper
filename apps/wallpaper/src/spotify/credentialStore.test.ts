@@ -26,6 +26,102 @@ const database = (): CredentialDatabase => {
 describe('dedicated direct credential store', () => {
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(0); });
   afterEach(() => { vi.useRealTimers(); });
+  it.each(['429', 'rotation', 'invalid_grant'])('blocks a second session until the original %s result is persisted', async outcome => {
+    const db = database();
+    const first = new DirectCredentialStore(db);
+    const second = new DirectCredentialStore(db);
+    const record = await first.import(initial);
+    vi.spyOn(first, 'complete').mockRejectedValueOnce(Error('dummy commit failure'));
+    const fetcher = vi.fn(async () => {
+      if (fetcher.mock.calls.length === 1 && outcome === '429') return new Response('', { status: 429, headers: { 'Retry-After': '120' } });
+      if (outcome === 'invalid_grant') return Response.json({ error: 'invalid_grant' }, { status: 400 });
+      return Response.json({ access_token: 'dummy-access', refresh_token: 'dummy-rotated', expires_in: 3600 });
+    });
+    const a = new DirectTokenSession(first, record!.id, fetcher);
+    const b = new DirectTokenSession(second, record!.id, fetcher);
+    expect(await a.accessToken(0)).toMatchObject({ ok: false, error: { kind: 'storage_error' } });
+    vi.setSystemTime(60001);
+    expect(await b.accessToken(Date.now())).toMatchObject({ ok: false, error: { kind: 'storage_error' } });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const recovered = await a.accessToken(Date.now());
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    if (outcome === 'rotation') {
+      expect(recovered).toEqual({ ok: true, value: 'dummy-access' });
+      expect(await b.accessToken(Date.now())).toEqual(recovered);
+      expect((await second.read())?.refreshToken).toBe('dummy-rotated');
+    } else if (outcome === '429') {
+      expect(recovered).toMatchObject({ ok: false, error: { kind: 'rate_limited', retryAfterMs: 59999 } });
+      expect(await b.accessToken(Date.now())).toMatchObject({ ok: false, error: { kind: 'rate_limited' } });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      vi.setSystemTime(120001);
+      expect((await b.accessToken(Date.now())).ok).toBe(true);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } else {
+      expect(recovered).toMatchObject({ ok: false, error: { kind: 'unauthorized' } });
+      expect(await second.read()).toBeNull();
+      expect(await b.accessToken(Date.now())).toMatchObject({ ok: false, error: { kind: 'unauthorized' } });
+    }
+  });
+
+  it('keeps an orphaned request blocked across store recreation and stale initial input', async () => {
+    const db = database();
+    const original = new DirectCredentialStore(db);
+    const record = await original.import(initial);
+    await original.claim(record!.id, 0);
+    const restored = new DirectCredentialStore(db);
+    expect((await restored.import(initial))?.id).toBe(record!.id);
+    const fetcher = vi.fn(async () => Response.json({ access_token: 'dummy-new', expires_in: 3600 }));
+    expect(await new DirectTokenSession(restored, record!.id, fetcher).accessToken(7200000)).toMatchObject({ ok: false, error: { kind: 'storage_error' } });
+    expect(fetcher).not.toHaveBeenCalled();
+    const replacement = await restored.import({ ...initial, authorizationId: 'b'.repeat(32) });
+    expect((await new DirectTokenSession(restored, replacement!.id, fetcher).accessToken(7200000)).ok).toBe(true);
+  });
+
+  it.each(['network', 'malformed-success'])('requires reauthorization after a %s result with unknown token outcome', async outcome => {
+    const db = database();
+    const store = new DirectCredentialStore(db);
+    const record = await store.import(initial);
+    const fetcher = vi.fn(async () => {
+      if (outcome === 'network') throw Error('dummy transport failure');
+      return Response.json({ refresh_token: 'dummy-possibly-rotated' });
+    });
+    const first = new DirectTokenSession(store, record!.id, fetcher);
+    expect((await first.accessToken(0)).ok).toBe(false);
+    expect(await first.accessToken(60001)).toMatchObject({ ok: false, error: { kind: 'storage_error' } });
+    expect(await new DirectTokenSession(new DirectCredentialStore(db), record!.id, fetcher).accessToken(60001)).toMatchObject({ ok: false, error: { kind: 'storage_error' } });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers a committed rotation whose acknowledgement was lost without resending', async () => {
+    const store = new DirectCredentialStore(database());
+    const record = await store.import(initial);
+    const complete = store.complete.bind(store);
+    vi.spyOn(store, 'complete').mockImplementationOnce(async (...args) => {
+      await complete(...args);
+      throw Error('dummy lost acknowledgement');
+    });
+    const fetcher = vi.fn(async () => Response.json({ access_token: 'dummy-access', refresh_token: 'dummy-rotated', expires_in: 3600 }));
+    const session = new DirectTokenSession(store, record!.id, fetcher);
+    expect((await session.accessToken(0)).ok).toBe(false);
+    expect(await session.accessToken(60001)).toEqual({ ok: true, value: 'dummy-access' });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect((await store.read())?.revision).toBe(1);
+  });
+
+  it('retries persistence without resending and discards a pending response after account replacement', async () => {
+    const store = new DirectCredentialStore(database());
+    const record = await store.import(initial);
+    const completion = vi.spyOn(store, 'complete').mockRejectedValueOnce(Error('dummy write failure'));
+    const fetcher = vi.fn(async () => Response.json({ access_token: 'dummy-old-access', refresh_token: 'dummy-old-rotated', expires_in: 3600 }));
+    const session = new DirectTokenSession(store, record!.id, fetcher);
+    await session.accessToken(0);
+    const replacement = await store.import({ ...initial, refreshToken: 'dummy-new-account', authorizationId: 'b'.repeat(32) });
+    expect(await session.accessToken(60001)).toMatchObject({ ok: false, error: { kind: 'unauthorized' } });
+    expect(completion).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect((await store.read())?.id).toBe(replacement!.id);
+    expect((await store.read())?.refreshToken).toBe('dummy-new-account');
+  });
   it('disconnects durable secrets after invalid settings without reopening the safety gate', async () => {
     const db = database();
     const store = new DirectCredentialStore(db);
@@ -87,14 +183,14 @@ describe('dedicated direct credential store', () => {
     }
     await vi.advanceTimersByTimeAsync(300001);
     expect(await session.accessToken(Date.now())).toEqual({ ok: true, value: 'dummy-access' });
-    expect(complete).toHaveBeenCalledTimes(2);
+    expect(complete).toHaveBeenCalledTimes(3); // Failed write, original result saved, later refresh saved.
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
   it.each(['rotation', 'invalid_grant'])('does not resend old credentials after a failed %s write', async outcome => {
     const store = new DirectCredentialStore(database());
     const record = await store.import(initial);
-    vi.spyOn(store, 'complete').mockRejectedValueOnce(Error('dummy write failure'));
+    vi.spyOn(store, 'complete').mockRejectedValueOnce(Error('dummy write failure')).mockRejectedValueOnce(Error('dummy still unavailable'));
     const fetcher = vi.fn(async () => outcome === 'rotation'
       ? Response.json({ access_token: 'dummy-access', refresh_token: 'dummy-rotated', expires_in: 3600 })
       : Response.json({ error: 'invalid_grant' }, { status: 400 }));
@@ -102,6 +198,15 @@ describe('dedicated direct credential store', () => {
     expect(await session.accessToken(0)).toMatchObject({ ok: false, error: { kind: 'storage_error' } });
     await vi.advanceTimersByTimeAsync(300001);
     expect(await session.accessToken(Date.now())).toMatchObject({ ok: false, error: { kind: 'storage_error' } });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const recovered = await session.accessToken(Date.now());
+    if (outcome === 'rotation') {
+      expect(recovered).toEqual({ ok: true, value: 'dummy-access' });
+      expect((await store.read())?.refreshToken).toBe('dummy-rotated');
+    } else {
+      expect(recovered).toMatchObject({ ok: false, error: { kind: 'unauthorized' } });
+      expect(await store.read()).toBeNull();
+    }
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
@@ -364,10 +469,12 @@ describe('dedicated direct credential store', () => {
     expect(claims.map(x => x.kind).sort()).toEqual(['busy', 'claimed']);
   });
 
-  it('rejects old lease results after expiry and after switching accounts', async () => {
+  it('rejects old lease results after revision advances and after switching accounts', async () => {
     const store = new DirectCredentialStore(database());
     const record = await store.import(initial);
     const old = await store.claim(record!.id, 0);
+    if (old.kind !== 'claimed') throw Error('test lease setup');
+    await store.complete(old.record, { ok: true, value: { accessToken: 'dummy-previous', expiresAtMs: 60000 } }, 1000);
     const fresh = await store.claim(record!.id, 120000);
     if (old.kind !== 'claimed' || fresh.kind !== 'claimed') throw Error('test lease setup');
     expect(await store.complete(old.record, { ok: false, invalidGrant: true, error: { kind: 'unauthorized', message: 'dummy' } })).toBe(false);

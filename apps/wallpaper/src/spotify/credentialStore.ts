@@ -22,7 +22,7 @@ export interface CredentialData {
 export interface CredentialDatabase {
   transaction<T>(edit: (data: CredentialData) => T): Promise<T>;
 }
-type Claim = { kind: 'claimed'; record: CredentialRecord } | { kind: 'ready'; token: SpotifyTokenState } | { kind: 'cooldown'; error: Extract<SpotifyResult<never>, { ok: false }>['error'] } | { kind: 'busy' } | { kind: 'missing' };
+type Claim = { kind: 'claimed'; record: CredentialRecord } | { kind: 'ready'; token: SpotifyTokenState } | { kind: 'cooldown'; error: Extract<SpotifyResult<never>, { ok: false }>['error'] } | { kind: 'busy' } | { kind: 'uncertain' } | { kind: 'missing' };
 const storageError = () => new Error('Credential storage is unavailable.');
 const validSecret = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0 && value.length <= 16384;
 const validAuthorization = (value: DirectAuthorization): boolean =>
@@ -62,11 +62,13 @@ export class DirectCredentialStore {
     return this.edit(data => {
       const record = data.active;
       if (!record || record.id !== id) return { kind: 'missing' };
+      // Expiry bounds the wait, not the request's outcome. Never steal a lease:
+      // another context may have received a rotation it has not persisted yet.
+      if (record.lease) return { kind: record.lease.until > now ? 'busy' : 'uncertain' };
       if (record.cooldown && record.cooldown.until > now) return { kind: 'cooldown', error: { ...record.cooldown.error, retryAfterMs: record.cooldown.until - now } };
       if (record.token && record.token.accessToken !== rejectedAccessToken && !shouldRefreshToken(record.token, now)) {
         return { kind: 'ready', token: record.token };
       }
-      if (record.lease && record.lease.until > now) return { kind: 'busy' };
       record.lease = { id: crypto.randomUUID(), until: now + 60_000 };
       return { kind: 'claimed', record };
     });
@@ -77,6 +79,12 @@ export class DirectCredentialStore {
       const record = data.active;
       if (!record || record.id !== claim.id || record.revision !== claim.revision || !claim.lease || record.lease?.id !== claim.lease.id) return false;
       if (!result.ok && result.invalidGrant) { retire(data); return true; }
+      if (!result.ok && (result.error.kind === 'network_error' ||
+        (result.error.kind === 'unknown_response_shape' && (result.error.status ?? 200) < 400))) {
+        // The server may have rotated the token even though its response was lost.
+        record.lease!.until = Math.min(record.lease!.until, now);
+        return true;
+      }
       delete record.lease;
       if (result.ok) {
         delete record.cooldown;

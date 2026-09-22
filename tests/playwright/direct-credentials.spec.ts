@@ -1,6 +1,62 @@
 import { test, expect } from '@playwright/test';
 test.use({ screenshot: 'off', trace: 'off', video: 'off' });
 
+for (const outcome of ['429', 'rotation', 'invalid_grant'] as const) {
+  test(`separate pages cannot bypass an aborted IndexedDB ${outcome} completion`, async ({ page, context }) => {
+    await page.goto('/');
+    const other = await context.newPage();
+    await other.goto('/');
+    const first = await page.evaluate(async outcome => {
+      const { DirectCredentialStore, indexedCredentialDatabase } = await import('/src/spotify/credentialStore.ts');
+      const { DirectTokenSession } = await import('/src/spotify/directTokenSession.ts');
+      const db = indexedCredentialDatabase(indexedDB);
+      let abortCompletion = false;
+      const store = new DirectCredentialStore({ transaction: edit => db.transaction(data => {
+        const result = edit(data);
+        if (abortCompletion) { abortCompletion = false; throw Error('dummy transaction abort'); }
+        return result;
+      }) });
+      const record = await store.import({ clientId: 'dummy-client', refreshToken: 'dummy-initial' });
+      let calls = 0;
+      const session = new DirectTokenSession(store, record!.id, async () => {
+        calls++;
+        abortCompletion = true;
+        if (outcome === '429') return new Response('', { status: 429, headers: { 'Retry-After': '120' } });
+        if (outcome === 'invalid_grant') return Response.json({ error: 'invalid_grant' }, { status: 400 });
+        return Response.json({ access_token: 'dummy-access', refresh_token: 'dummy-rotated', expires_in: 3600 });
+      });
+      const started = Date.now();
+      const result = await session.accessToken(started);
+      // Keep only the original page's response in memory; the other page has none.
+      Object.assign(window, { pendingTestSession: session, pendingTestStore: store, pendingTestCalls: () => calls, pendingTestAt: started + 60001 });
+      return { failed: !result.ok, calls, testAt: started + 60001 };
+    }, outcome);
+    expect(first.failed).toBe(true);
+    expect(first.calls).toBe(1);
+    const blocked = await other.evaluate(async testAt => {
+      const { DirectCredentialStore, indexedCredentialDatabase } = await import('/src/spotify/credentialStore.ts');
+      const { DirectTokenSession } = await import('/src/spotify/directTokenSession.ts');
+      const store = new DirectCredentialStore(indexedCredentialDatabase(indexedDB));
+      const record = await store.read();
+      let calls = 0;
+      const session = new DirectTokenSession(store, record!.id, async () => { calls++; throw Error('unexpected request'); });
+      const result = await session.accessToken(testAt);
+      return { calls, kind: result.ok ? 'success' : result.error.kind };
+    }, first.testAt);
+    expect(blocked).toEqual({ calls: 0, kind: 'storage_error' });
+    const recovered = await page.evaluate(async () => {
+      const w = window as any;
+      const result = await w.pendingTestSession.accessToken(w.pendingTestAt);
+      const record = await w.pendingTestStore.read();
+      return { calls: w.pendingTestCalls(), kind: result.ok ? 'success' : result.error.kind, retired: record === null, rotated: record?.refreshToken === 'dummy-rotated' };
+    });
+    expect(recovered.calls).toBe(1);
+    expect(recovered.kind).toBe(outcome === '429' ? 'rate_limited' : outcome === 'rotation' ? 'success' : 'unauthorized');
+    expect(recovered.retired).toBe(outcome === 'invalid_grant');
+    expect(recovered.rotated).toBe(outcome === 'rotation');
+  });
+}
+
 test('invalid settings still allow explicit disconnect from real IndexedDB', async ({ page }) => {
   await page.goto('/');
   const result = await page.evaluate(async () => {

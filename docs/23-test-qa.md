@@ -50,6 +50,11 @@ visual/audio algorithms or removing the existing checks below:
   invalid_grant retirement, account changes, and late-response protection.
 - Same-store concurrent contexts, lease expiry and revision fencing, refresh
   during disposal, stale 401/invalid_grant, and no duplicate control replay.
+- Aborted completion writes for 429, rotation, and invalid_grant across two
+  independent sessions/pages sharing IndexedDB; expired leases cannot be stolen.
+  Original-response persistence retry preserves Retry-After and rejects results
+  after account replacement. Orphaned leases and ambiguous token responses
+  require reauthorization rather than reusing a possibly obsolete token.
 - Distinct 403, 429/QUOTA_EXCEEDED, network, timeout, 5xx, invalid payload, and
   no-playback handling; credential-free settings export and artifact scans.
 - Fake-clock one-hour, over-24-hour, and 72-hour refresh/rotation, omitted
