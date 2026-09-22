@@ -26,6 +26,110 @@ const database = (): CredentialDatabase => {
 describe('dedicated direct credential store', () => {
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(0); });
   afterEach(() => { vi.useRealTimers(); });
+  it('disconnects durable secrets after invalid settings without reopening the safety gate', async () => {
+    const db = database();
+    const store = new DirectCredentialStore(db);
+    const record = await store.import(initial);
+    const claim = await store.claim(record!.id, 0);
+    if (claim.kind !== 'claimed') throw Error('setup');
+    await store.complete(claim.record, { ok: true, value: { accessToken: 'dummy-access', refreshToken: 'dummy-rotated', expiresAtMs: 3600000 } });
+    const selectProvider = vi.fn(() => ({ kind: 'invalid', error: { kind: 'configuration', code: 'missing-credentials', message: 'dummy test provider' } } as const));
+    const runtime = createWallpaperRuntime(defaultSettings, { credentialStore: store, selectProvider });
+    let state: any;
+    runtime.subscribe(value => { state = value; });
+    const target = {} as Window;
+    registerWallpaperPropertyListener(result => runtime.applyConfiguration(result.settings!, result.credential, result.safetyGateOpen), target, () => state.settings.spotify.provider, () => state.settings);
+    runtime.start();
+    target.wallpaperPropertyListener!.applyUserProperties!({ settings_json: { value: '{invalid' } });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await store.read()).not.toBeNull();
+    selectProvider.mockClear();
+    target.wallpaperPropertyListener!.applyUserProperties!({ spotify_refresh_token: { value: '' } });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await store.read()).toBeNull();
+    expect(await db.transaction(data => JSON.stringify(data))).not.toContain('dummy-');
+    expect(await store.import(initial)).toBeNull();
+    runtime.applyConfiguration({ ...defaultSettings, spotify: { ...defaultSettings.spotify, provider: 'direct' } }, { kind: 'replace', value: { kind: 'direct', ...initial } }, true);
+    expect(selectProvider).not.toHaveBeenCalled();
+    expect(state.credentialStatus.present).toBe(false);
+    runtime.dispose();
+  });
+
+  it('reports a disconnect write failure even with the safety gate closed', async () => {
+    const store = new DirectCredentialStore(database());
+    await store.import(initial);
+    vi.spyOn(store, 'disconnect').mockRejectedValueOnce(Error('dummy write failure'));
+    const runtime = createWallpaperRuntime(defaultSettings, { credentialStore: store });
+    let state: any;
+    runtime.subscribe(value => { state = value; });
+    runtime.applyConfiguration(defaultSettings, { kind: 'retain' }, false);
+    runtime.applyConfiguration(defaultSettings, { kind: 'clear' }, false);
+    await vi.waitFor(() => expect(state.providerConfigurationError).toContain('保存'));
+    expect(state.credentialStatus.present).toBe(false);
+    expect(await store.read()).not.toBeNull();
+    runtime.dispose();
+  });
+
+  it.each([503, 429])('recovers in the same session after a %s cooldown write fails', async status => {
+    const store = new DirectCredentialStore(database());
+    const record = await store.import(initial);
+    const complete = vi.spyOn(store, 'complete').mockRejectedValueOnce(Error('dummy write failure'));
+    const fetcher = vi.fn().mockResolvedValueOnce(new Response('', { status, headers: { 'Retry-After': '120' } }))
+      .mockResolvedValue(Response.json({ access_token: 'dummy-access', expires_in: 3600 }));
+    const session = new DirectTokenSession(store, record!.id, fetcher);
+    expect(await session.accessToken(0)).toMatchObject({ ok: false, error: { kind: 'storage_error' } });
+    expect(await session.accessToken(1)).toMatchObject({ ok: false });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    if (status === 429) {
+      // The lease has expired, but Retry-After must still prevent a retry.
+      expect(await session.accessToken(60001)).toMatchObject({ ok: false });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+    await vi.advanceTimersByTimeAsync(300001);
+    expect(await session.accessToken(Date.now())).toEqual({ ok: true, value: 'dummy-access' });
+    expect(complete).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['rotation', 'invalid_grant'])('does not resend old credentials after a failed %s write', async outcome => {
+    const store = new DirectCredentialStore(database());
+    const record = await store.import(initial);
+    vi.spyOn(store, 'complete').mockRejectedValueOnce(Error('dummy write failure'));
+    const fetcher = vi.fn(async () => outcome === 'rotation'
+      ? Response.json({ access_token: 'dummy-access', refresh_token: 'dummy-rotated', expires_in: 3600 })
+      : Response.json({ error: 'invalid_grant' }, { status: 400 }));
+    const session = new DirectTokenSession(store, record!.id, fetcher);
+    expect(await session.accessToken(0)).toMatchObject({ ok: false, error: { kind: 'storage_error' } });
+    await vi.advanceTimersByTimeAsync(300001);
+    expect(await session.accessToken(Date.now())).toMatchObject({ ok: false, error: { kind: 'storage_error' } });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['mock', 'appearance'])('respects %s notifications during a pending initial import', async change => {
+    const store = new DirectCredentialStore(database());
+    const importOriginal = store.import.bind(store);
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    vi.spyOn(store, 'import').mockImplementation(async input => { await pending; return importOriginal(input); });
+    const selectProvider = vi.fn(() => ({ kind: 'invalid', error: { kind: 'configuration', code: 'missing-credentials', message: 'dummy test provider' } } as const));
+    const runtime = createWallpaperRuntime(defaultSettings, { credentialStore: store, selectProvider });
+    let state: any;
+    runtime.subscribe(value => { state = value; });
+    const target = {} as Window;
+    registerWallpaperPropertyListener(result => runtime.applyConfiguration(result.settings!, result.credential, result.safetyGateOpen, result.providerSelectionExplicit), target, () => state.settings.spotify.provider, () => state.settings);
+    runtime.start();
+    target.wallpaperPropertyListener!.applyUserProperties!({ spotify_refresh_token: { value: 'swpt2.' + btoa(JSON.stringify({ v: 2, ...initial })).replace(/=+$/, '') } });
+    await vi.waitFor(() => expect(store.import).toHaveBeenCalled());
+    target.wallpaperPropertyListener!.applyUserProperties!(change === 'mock' ? { spotify_playback_provider: { value: 'mock' } } : { clock_enabled: { value: true } });
+    selectProvider.mockClear();
+    release();
+    await vi.waitFor(async () => expect(await store.read()).not.toBeNull());
+    await vi.advanceTimersByTimeAsync(100);
+    expect(state.settings.spotify.provider).toBe(change === 'mock' ? 'mock' : 'direct');
+    if (change === 'mock') expect(selectProvider).not.toHaveBeenCalled();
+    else expect(state.settings.clock.enabled).toBe(true);
+    runtime.dispose();
+  });
   it('keeps mock mode during passive startup restoration', async () => {
     const store = new DirectCredentialStore(database());
     await store.import(initial);

@@ -51,7 +51,7 @@
       configurationSafetyGateOpen = safetyAllowed;
       settingsWarning = result.warning;
       settingsSource = 'wallpaper-engine properties';
-      if (result.settings) wallpaperRuntime.applyConfiguration(result.settings, result.credential, safetyAllowed);
+      if (result.settings) wallpaperRuntime.applyConfiguration(result.settings, result.credential, safetyAllowed, result.providerSelectionExplicit);
     }, window, () => runtimeSnapshot.settings.spotify.provider, () => runtimeSnapshot.settings);
   });
 

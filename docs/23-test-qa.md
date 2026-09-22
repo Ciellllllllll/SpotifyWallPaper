@@ -28,6 +28,15 @@ appearance.
 
 ## Unit tests
 
+The Windows junction suite always checks creation, repeat execution, different
+targets, existing directories, and missing build artifacts. The real 8.3 alias
+case probes the temporary volume: absence is reported as an unavailable test
+capability locally, while GitHub Actions requires an alias and fails if the
+prerequisite is missing. `SPOTIFY_REQUIRE_83_ALIAS=true` enables the same strict
+check locally. Never change a user's volume or registry settings for this test.
+The capability-policy test covers both absent/optional and absent/required
+cases without claiming an actual 8.3-disabled-volume execution.
+
 Direct connection migration adds regression requirements without changing the
 visual/audio algorithms or removing the existing checks below:
 

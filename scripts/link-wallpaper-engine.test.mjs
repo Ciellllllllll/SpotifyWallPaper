@@ -32,7 +32,21 @@ test('creates the development junction and accepts the same junction again', { s
   });
 });
 
-test('accepts an existing junction whose target uses an actual Windows short name', { skip: process.platform !== 'win32' }, () => {
+const hasShortNameAlias = (shortPath, longPath, required) => {
+  assert.ok(shortPath, 'Windows short-name capability probe returned no path');
+  if (shortPath !== longPath) return true;
+  assert.equal(required, false, 'This CI run requires a real 8.3 alias; the temporary volume does not provide one');
+  return false;
+};
+
+test('separates missing 8.3 capability from required CI coverage', () => {
+  assert.equal(hasShortNameAlias('same-path', 'same-path', false), false);
+  assert.throws(() => hasShortNameAlias('same-path', 'same-path', true), /requires a real 8.3 alias/);
+  assert.equal(hasShortNameAlias('short-path', 'long-path', true), true);
+  assert.throws(() => hasShortNameAlias('', 'long-path', false), /returned no path/);
+});
+
+test('accepts an existing junction whose target uses an actual Windows short name', { skip: process.platform !== 'win32' }, (t) => {
   withSyntheticRepository(({ destination, dist, run }) => {
     const short = spawnSync('powershell.exe', [
       '-NoProfile', '-NonInteractive', '-Command',
@@ -40,7 +54,12 @@ test('accepts an existing junction whose target uses an actual Windows short nam
     ], { encoding: 'utf8', env: { ...process.env, LINK_TEST_DIST: dist } });
     assert.equal(short.status, 0, short.stderr);
     const shortDist = short.stdout.trim();
-    assert.notEqual(shortDist, realpathSync.native(dist), 'fixture must exercise a real 8.3 alias');
+    const required = process.env.GITHUB_ACTIONS === 'true' || process.env.SPOTIFY_REQUIRE_83_ALIAS === 'true';
+    if (!hasShortNameAlias(shortDist, realpathSync.native(dist), required)) {
+      t.skip('No 8.3 alias on this temporary volume; ordinary junction checks still run');
+      return;
+    }
+    t.diagnostic('Actual Windows 8.3 alias available and exercised');
     symlinkSync(shortDist, destination, 'junction');
     assert.equal(realpathSync.native(destination), realpathSync.native(shortDist));
     for (let attempt = 0; attempt < 2; attempt += 1) {

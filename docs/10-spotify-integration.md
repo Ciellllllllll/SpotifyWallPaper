@@ -75,6 +75,17 @@ authorization cannot overwrite a replacement. A late 401 retries once with the
 current token; only current `invalid_grant` retires credentials. Persistence
 failure is distinct from revoked authorization and is not a restart guarantee.
 
+Explicit disconnect erases durable secrets even after malformed settings close
+the networking safety gate; disconnect must not reopen that gate. Invalid
+settings alone retain the saved authorization. An explicit provider selection
+supersedes pending authorization activation even when the displayed provider
+has not changed; appearance-only notifications do not cancel activation.
+
+If persisting an explicit HTTP failure/cooldown fails, the same session may
+retry storage after the refresh lease, backoff, and Retry-After have elapsed.
+Failed persistence after rotation, invalid_grant, or an ambiguous response
+remains fail-closed to avoid resending potentially obsolete credentials.
+
 Spotify's Refresh Token lifetime is six months from original authorization,
 not extended by Access Token refresh. Do not impose a 24-hour lifetime or
 convert six months into an automatic 180-day deletion rule. See the

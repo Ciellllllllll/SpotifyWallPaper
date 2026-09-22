@@ -288,7 +288,11 @@ export const registerWallpaperPropertyListener = (
       }
       const result = parseWallpaperProperties(effectiveProperties, providerHint?.());
       safetyGateOpen = safetyGateOpen && result.safetyGateOpen;
-      const safeResult = { ...result, safetyGateOpen };
+      // Use this notification's intent, never a provider cached in the snapshot.
+      const providerValue = properties.spotify_playback_provider?.value;
+      const providerSelectionExplicit = providerValue === 'mock' || providerValue === 'direct' || providerValue === 'backend' ||
+        (result.settingsReplacement !== undefined && result.safetyGateOpen);
+      const safeResult = { ...result, safetyGateOpen, providerSelectionExplicit };
       onProperties(currentSettings ? {
         ...safeResult,
         settings: applyWallpaperPreferencesPatch(result.settingsReplacement ?? currentSettings(), result.patch)

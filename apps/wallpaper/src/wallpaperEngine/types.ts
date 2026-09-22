@@ -13,6 +13,7 @@ export interface WallpaperPropertyResult {
   credential: CredentialUpdate;
   safetyGateOpen: boolean;
   settingsReplacement?: WallpaperPreferences;
+  providerSelectionExplicit?: boolean;
 }
 
 export type ProviderHint = () => PlaybackProviderKind;

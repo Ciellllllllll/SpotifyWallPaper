@@ -55,6 +55,18 @@ Do not remove mock/browser preview support.
 Do not discard previous track state immediately on track change; transitions need previous and current states.
 Please commit once each phase is complete. Please refer to previous commit messages when writing your commit message.
 
+## Single-agent implementation and fixes
+
+修正・実装は主担当エージェントが直接行い、SubAgentを作成しない。
+既存のSubAgentや別タスクへの委譲も行わない。これはレビュー目的の
+SubAgentにも適用し、本ファイルおよび関連ドキュメント・スキルにある
+SubAgentや独立レビュー担当の起動指示より優先する。
+
+必要なレビュー観点（Sol、SpecGuard、Security、Architecture、Ponytail等）は
+主担当が順に自己レビューとして確認する。独立レビューを実施したとは
+報告せず、自己レビューであることと未確認事項を明記する。
+この方針は、必要なテスト・ビルド・セキュリティ検証や承認規則を免除しない。
+
 ## Work size and review policy
 
 Ponytail's minimal-solution guidance remains enabled for all coding work, but

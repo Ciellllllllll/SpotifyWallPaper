@@ -77,7 +77,7 @@ export interface WallpaperRuntime {
   enableCredentialStore(store: DirectCredentialStore): void;
   start(): void;
   subscribe(listener: (snapshot: ReadonlyWallpaperRuntimeSnapshot) => void): () => void;
-  applyConfiguration(settings: WallpaperPreferences, credential: CredentialUpdate, safetyGateOpen: boolean): void;
+  applyConfiguration(settings: WallpaperPreferences, credential: CredentialUpdate, safetyGateOpen: boolean, providerSelectionExplicit?: boolean): void;
   acceptAudioFrame(frame: VisualizerFrame): void;
   execute(command: PlaybackCommand): Promise<void>;
   toggleDisplayMode(): void;
@@ -507,8 +507,16 @@ export const createWallpaperRuntime = (
       listener(snapshot as ReadonlyWallpaperRuntimeSnapshot);
       return () => listeners.delete(listener);
     },
-    applyConfiguration(settings, credential, gateOpen) {
+    applyConfiguration(settings, credential, gateOpen, providerSelectionExplicit = false) {
       if (disposed) return;
+      // Erasing secrets is allowed even when malformed settings prohibit networking.
+      if (!applyingStoredCredential && credential.kind === 'clear') {
+        credentialEpoch += 1;
+        directSession = undefined;
+        authorizationId = undefined;
+        const store = credentialStore;
+        if (store) credentialQueue = credentialQueue.then(() => store.disconnect()).catch(storageFailed);
+      }
       if (credentialStore && !applyingStoredCredential && gateOpen && safetyGateOpen) {
         const store = credentialStore;
         if (credential.kind === 'replace' && credential.value.kind === 'direct') {
@@ -526,16 +534,11 @@ export const createWallpaperRuntime = (
           });
           credential = { kind: 'retain' };
           settings = { ...settings, spotify: { ...settings.spotify, provider: snapshot.settings.spotify.provider } };
-        } else if (credential.kind === 'clear') {
-          credentialEpoch += 1;
-          directSession = undefined;
-          authorizationId = undefined;
-          credentialQueue = credentialQueue.then(() => store.disconnect()).catch(storageFailed);
         } else if (credential.kind === 'replace' && credential.value.kind === 'backend') {
           credentialEpoch += 1;
           directSession = undefined;
           authorizationId = undefined;
-        } else if (credential.kind === 'retain' && settings.spotify.provider !== snapshot.settings.spotify.provider) {
+        } else if (credential.kind === 'retain' && (providerSelectionExplicit || settings.spotify.provider !== snapshot.settings.spotify.provider)) {
           const epoch = ++credentialEpoch;
           if (settings.spotify.provider === 'direct') {
             credentialQueue = credentialQueue.then(async () => acceptStored(await store.read(), epoch)).catch(storageFailed);
