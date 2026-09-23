@@ -2,11 +2,7 @@ name: Spotify Auth Pages
 
 on:
   push:
-    branches: [develop]
-    paths: ['apps/spotify-auth/**', 'tests/playwright/spotify-auth.spec.ts', 'playwright.auth.config.ts', 'scripts/serve-pages-test.mjs', 'scripts/check-public-backend-secrets*', 'scripts/spotify-pages.test.mjs', 'package*.json', '.github/workflows/spotify-auth-pages.yml']
-  pull_request:
-    paths: ['apps/spotify-auth/**', 'tests/playwright/spotify-auth.spec.ts', 'playwright.auth.config.ts', 'scripts/serve-pages-test.mjs', 'scripts/check-public-backend-secrets*', 'scripts/spotify-pages.test.mjs', 'package*.json', '.github/workflows/spotify-auth-pages.yml']
-  workflow_dispatch:
+    tags: ['release-*']
 
 permissions:
   contents: read
@@ -16,7 +12,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-branch:
+    if: github.event.deleted == false
+    runs-on: ubuntu-latest
+    outputs:
+      master: ${{ steps.branch.outputs.master }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - name: Require a commit contained in develop or master
+        id: branch
+        shell: pwsh
+        run: |
+          $branches = @(git branch --remotes --contains HEAD --format='%(refname)')
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify release ancestry.' }
+          $develop = $branches -ccontains 'refs/remotes/origin/develop'
+          $master = $branches -ccontains 'refs/remotes/origin/master'
+          if (-not ($develop -or $master)) { throw 'Release commit must be contained in develop or master.' }
+          "master=$($master.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
   build:
+    needs: release-branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -34,14 +51,14 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test --config playwright.auth.config.ts
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop' && vars.PAGES_DEPLOY_ENABLED == 'true'
+        if: needs.release-branch.outputs.master == 'true' && vars.PAGES_DEPLOY_ENABLED == 'true'
         with:
           path: apps/spotify-auth/pages
           retention-days: 1
 
   deploy:
-    needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop' && vars.PAGES_DEPLOY_ENABLED == 'true'
+    needs: [release-branch, build]
+    if: needs.release-branch.outputs.master == 'true' && vars.PAGES_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

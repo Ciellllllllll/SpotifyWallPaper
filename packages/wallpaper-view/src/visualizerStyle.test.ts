@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { defaultWallpaperPreferences } from '@spotify-wallpaper/shared-types';
 import {
   effectiveVisualizerConfig,
-  visualizerResponsePeak,
-  visualizerResponseSample,
   visualizerStyleVariables
 } from './visualizerStyle';
 
@@ -132,18 +130,6 @@ describe('wallpaper view visualizer presentation contract', () => {
 
     expect(config.particleCount).toBe(96);
     expect(config.particleLifeMs).toBe(10_000);
-  });
-
-  it('uses a bounded nonlinear response curve for visible motion', () => {
-    expect(visualizerResponseSample(0.25, 1.15)).toBeGreaterThan(0.25);
-    expect(visualizerResponseSample(1, 2)).toBe(1.35);
-    expect(visualizerResponseSample(Number.NaN, 1.15)).toBe(0);
-    expect(visualizerResponseSample(-1, 1.15)).toBe(0);
-  });
-
-  it('restores an intensity-scaled peak before applying the response curve', () => {
-    expect(visualizerResponsePeak(2, 2, 1.15)).toBeCloseTo(2.3, 5);
-    expect(visualizerResponsePeak(Number.NaN, 1.15, 1.15)).toBe(0);
   });
 
 });

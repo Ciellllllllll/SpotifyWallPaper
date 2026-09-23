@@ -2,8 +2,11 @@
 
 ## Regression gates
 
-Every code-changing phase starts from characterization or a red contract test
-and ends with targeted verification, Sol/medium review, SpecGuard (and
+Every code-changing phase first checks whether existing characterization or
+contract tests adequately protect the affected behavior. Add or update a
+meaningful regression test only where coverage is missing; a new red test is
+not mandatory for a reversible, low-impact change. Each phase ends with
+targeted verification, Sol/medium review, SpecGuard (and
 Security where applicable), then same-diff Ponytail audit. Browser mock startup must
 remain credential-free without Spotify, Tauri, public backend, or WASM. Fixed-time
 visual fixtures cover 1920×1080 and 3440×1440 for both display modes;
@@ -27,6 +30,28 @@ visual change such as the video-style visualizer changes the rendered
 appearance.
 
 ## Unit tests
+
+### Test value and selection
+
+- Test observable behavior, specification boundaries, or known regressions.
+  Avoid copying implementation formulas, incidental object shapes, or command
+  spelling into expectations merely to demonstrate that code was changed.
+- Exact values remain appropriate for real contracts, including performance
+  caps, protocol fields, geometry, and migration outputs. Judge the behavior
+  protected, not the number or style of assertions.
+- Prefer existing tests. When consolidating coverage, keep unique edge cases
+  at the owning boundary and retain consumer-specific integration checks.
+- For a low-impact text or presentation change, diff review, relevant static
+  checks, or a focused mock display check may be sufficient without a new test.
+- Run affected files or workspaces first. For example,
+  `npm run test -w @spotify-wallpaper/wallpaper -- src/previewConfig.test.ts`
+  selects one file; root `npm test` runs the standard cross-workspace suite.
+  Wrap resource-intensive commands with `h5i capture run --` locally.
+- Complete the checks required by the work class and touched domain. Once
+  they pass, stop testing unless new changes, failures, unresolved concerns, or
+  a required gate justify another run. Record the reason for expanded or
+  repeated verification. Release, actual-WASM, security, and committed-HEAD
+  checks retain their specified prerequisites and scope.
 
 The Windows junction suite always checks creation, repeat execution, different
 targets, existing directories, and missing build artifacts. The real 8.3 alias

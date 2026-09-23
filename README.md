@@ -364,6 +364,14 @@ cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml
 npm audit --audit-level=moderate
 ```
 
+CI and Spotify Auth Pages run only when a `release-*` Git tag is pushed
+(for example, `release-v1.0.0`). A preliminary job requires the tagged commit
+to be contained in `develop` or `master`; ordinary branch pushes and PRs do
+not trigger either workflow. Push the branch before pushing its release tag.
+Pages publishing additionally requires master ancestry, `PAGES_DEPLOY_ENABLED=true`,
+and an environment rule permitting `release-*` tags; develop-only commits only validate.
+See the [publication steps](docs/user-guide.md#github-pagesの公開手順利用者が実行).
+
 CI runs independent web, visual-core Rust, Tauri and loopback jobs. The web
 job generates WASM and shared types before tests/builds, runs browser
 characterization and audits dependencies. Pages publishing remains opt-in.

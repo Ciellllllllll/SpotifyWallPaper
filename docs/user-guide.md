@@ -112,16 +112,20 @@ Fake clockの24/72時間相当テストは実機72時間連続稼働試験では
    Spotifyの[Policy](https://developer.spotify.com/policy)・[Design](https://developer.spotify.com/documentation/design)と
    GitHub Pagesの[利用制限](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)への適合を別途確認します。
    画像加工・音声と視覚の同期・商標・商用/機密取引の条件は、この技術移行で承認されたものではありません。
-2. レビュー済みdevelopを利用者がpushします。この作業ではpushしません。
+2. レビュー済みmasterを利用者がpushします。この作業ではpushしません。
 3. Repository Settings → Pages → SourceをGitHub Actionsにします。
-4. `github-pages` environmentのdeployment branchで`develop`を許可し、必要な承認規則を設定します。
+4. `github-pages` environmentのdeployment branches and tagsでタグ`release-*`を許可し、必要な承認規則を設定します。
+   workflow側でもタグのコミットが`master`の履歴に含まれることを確認します。
 5. Repository Variable `PAGES_DEPLOY_ENABLED`を文字列`true`にします。未設定・falseでは公開しません。
-6. developへの対象push、または利用可能な場合はdevelopを指定したworkflow_dispatchで実行します。
-   default branchがmasterの場合、workflow_dispatchの登録/UI表示にはworkflowがdefault branchに存在する条件があります。
-   この作業ではmasterを変更しません。必要なら利用者が別途レビューしたworkflow登録を行うかdevelop pushを使用します。
+6. 更新済みworkflowを含むレビュー済みコミットに、新しい`release-*`タグ（例：`release-v1.0.0`）を付けてPushします。
+   例：`git tag -a release-v1.0.0 <確認済みコミットSHA> -m "Release v1.0.0"`、続けて`git push origin refs/tags/release-v1.0.0`。
+   既存タグは付け替えず、新しい名前を使います。ブランチを先にPushしてからタグをPushしてください。
 7. Pages設定のHTTPSと最終URL、callbackの200応答、assetsのパスを実公開後に確認します。
 
-PRは検証のみです。deploy権限は公開jobに限定し、artifactは認証ページの静的出力だけで保存期間1日です。
+通常CIとPages用workflowはタグPushだけで起動します。通常のブランチPush、PR、手動実行では起動しません。
+タグのコミットが`develop`または`master`の履歴に含まれる場合だけ検証を進め、どちらにも含まれなければ冒頭の確認jobが失敗します。
+`develop`にしか含まれないコミットでは検証のみ行い、Pagesへ公開しません。
+deploy権限は公開jobに限定し、artifactは認証ページの静的出力だけで保存期間1日です。
 Client ID・Spotify Token・Client SecretをGitHub Secrets/Variablesへ登録する必要はありません。
 GitHubは最初のcallback HTTP要求を受けます。認可コードはPKCEで保護しますが「サーバーを一切通らない」とは説明しません。
 Pagesで独自HTTPヘッダーを自由に設定できるとは仮定せず、HTMLのCSP/meta referrerを使います。

@@ -25,6 +25,25 @@ all classes.
 
 ## Review gate
 
+### Verification scope
+
+Before editing, identify the behavior at risk, existing coverage, and applicable
+checks. Reversible, low-impact changes do not need new implementation-mirroring
+tests. Add or modify tests only for meaningful contracts or regressions not
+adequately covered already; existing characterization can satisfy the starting
+gate for a Phase.
+
+Start with affected test files or workspaces and required type, build, or manual
+checks. Expand to consumers or full suites when the impact or mandatory gates
+require it. After these checks pass, finish the task. Repeat or broaden only
+for new changes, failures, unresolved concerns, or an explicit gate. Record the
+reason; a second review alone is not a reason to rerun an unchanged suite.
+Generated artifacts, dependencies, and environment changes can invalidate
+earlier evidence. Committed-HEAD and release verification remain required where
+specified below.
+
+### Review procedure
+
 Small isolated changes use focused local verification and do not require a
 read-only reviewer, SpecGuard, or SubAgent by default. Normal changes use
 focused self-review and relevant tests; an independent reviewer is added only

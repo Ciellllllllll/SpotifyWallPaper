@@ -98,6 +98,23 @@ to risk:
 When uncertain, classify the work as high risk. Security and repository hard
 rules are never waived by the small-change path.
 
+## Test selection and stopping rule
+
+Do not add tests that merely mirror the implementation for reversible,
+low-impact changes. Add or change a test only when it protects a meaningful
+behavior, contract, or regression that existing coverage does not adequately
+verify. Prefer existing tests; retain unique boundary and failure-path coverage
+when consolidating duplicates. Explain what a removed test no longer needs to
+protect or where its coverage remains.
+
+Choose verification from the changed behavior, affected consumers, and required
+work-class gates. Run focused tests and the applicable checks. Once those pass,
+proceed to completion; broaden or repeat verification only for new changes,
+failures, unresolved concerns, or an explicitly required gate (including
+committed-HEAD verification). A new test is not required merely because a file
+changed or the task belongs to a Phase. See `docs/23-test-qa.md` for selection
+examples. These rules do not waive required security or release checks.
+
 ## Ponytail baseline and review policy
 
 For strict-gated work only, resolve and freeze the official Ponytail

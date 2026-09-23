@@ -1,13 +1,33 @@
 name: CI
 
 on:
-  pull_request:
   push:
-    branches:
-      - develop
+    tags: ['release-*']
+
+permissions:
+  contents: read
 
 jobs:
+  release-branch:
+    if: github.event.deleted == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - name: Require a commit contained in develop or master
+        id: branch
+        shell: pwsh
+        run: |
+          $branches = @(git branch --remotes --contains HEAD --format='%(refname)')
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify release ancestry.' }
+          $develop = $branches -ccontains 'refs/remotes/origin/develop'
+          $master = $branches -ccontains 'refs/remotes/origin/master'
+          if (-not ($develop -or $master)) { throw 'Release commit must be contained in develop or master.' }
+          "master=$($master.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
   web:
+    needs: release-branch
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -19,8 +39,12 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Verify repository authority
-        run: npm run verify:repository-authority
+      # Authority unit tests run once below through npm test.
+      - name: Check repository authority
+        run: npm run check:repository-authority
+
+      - name: Check repository preservation
+        run: npm run check:repository-preservation
 
       - name: Setup Rust and WASM tooling
         uses: dtolnay/rust-toolchain@stable
@@ -67,6 +91,7 @@ jobs:
         run: npx playwright test tests/playwright/wallpaper-characterization.spec.ts tests/playwright/direct-credentials.spec.ts
 
   rust:
+    needs: release-branch
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -90,6 +115,7 @@ jobs:
         run: cargo check --manifest-path crates/visual-core/Cargo.toml --target wasm32-unknown-unknown --all-features
 
   tauri:
+    needs: release-branch
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -108,6 +134,7 @@ jobs:
         run: cargo test --manifest-path apps/configurator/src-tauri/Cargo.toml --all-features
 
   loopback:
+    needs: release-branch
     runs-on: windows-latest
     steps:
       - name: Checkout

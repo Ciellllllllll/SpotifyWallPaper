@@ -44,7 +44,9 @@ represented as completed by passing the standard product build.
 - Real Wallpaper Engine CORS/Origin, storage persistence/sharing across screens
   and processes, restart, sleep/resume, and actual-account behavior remain
   unverified until measured on this version. Browser results do not substitute.
-- Verify PR cannot deploy; develop deployment requires explicit
+- Verify branch pushes and PRs start neither workflow; only `release-*` tag
+  pushes start them, with develop/master ancestry checked before verification.
+  Pages deployment requires master ancestry and explicit
   `PAGES_DEPLOY_ENABLED=true`. Publication itself is a user action outside this task.
 
 ## Browser Mock
@@ -200,7 +202,7 @@ credential-free mock verification. Real Spotify authorization, third-party
 access, Limited beta, and general publication remain prohibited until the
 applicable gates below are complete and the action is separately approved.
 
-Confirm Pages publication is restricted to develop and PAGES_DEPLOY_ENABLED=true; pull requests only validate.
+Confirm Pages publication requires a release-* tag whose commit is contained in master and PAGES_DEPLOY_ENABLED=true. Pull requests do not start CI. The github-pages environment must allow release-* tags.
 
 Do not begin a Spotify-connected Limited beta until policy or a
 policy-compatible build, operator-reviewed Privacy/EULA, infrastructure,
