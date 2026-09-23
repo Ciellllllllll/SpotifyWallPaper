@@ -7,7 +7,7 @@ with TypeScript fallback logic when WASM binaries are absent.
 
 Current functions:
 - `normalize_visualizer`: visualizer sample smoothing, decay, clamping,
-  and noise gating (returns typed Float32Array for zero-copy hot path)
+  and noise gating (returns typed Float32Array, avoiding JSON serialization)
 - `readability`: WCAG-based text color, overlay opacity, and shadow
   strength for a given background RGB
 

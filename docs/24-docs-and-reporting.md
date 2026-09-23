@@ -56,8 +56,10 @@ If implementation behavior changes, docs must be updated in the same phase. Do
 not leave docs inconsistent with behavior.
 
 All Markdown beneath `docs/` is tracked repository material and must be
-classified by `config/repository-authority.json`. Phase reports and executed
-plans are historical evidence: preserve their original narrative, but use
-current entry/domain specifications for normative behavior. Ownership changes
+classified by `config/repository-authority.json`. Executed plans are historical
+evidence: preserve their original narrative, but use current entry/domain
+specifications for normative behavior. Individual phase reports were
+consolidated into `docs/phase-reports/README.md`; original files are accessible
+via git history. Ownership changes
 to documents, ignore rules, or generated sources require policy, tests,
 documentation, and review in the same commit.

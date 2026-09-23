@@ -14,14 +14,14 @@ domain specifications (`docs/10` through `docs/25`) for current behavior.
 | 2 | Wallpaper Engine bridge | Complete |
 | 3 | Rust/WASM helpers | Complete |
 | 4 | Settings and layout customization | Complete |
-| 5 | Background theme | Complete |
+| 5 | Background and theme | Complete |
 | 6 | Visualizer | Complete |
-| 7 | Lyrics (deferred from v1 scope) | Deferred |
-| 8 | Transitions | Complete |
-| 9 | Player and clock | Complete |
-| 10 | Tauri configurator | Complete |
-| 11 | Rainmeter | Complete |
-| 12 | Final QA and docs | Complete |
+| — | Lyrics/LRC (deferred from v1 scope) | Deferred |
+| 7 | Transitions | Complete |
+| 8 | Player and clock | Complete |
+| 9 | Tauri configurator | Complete |
+| 10 | Rainmeter | Complete |
+| 11 | Final QA and docs | Complete |
 
 Post-release records:
 - One-click Spotify auth token flow
