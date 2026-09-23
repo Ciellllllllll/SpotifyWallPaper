@@ -16,7 +16,7 @@ Spotify Wallpaper is a Wallpaper Engine Web Wallpaper project. It has a browser-
 - Wallpaper app: Svelte, TypeScript, Vite, Wallpaper Engine Web Wallpaper APIs.
 - Standard auth page: static Vite + TypeScript PKCE app hosted on GitHub Pages; each user supplies their own Client ID.
 - Shared model types: TypeScript workspace package.
-- Visual core: Rust compiled to WebAssembly for typed-array visual normalization and readability helpers.
+- Optional WASM helpers: Rust compiled to WebAssembly for visualizer sample normalization and theme readability calculation. The wallpaper runs with TypeScript fallbacks when WASM is absent.
 - Optional configurator: Svelte frontend with Tauri/Rust backend.
 - Optional Rainmeter output: configurator-side JSON writer and scheduler.
 

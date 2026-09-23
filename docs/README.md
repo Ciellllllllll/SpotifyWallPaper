@@ -16,7 +16,7 @@ This directory splits the project specification into small files so Codex and Su
 
 - `10-spotify-integration.md`: OAuth, token refresh, polling, playback operations.
 - `11-wallpaper-engine.md`: Wallpaper Engine properties, audio listener, browser mock mode.
-- `12-rust-wasm-core.md`: Rust/WASM responsibilities and tests.
+- `12-rust-wasm-core.md`: optional Rust/WASM helper functions and tests.
 - `13-settings-schema.md`: versioned settings, defaults, migrations.
 - `14-ui-layout.md`: coordinate-based layout, layers, presets.
 - `15-background-theme.md`: album background, theme generation, readability.
