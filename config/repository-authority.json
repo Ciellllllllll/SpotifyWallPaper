@@ -84,7 +84,8 @@
       "name": "active-plans",
       "classification": "implementation-plan",
       "paths": [
-        "docs/superpowers/plans/2026-08-27-visualizer-position-display-animation.md"
+        "docs/superpowers/plans/2026-08-27-visualizer-position-display-animation.md",
+        "docs/superpowers/plans/2026-09-23-codebase-housekeeping.md"
       ]
     },
     {
@@ -114,7 +115,6 @@
       "name": "phase-reports",
       "classification": "historical-evidence",
       "paths": [
-        "docs/phase-reports/cloudflare-worker-public-backend.md",
         "docs/phase-reports/github-pages-direct-migration.md",
         "docs/phase-reports/final-implementation-report.md",
         "docs/phase-reports/lyrics-deferred-spec-update.md",
@@ -144,11 +144,6 @@
       "name": "retired-backend-documents",
       "classification": "historical-evidence",
       "paths": [
-        "docs/operations/cloudflare-worker-deploy.md",
-        "docs/operations/cloudflare-worker-incident-response.md",
-        "docs/operations/cloudflare-worker-key-rotation.md",
-        "docs/operations/cloudflare-worker-restore.md",
-        "docs/release-notes-public-backend-beta.md",
         "docs/eula.md"
       ]
     }

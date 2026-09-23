@@ -38,19 +38,15 @@ This directory splits the project specification into small files so Codex and Su
 - `qa-checklist.md`: automated and manual QA checklist for release/regression verification.
 - `privacy.md`: direct-mode credential storage, deletion and publication requirements.
 - `eula.md`: archived former hosted-backend agreement; not current release terms.
-- `release-notes-public-backend-beta.md`: archived former backend beta evidence.
 - `release-notes-v0.0.1.md`: historical milestone release evidence.
 
 `post-v0.0.1-stabilization.md` is the current stabilization specification. The
 same-named file under `phase-reports/` is historical execution evidence.
 
-## Operations runbooks
+## Operations documents
 
 - `how-to-use-h5i.md`: required safe command-capture workflow for
   resource-intensive verification.
-The four `operations/cloudflare-worker-*.md` runbooks are archived historical
-evidence. Their former deployment, rotation, incident and restore commands are
-not current operating procedures; the service and tooling have been removed.
 
 ## Designs and implementation plans
 

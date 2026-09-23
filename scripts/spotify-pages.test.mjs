@@ -114,7 +114,7 @@ test('retired backend runbooks are historical while the retirement contract stay
   const policy = JSON.parse(readFileSync('config/repository-authority.json', 'utf8'));
   const retired = policy.documentGroups.find(group => group.name === 'retired-backend-documents');
   assert.equal(retired.classification, 'historical-evidence');
-  assert.equal(retired.paths.length, 6);
-  assert.ok(retired.paths.includes('docs/operations/cloudflare-worker-deploy.md'));
+  assert.equal(retired.paths.length, 1);
+  assert.ok(retired.paths.includes('docs/eula.md'));
   assert.ok(policy.documentGroups.some(group => group.classification === 'normative' && group.paths.includes('docs/25-public-backend.md')));
 });
