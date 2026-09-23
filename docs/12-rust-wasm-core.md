@@ -1,13 +1,19 @@
-# Rust WASM Core
+# Rust WASM Helpers
 
 ## Responsibilities
 
-Rust/WASM handles pure logic only.
+Rust/WASM provides optional performance-path helpers. The wallpaper runs
+with TypeScript fallback logic when WASM binaries are absent.
 
-Allowed responsibilities:
+Current functions:
+- `normalize_visualizer`: visualizer sample smoothing, decay, clamping,
+  and noise gating (returns typed Float32Array, avoiding JSON serialization)
+- `readability`: WCAG-based text color, overlay opacity, and shadow
+  strength for a given background RGB
 
-- contrast/readability calculation
-- visualizer data normalization
+All visualizer rendering (SVG generation, bar/path layout, animation,
+Canvas effects) and all theme extraction (album pixel sampling, color
+selection) remain TypeScript-owned.
 
 Forbidden responsibilities:
 

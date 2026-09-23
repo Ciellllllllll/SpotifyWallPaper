@@ -1221,23 +1221,6 @@ export const RECOVERED_DOCUMENT_PATHS = Object.freeze([
   'docs/21-rainmeter.md',
   'docs/release-notes-v0.0.1.md',
   'docs/superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md',
-  'docs/phase-reports/final-implementation-report.md',
-  'docs/phase-reports/lyrics-deferred-spec-update.md',
-  'docs/phase-reports/one-click-spotify-auth-token.md',
-  'docs/phase-reports/phase-0-scaffold-and-mock-preview.md',
-  'docs/phase-reports/phase-1-spotify-mvp.md',
-  'docs/phase-reports/phase-2-wallpaper-engine-bridge.md',
-  'docs/phase-reports/phase-3-rust-wasm-core.md',
-  'docs/phase-reports/phase-4-settings-layout-customization.md',
-  'docs/phase-reports/phase-5-background-theme.md',
-  'docs/phase-reports/phase-6-visualizer.md',
-  'docs/phase-reports/phase-7-lyrics.md',
-  'docs/phase-reports/phase-8-transitions.md',
-  'docs/phase-reports/phase-9-player-clock.md',
-  'docs/phase-reports/phase-10-tauri-configurator.md',
-  'docs/phase-reports/phase-11-rainmeter.md',
-  'docs/phase-reports/phase-12-final-qa-docs.md',
-  'docs/phase-reports/post-v0.0.1-stabilization.md',
 ]);
 
 export const STATIC_LOCAL_PATHS = Object.freeze([
@@ -1248,10 +1231,7 @@ export const STATIC_LOCAL_PATHS = Object.freeze([
   '.claude',
 ]);
 
-export const RECOVERED_WHITESPACE_PATHS = Object.freeze([
-  'docs/phase-reports/phase-7-lyrics.md',
-  'docs/phase-reports/phase-8-transitions.md',
-]);
+export const RECOVERED_WHITESPACE_PATHS = Object.freeze([]);
 
 function hasExactUniqueSet(candidate, expected) {
   return (
@@ -1780,12 +1760,10 @@ const PHASE0_ADDED_PATHS = Object.freeze([
   'scripts/repository-authority.test.mjs',
   'scripts/repository-preservation.mjs',
   'scripts/repository-preservation.test.mjs',
-  'docs/00-codex-entrypoint.md',
   'docs/05-repository-authority.md',
   'docs/phase-reports/README.md',
   'docs/superpowers/plans/README.md',
   'docs/superpowers/plans/2026-07-27-system-wide-refactor-phase-0-repository-specification-truth.md',
-  'docs/phase-reports/system-wide-refactor-phase-0-repository-specification-truth.md',
   'docs/12-rust-wasm-core.md',
   'docs/14-ui-layout.md',
   'docs/15-background-theme.md',
@@ -1795,23 +1773,6 @@ const PHASE0_ADDED_PATHS = Object.freeze([
   'docs/21-rainmeter.md',
   'docs/release-notes-v0.0.1.md',
   'docs/superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md',
-  'docs/phase-reports/final-implementation-report.md',
-  'docs/phase-reports/lyrics-deferred-spec-update.md',
-  'docs/phase-reports/one-click-spotify-auth-token.md',
-  'docs/phase-reports/phase-0-scaffold-and-mock-preview.md',
-  'docs/phase-reports/phase-1-spotify-mvp.md',
-  'docs/phase-reports/phase-2-wallpaper-engine-bridge.md',
-  'docs/phase-reports/phase-3-rust-wasm-core.md',
-  'docs/phase-reports/phase-4-settings-layout-customization.md',
-  'docs/phase-reports/phase-5-background-theme.md',
-  'docs/phase-reports/phase-6-visualizer.md',
-  'docs/phase-reports/phase-7-lyrics.md',
-  'docs/phase-reports/phase-8-transitions.md',
-  'docs/phase-reports/phase-9-player-clock.md',
-  'docs/phase-reports/phase-10-tauri-configurator.md',
-  'docs/phase-reports/phase-11-rainmeter.md',
-  'docs/phase-reports/phase-12-final-qa-docs.md',
-  'docs/phase-reports/post-v0.0.1-stabilization.md',
 ]);
 
 const PHASE0_EXPECTED_STAGED = new Map([

@@ -1266,12 +1266,10 @@ const PHASE0_ADDED_PATHS = [
   'scripts/repository-authority.test.mjs',
   'scripts/repository-preservation.mjs',
   'scripts/repository-preservation.test.mjs',
-  'docs/00-codex-entrypoint.md',
   'docs/05-repository-authority.md',
   'docs/phase-reports/README.md',
   'docs/superpowers/plans/README.md',
   'docs/superpowers/plans/2026-07-27-system-wide-refactor-phase-0-repository-specification-truth.md',
-  'docs/phase-reports/system-wide-refactor-phase-0-repository-specification-truth.md',
   'docs/12-rust-wasm-core.md',
   'docs/14-ui-layout.md',
   'docs/15-background-theme.md',
@@ -1281,23 +1279,6 @@ const PHASE0_ADDED_PATHS = [
   'docs/21-rainmeter.md',
   'docs/release-notes-v0.0.1.md',
   'docs/superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md',
-  'docs/phase-reports/final-implementation-report.md',
-  'docs/phase-reports/lyrics-deferred-spec-update.md',
-  'docs/phase-reports/one-click-spotify-auth-token.md',
-  'docs/phase-reports/phase-0-scaffold-and-mock-preview.md',
-  'docs/phase-reports/phase-1-spotify-mvp.md',
-  'docs/phase-reports/phase-2-wallpaper-engine-bridge.md',
-  'docs/phase-reports/phase-3-rust-wasm-core.md',
-  'docs/phase-reports/phase-4-settings-layout-customization.md',
-  'docs/phase-reports/phase-5-background-theme.md',
-  'docs/phase-reports/phase-6-visualizer.md',
-  'docs/phase-reports/phase-7-lyrics.md',
-  'docs/phase-reports/phase-8-transitions.md',
-  'docs/phase-reports/phase-9-player-clock.md',
-  'docs/phase-reports/phase-10-tauri-configurator.md',
-  'docs/phase-reports/phase-11-rainmeter.md',
-  'docs/phase-reports/phase-12-final-qa-docs.md',
-  'docs/phase-reports/post-v0.0.1-stabilization.md',
 ];
 
 const RECOVERED_DOCUMENT_PATHS = [
@@ -1310,23 +1291,6 @@ const RECOVERED_DOCUMENT_PATHS = [
   'docs/21-rainmeter.md',
   'docs/release-notes-v0.0.1.md',
   'docs/superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md',
-  'docs/phase-reports/final-implementation-report.md',
-  'docs/phase-reports/lyrics-deferred-spec-update.md',
-  'docs/phase-reports/one-click-spotify-auth-token.md',
-  'docs/phase-reports/phase-0-scaffold-and-mock-preview.md',
-  'docs/phase-reports/phase-1-spotify-mvp.md',
-  'docs/phase-reports/phase-2-wallpaper-engine-bridge.md',
-  'docs/phase-reports/phase-3-rust-wasm-core.md',
-  'docs/phase-reports/phase-4-settings-layout-customization.md',
-  'docs/phase-reports/phase-5-background-theme.md',
-  'docs/phase-reports/phase-6-visualizer.md',
-  'docs/phase-reports/phase-7-lyrics.md',
-  'docs/phase-reports/phase-8-transitions.md',
-  'docs/phase-reports/phase-9-player-clock.md',
-  'docs/phase-reports/phase-10-tauri-configurator.md',
-  'docs/phase-reports/phase-11-rainmeter.md',
-  'docs/phase-reports/phase-12-final-qa-docs.md',
-  'docs/phase-reports/post-v0.0.1-stabilization.md',
 ];
 
 test('requires policy preservation sets to exactly match fixed safety paths', () => {
@@ -1397,7 +1361,7 @@ function replaceFirstRawDiffEntry(entries, replacement) {
   ]);
 }
 
-test('accepts only the exact 46-path Phase 0 staged allowlist', async () => {
+test('accepts only the exact 27-path Phase 0 staged allowlist', async () => {
   const exactEntries = [
     ...PHASE0_MODIFIED_PATHS.map((repositoryPath) => ({
       path: repositoryPath,
@@ -1408,17 +1372,17 @@ test('accepts only the exact 46-path Phase 0 staged allowlist', async () => {
       status: 'A',
     })),
   ];
-  assert.equal(exactEntries.length, 46);
+  assert.equal(exactEntries.length, 27);
 
   const exact = await verifyPhase0StagedIndex('D:\\repository', {
     runGit: async () => buildRawDiff(exactEntries),
   });
-  assert.deepEqual(exact, { match: true, count: 46 });
+  assert.deepEqual(exact, { match: true, count: 27 });
 
   const missing = await verifyPhase0StagedIndex('D:\\repository', {
     runGit: async () => buildRawDiff(exactEntries.slice(1)),
   });
-  assert.deepEqual(missing, { match: false, count: 45 });
+  assert.deepEqual(missing, { match: false, count: 26 });
 
   const extra = await verifyPhase0StagedIndex('D:\\repository', {
     runGit: async () =>
@@ -1427,7 +1391,7 @@ test('accepts only the exact 46-path Phase 0 staged allowlist', async () => {
         { path: 'apps/wallpaper/src/main.ts', status: 'A' },
       ]),
   });
-  assert.deepEqual(extra, { match: false, count: 47 });
+  assert.deepEqual(extra, { match: false, count: 28 });
 
   const wrongMode = structuredClone(exactEntries);
   wrongMode[0].mode = '100755';
@@ -1435,7 +1399,7 @@ test('accepts only the exact 46-path Phase 0 staged allowlist', async () => {
     await verifyPhase0StagedIndex('D:\\repository', {
       runGit: async () => buildRawDiff(wrongMode),
     }),
-    { match: false, count: 46 },
+    { match: false, count: 27 },
   );
 
   const deleted = structuredClone(exactEntries);
@@ -1444,7 +1408,7 @@ test('accepts only the exact 46-path Phase 0 staged allowlist', async () => {
     await verifyPhase0StagedIndex('D:\\repository', {
       runGit: async () => buildRawDiff(deleted),
     }),
-    { match: false, count: 46 },
+    { match: false, count: 27 },
   );
 
   const one = '1111111111111111111111111111111111111111';
@@ -1467,7 +1431,7 @@ test('accepts only the exact 46-path Phase 0 staged allowlist', async () => {
       await verifyPhase0StagedIndex('D:\\repository', {
         runGit: async () => replaceFirstRawDiffEntry(exactEntries, replacement),
       }),
-      { match: false, count: 46 },
+      { match: false, count: 27 },
     );
   }
 });
@@ -1491,7 +1455,7 @@ test('forces staged diff visibility for submodules and external diff settings', 
     },
   });
 
-  assert.deepEqual(result, { match: true, count: 46 });
+  assert.deepEqual(result, { match: true, count: 27 });
   assert.deepEqual(capturedArguments, [
     'diff',
     '--cached',
@@ -1568,7 +1532,7 @@ test('verifies the production staged diff with full object ids and visible gitli
 
     assert.deepEqual(await verifyPhase0StagedIndex(repositoryRoot), {
       match: true,
-      count: 46,
+      count: 27,
     });
     assert.deepEqual(
       await runPreservationCli([
@@ -1577,7 +1541,7 @@ test('verifies the production staged diff with full object ids and visible gitli
       ]),
       {
         exitCode: 0,
-        stdout: 'MATCH count=46\n',
+        stdout: 'MATCH count=27\n',
         stderr: '',
       },
     );
@@ -1600,7 +1564,7 @@ test('verifies the production staged diff with full object ids and visible gitli
     );
     assert.deepEqual(await verifyPhase0StagedIndex(repositoryRoot), {
       match: false,
-      count: 47,
+      count: 28,
     });
     assert.deepEqual(
       await runPreservationCli([
@@ -1609,7 +1573,7 @@ test('verifies the production staged diff with full object ids and visible gitli
       ]),
       {
         exitCode: 1,
-        stdout: 'MISMATCH count=47\n',
+        stdout: 'MISMATCH count=28\n',
         stderr: '',
       },
     );
@@ -2000,14 +1964,7 @@ async function initializeRecoveredCliRepository(repositoryRoot) {
       '* text=auto eol=lf',
       ...RECOVERED_DOCUMENT_PATHS.map(
         (repositoryPath) =>
-          `${repositoryPath} -text${
-            [
-              'docs/phase-reports/phase-7-lyrics.md',
-              'docs/phase-reports/phase-8-transitions.md',
-            ].includes(repositoryPath)
-              ? ' whitespace=-trailing-space'
-              : ''
-          }`,
+          `${repositoryPath} -text`,
       ),
       '',
     ].join('\n'),
@@ -2053,7 +2010,7 @@ test('CLI enforces fixed policy in every compare and verify mode', async () => {
       ]),
       {
         exitCode: 0,
-        stdout: 'MATCH count=26\n',
+        stdout: 'MATCH count=9\n',
         stderr: '',
       },
     );
@@ -2142,7 +2099,7 @@ test('CLI captures and compares only fixed preservation tokens', async () => {
       rootArgument,
     ]);
     assert.equal(capture.exitCode, 0);
-    assert.match(capture.stdout, /^v1:26:[0-9a-f]{64}\r?\n$/u);
+    assert.match(capture.stdout, /^v1:9:[0-9a-f]{64}\r?\n$/u);
     assert.equal(capture.stderr, '');
 
     const token = capture.stdout.trim();
@@ -2166,7 +2123,7 @@ test('CLI captures and compares only fixed preservation tokens', async () => {
         ]),
         {
           exitCode: 0,
-          stdout: 'MATCH count=26\n',
+          stdout: 'MATCH count=9\n',
           stderr: '',
         },
       );
@@ -2179,7 +2136,7 @@ test('CLI captures and compares only fixed preservation tokens', async () => {
     ]);
     assert.deepEqual(comparison, {
       exitCode: 0,
-      stdout: 'MATCH count=26\n',
+      stdout: 'MATCH count=9\n',
       stderr: '',
     });
 
@@ -2191,7 +2148,7 @@ test('CLI captures and compares only fixed preservation tokens', async () => {
         await runPreservationCli([mode, rootArgument]),
         {
           exitCode: 0,
-          stdout: 'MATCH count=26\n',
+          stdout: 'MATCH count=9\n',
           stderr: '',
         },
       );
@@ -2257,13 +2214,13 @@ test('CLI captures and compares only fixed preservation tokens', async () => {
       rootArgument,
     ]);
     assert.equal(mismatch.exitCode, 1);
-    assert.equal(mismatch.stdout, 'MISMATCH count=26\n');
+    assert.equal(mismatch.stdout, 'MISMATCH count=9\n');
     assert.equal(mismatch.stderr, '');
     assert.deepEqual(
       await runPreservationCli(['verify-recovered-index', rootArgument]),
       {
         exitCode: 1,
-        stdout: 'MISMATCH count=26\n',
+        stdout: 'MISMATCH count=9\n',
         stderr: '',
       },
     );
@@ -2295,7 +2252,7 @@ test('CLI captures and compares only fixed preservation tokens', async () => {
       ]),
       {
         exitCode: 1,
-        stdout: 'MISMATCH count=26\n',
+        stdout: 'MISMATCH count=9\n',
         stderr: '',
       },
     );

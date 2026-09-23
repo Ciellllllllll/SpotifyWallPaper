@@ -87,14 +87,8 @@ test('normal product build/check/test exclude optional applications without remo
   }
 });
 
-test('migration evidence is classified without changing historical byte exceptions', () => {
-  const policy = JSON.parse(readFileSync('config/repository-authority.json', 'utf8'));
-  const path = 'docs/phase-reports/github-pages-direct-migration.md';
-  const groups = policy.documentGroups.filter(group => group.paths.includes(path));
-  assert.equal(groups.length, 1);
-  assert.equal(groups[0].classification, 'historical-evidence');
-  assert.doesNotMatch(readFileSync('.gitattributes', 'utf8'), /github-pages-direct-migration/);
-  assert.match(readFileSync('docs/phase-reports/README.md', 'utf8'), /github-pages-direct-migration/);
+test('migration evidence is cataloged in consolidated phase-reports README', () => {
+  assert.match(readFileSync('docs/phase-reports/README.md', 'utf8'), /GitHub Pages direct migration/);
 });
 
 
@@ -114,7 +108,7 @@ test('retired backend runbooks are historical while the retirement contract stay
   const policy = JSON.parse(readFileSync('config/repository-authority.json', 'utf8'));
   const retired = policy.documentGroups.find(group => group.name === 'retired-backend-documents');
   assert.equal(retired.classification, 'historical-evidence');
-  assert.equal(retired.paths.length, 6);
-  assert.ok(retired.paths.includes('docs/operations/cloudflare-worker-deploy.md'));
+  assert.equal(retired.paths.length, 1);
+  assert.ok(retired.paths.includes('docs/eula.md'));
   assert.ok(policy.documentGroups.some(group => group.classification === 'normative' && group.paths.includes('docs/25-public-backend.md')));
 });

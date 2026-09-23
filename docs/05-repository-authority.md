@@ -48,28 +48,21 @@ path was not declared in advance; its target is never traversed.
 
 ## Historical raw-byte boundary
 
-The GitHub Pages/direct-connection migration report is new historical evidence,
-classified in `phase-reports`. It is not a recovered document and receives no
-raw-byte or whitespace exception. Browser test output stays under the existing
-ignored `artifacts/` ownership boundary.
+Browser test output stays under the existing ignored `artifacts/` ownership
+boundary.
 
-Exactly 26 recovered historical documents are listed in the policy and have
+Exactly 9 recovered historical documents are listed in the policy and have
 exact `-text` entries in `.gitattributes`. Those entries preserve their
 original worktree bytes through Git clean filters. The exception is
-file-specific: it does not apply to `docs/00-codex-entrypoint.md`, plan/report
+file-specific: it does not apply to plan/report
 indexes, all Markdown, or a directory wildcard.
-
-Two recovered reports retain historical CRLF bytes. Their exact path entries
-also disable Git's trailing-space diagnostic so `git diff --check` does not
-misclassify the preserved carriage returns; this exception is not a wildcard
-and does not permit rewriting either report.
 
 The preservation helper compares the recovered worktree, index, reviewed tree,
 and committed `HEAD` without printing content or digests. The local report ZIP
 is a redundant ignored archive and is never repository authority.
 
-The helper independently fixes the 26 recovered paths, the five static-local
-paths, and the two historical whitespace exceptions in code. The policy must
+The helper independently fixes the 9 recovered paths and the five static-local
+paths in code. The policy must
 match those sets exactly, without duplicates and independent of ordering.
 Worktree and index `.gitattributes` rules must contain only the global text
 rule and the exact path-specific exceptions. The recovered paths must have

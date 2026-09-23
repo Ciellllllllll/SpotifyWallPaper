@@ -4,7 +4,6 @@ This directory splits the project specification into small files so Codex and Su
 
 ## Entry documents
 
-- `00-codex-entrypoint.md`: how Codex should start.
 - `01-project-goals-and-non-goals.md`: product scope and forbidden scope.
 - `02-repository-structure.md`: expected monorepo layout and ownership.
 - `03-implementation-phases.md`: required implementation order.
@@ -16,7 +15,7 @@ This directory splits the project specification into small files so Codex and Su
 
 - `10-spotify-integration.md`: OAuth, token refresh, polling, playback operations.
 - `11-wallpaper-engine.md`: Wallpaper Engine properties, audio listener, browser mock mode.
-- `12-rust-wasm-core.md`: Rust/WASM responsibilities and tests.
+- `12-rust-wasm-core.md`: optional Rust/WASM helper functions and tests.
 - `13-settings-schema.md`: versioned settings, defaults, migrations.
 - `14-ui-layout.md`: coordinate-based layout, layers, presets.
 - `15-background-theme.md`: album background, theme generation, readability.
@@ -30,7 +29,6 @@ This directory splits the project specification into small files so Codex and Su
 - `23-test-qa.md`: tests, mocks, manual QA.
 - `24-docs-and-reporting.md`: documentation and phase reports.
 - `25-public-backend.md`: hosted backend retirement and retained local boundaries.
-- `30-subagent-matrix.md`: SubAgent ownership and handoff rules.
 
 ## Release and QA documents
 
@@ -38,19 +36,16 @@ This directory splits the project specification into small files so Codex and Su
 - `qa-checklist.md`: automated and manual QA checklist for release/regression verification.
 - `privacy.md`: direct-mode credential storage, deletion and publication requirements.
 - `eula.md`: archived former hosted-backend agreement; not current release terms.
-- `release-notes-public-backend-beta.md`: archived former backend beta evidence.
 - `release-notes-v0.0.1.md`: historical milestone release evidence.
 
 `post-v0.0.1-stabilization.md` is the current stabilization specification. The
 same-named file under `phase-reports/` is historical execution evidence.
 
-## Operations runbooks
+## Phase reports
 
-- `how-to-use-h5i.md`: required safe command-capture workflow for
-  resource-intensive verification.
-The four `operations/cloudflare-worker-*.md` runbooks are archived historical
-evidence. Their former deployment, rotation, incident and restore commands are
-not current operating procedures; the service and tooling have been removed.
+`phase-reports/README.md` catalogs historical implementation evidence as a
+consolidated summary table. Individual phase reports were removed on
+2026-09-23; see git history for original files.
 
 ## Designs and implementation plans
 
@@ -65,12 +60,6 @@ not current operating procedures; the service and tooling have been removed.
   historical Phase 0 repository-authority execution evidence.
 - `superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md`: executed
   historical intent for the public-backend baseline.
-
-## Phase reports
-
-`phase-reports/README.md` catalogs implementation evidence. Phase reports
-describe what was attempted or measured at that time; they are not current
-normative behavior and are not a substitute for entry/domain specifications.
 
 ## Rule for agents
 

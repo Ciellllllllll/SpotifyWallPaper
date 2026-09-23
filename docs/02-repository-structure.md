@@ -23,9 +23,9 @@ import the view; apps must not use relative imports across app boundaries.
   Optional loopback-only Rust Spotify backend for local development.
 
 - `crates/visual-core/`
-  Rust pure logic crate. The current boundary exposes only measured visual
-  normalization/readability algorithms through typed arrays. Settings,
-  layout, and safe-area semantics remain TypeScript-owned.
+  Optional Rust WASM helpers: visualizer sample normalization and theme
+  readability calculation, exposed as typed-array functions. Two functions,
+  ~200 lines. The wallpaper uses TypeScript fallbacks when WASM is absent.
 
 - `packages/shared-types/`
   Dependency-free TypeScript shared types and the single Spotify playback
