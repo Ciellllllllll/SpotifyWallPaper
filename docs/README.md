@@ -4,7 +4,6 @@ This directory splits the project specification into small files so Codex and Su
 
 ## Entry documents
 
-- `00-codex-entrypoint.md`: how Codex should start.
 - `01-project-goals-and-non-goals.md`: product scope and forbidden scope.
 - `02-repository-structure.md`: expected monorepo layout and ownership.
 - `03-implementation-phases.md`: required implementation order.
@@ -30,7 +29,6 @@ This directory splits the project specification into small files so Codex and Su
 - `23-test-qa.md`: tests, mocks, manual QA.
 - `24-docs-and-reporting.md`: documentation and phase reports.
 - `25-public-backend.md`: hosted backend retirement and retained local boundaries.
-- `30-subagent-matrix.md`: SubAgent ownership and handoff rules.
 
 ## Release and QA documents
 
@@ -43,10 +41,11 @@ This directory splits the project specification into small files so Codex and Su
 `post-v0.0.1-stabilization.md` is the current stabilization specification. The
 same-named file under `phase-reports/` is historical execution evidence.
 
-## Operations documents
+## Phase reports
 
-- `how-to-use-h5i.md`: required safe command-capture workflow for
-  resource-intensive verification.
+`phase-reports/README.md` catalogs historical implementation evidence as a
+consolidated summary table. Individual phase reports were removed on
+2026-09-23; see git history for original files.
 
 ## Designs and implementation plans
 
@@ -61,12 +60,6 @@ same-named file under `phase-reports/` is historical execution evidence.
   historical Phase 0 repository-authority execution evidence.
 - `superpowers/plans/2026-07-18-cloudflare-worker-public-backend.md`: executed
   historical intent for the public-backend baseline.
-
-## Phase reports
-
-`phase-reports/README.md` catalogs implementation evidence. Phase reports
-describe what was attempted or measured at that time; they are not current
-normative behavior and are not a substitute for entry/domain specifications.
 
 ## Rule for agents
 

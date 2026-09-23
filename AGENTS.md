@@ -17,8 +17,7 @@ task's worktree. Do not split one task across multiple checkouts.
 Before changing files, every agent must read:
 
 1. `docs/README.md`
-2. `docs/00-codex-entrypoint.md`
-3. The domain document that matches the current task.
+2. The domain document that matches the current task.
 
 Use the work classes in `docs/04-quality-gates.md` to choose the remaining
 reading. Small isolated changes need only the touched domain document and the
@@ -35,7 +34,6 @@ Architecture or cross-cutting work must also read:
 
 - `docs/02-repository-structure.md`
 - `docs/03-implementation-phases.md`
-- `docs/30-subagent-matrix.md`
 
 Public backend work must also read `docs/25-public-backend.md`.
 
@@ -182,7 +180,6 @@ It checks scope, secrets handling, performance, settings safety, and whether
 the implementation still works without Spotify connection by using mock data.
 
 ## Rules for Using Commands
-Read the `docs/how-to-use-h5i.md` section before using the h5i command.
 When running resource-intensive commands, do not execute them directly; always run them via `h5i capture run`.
 
 Example:
