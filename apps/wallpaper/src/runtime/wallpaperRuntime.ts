@@ -1,12 +1,9 @@
 import type {
   NormalizedPlayback,
-  SpotifyPlaybackError,
   VisualizerFrame,
   VisualizerMotionState,
   WallpaperPreferences,
-  WallpaperTheme,
   ProviderResult,
-  PlaybackCommand,
   PlaybackProvider
 } from '@spotify-wallpaper/shared-types';
 import { mockPlayback } from '../mock/mockPlayback';
@@ -21,8 +18,9 @@ import {
 } from '../spotify/polling';
 import { selectPlaybackProvider } from '../spotify/providers/factory';
 import { fallbackThemeFromSeed, hexToRgb, themeFromPrimary } from '../theme/colors';
-import { extractAlbumTheme, type AlbumThemeExtraction } from '../theme/extractAlbumTheme';
-import { createTransitionState, type TrackTransitionState } from '../transitions/model';
+import type { AlbumThemeExtraction } from '../theme/extractAlbumTheme';
+import { extractAlbumTheme } from '../theme/extractAlbumTheme';
+import { createTransitionState } from '../transitions/model';
 import {
   applyVisualizerIntensity,
   idleVisualizerFrame,
@@ -32,64 +30,28 @@ import {
 } from '../visualizer/model';
 import { calculateVisualizerMotion, neutralVisualizerMotion, releaseVisualizerMotion } from '../visualizer/motion';
 import { createSilentAudioFrame, startAudioBridge, type AudioBridgeSource } from '../wallpaperEngine/audio';
-import type { CredentialUpdate } from '../wallpaperEngine/types';
 import type { DirectCredentialStore, CredentialRecord } from '../spotify/credentialStore';
 import { DirectTokenSession } from '../spotify/directTokenSession';
+import {
+  SILENCE_RELEASE_MS,
+  FALLBACK_VISUALIZER_COLOR,
+  deepFreeze,
+  sanitizeProviderError,
+  retainsPlaybackEligibility
+} from './runtimeTypes';
+import type {
+  WallpaperRuntimeSnapshot,
+  ReadonlyWallpaperRuntimeSnapshot,
+  WallpaperRuntime,
+  WallpaperRuntimeDependencies
+} from './runtimeTypes';
 
-const SILENCE_RELEASE_MS = 450;
-const FALLBACK_VISUALIZER_COLOR = '#ffffff';
-interface WallpaperRuntimeSnapshot {
-  settings: WallpaperPreferences;
-  playback: NormalizedPlayback;
-  previousPlayback: NormalizedPlayback | null;
-  spotifyError: SpotifyPlaybackError | null;
-  controlError: SpotifyPlaybackError | null;
-  controlBusy: boolean;
-  playbackMode: string;
-  providerSelection: 'mock' | 'ready' | 'invalid';
-  providerConfigurationError: string | null;
-  lastPollingDelayMs: number | null;
-  consecutiveErrors: number;
-  nowMs: number;
-  progressNowMs: number;
-  visualizerFrame: VisualizerFrame | null;
-  previousVisualizerFrame: VisualizerFrame | null;
-  visualizerMotion: VisualizerMotionState;
-  visualizerColor: string;
-  theme: WallpaperTheme;
-  transitionState: TrackTransitionState | null;
-  credentialStatus: { kind: 'none' | 'direct' | 'backend'; present: boolean; revision: number };
-}
+export type { ReadonlyWallpaperRuntimeSnapshot, WallpaperRuntime, WallpaperRuntimeDependencies } from './runtimeTypes';
 
-type DeepReadonly<T> = T extends (...args: never[]) => unknown
-  ? T
-  : T extends Date
-    ? Readonly<T>
-    : T extends readonly (infer U)[]
-      ? ReadonlyArray<DeepReadonly<U>>
-      : T extends object
-        ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
-        : T;
-
-export type ReadonlyWallpaperRuntimeSnapshot = DeepReadonly<WallpaperRuntimeSnapshot>;
-
-export interface WallpaperRuntime {
-  enableCredentialStore(store: DirectCredentialStore): void;
-  start(): void;
-  subscribe(listener: (snapshot: ReadonlyWallpaperRuntimeSnapshot) => void): () => void;
-  applyConfiguration(settings: WallpaperPreferences, credential: CredentialUpdate, safetyGateOpen: boolean, providerSelectionExplicit?: boolean): void;
-  acceptAudioFrame(frame: VisualizerFrame): void;
-  execute(command: PlaybackCommand): Promise<void>;
-  toggleDisplayMode(): void;
-  dispose(): void;
-}
-
-export interface WallpaperRuntimeDependencies {
-  credentialStore?: DirectCredentialStore;
-  selectProvider?: typeof selectPlaybackProvider;
-  startAudioBridge?: typeof startAudioBridge;
-  extractTheme?: typeof extractAlbumTheme;
-}
+export const audioReactionEnabled = (settings: WallpaperPreferences): boolean =>
+  settings.visualizer.enabled
+  || settings.visualizer.glowingObjectsEnabled
+  || (settings.albumArt.visible && settings.layout.items.albumArt.enabled);
 
 export const createWallpaperRuntime = (
   initialSettings: WallpaperPreferences = defaultSettings,
@@ -197,11 +159,6 @@ export const createWallpaperRuntime = (
     };
     clockTimeout = window.setTimeout(tick, clockDelay(new Date(snapshot.nowMs)));
   };
-
-  const audioReactionEnabled = (settings: WallpaperPreferences): boolean =>
-    settings.visualizer.enabled
-    || settings.visualizer.glowingObjectsEnabled
-    || (settings.albumArt.visible && settings.layout.items.albumArt.enabled);
 
   const playbackAcceptsAudio = (source: VisualizerFrame['source']): boolean => {
     const hasItem = snapshot.playback.itemType === 'track' || snapshot.playback.itemType === 'episode';
@@ -509,7 +466,6 @@ export const createWallpaperRuntime = (
     },
     applyConfiguration(settings, credential, gateOpen, providerSelectionExplicit = false) {
       if (disposed) return;
-      // Erasing secrets is allowed even when malformed settings prohibit networking.
       if (!applyingStoredCredential && credential.kind === 'clear') {
         credentialEpoch += 1;
         directSession = undefined;
@@ -524,7 +480,6 @@ export const createWallpaperRuntime = (
           const epoch = ++credentialEpoch;
           credentialQueue = credentialQueue.then(async () => {
             const record = await store.import(input);
-            // A retired notification cannot displace the current account.
             if (record) acceptStored(record, epoch);
             else acceptStored(await store.read(), epoch);
           }).catch(() => {
@@ -755,44 +710,3 @@ export const createWallpaperRuntime = (
 
   return runtime;
 };
-
-const deepFreeze = <T>(value: T): T => {
-  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
-  Object.freeze(value);
-  for (const child of Object.values(value as Record<string, unknown>)) {
-    deepFreeze(child);
-  }
-  return value;
-};
-
-const sanitizeProviderError = (error: SpotifyPlaybackError): SpotifyPlaybackError => {
-  const status = error.status;
-  const retryAfterMs = error.retryAfterMs;
-  const safeStatus = typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
-  const safeRetryAfterMs = typeof retryAfterMs === 'number' && Number.isSafeInteger(retryAfterMs) && retryAfterMs >= 0
-    ? Math.round(retryAfterMs)
-    : undefined;
-  return {
-    kind: error.kind,
-    message: error.kind === 'rate_limited' && error.quotaExceeded === true ? 'Spotify開発者アカウントのquota上限です。再認証せず時間をおいてください。' : safeProviderErrorMessage(error.kind),
-    ...(error.quotaExceeded === true ? { quotaExceeded: true } : {}),
-    ...(safeStatus === undefined ? {} : { status: safeStatus }),
-    ...(safeRetryAfterMs === undefined ? {} : { retryAfterMs: safeRetryAfterMs })
-  };
-};
-
-const safeProviderErrorMessage = (kind: SpotifyPlaybackError['kind']): string => {
-  switch (kind) {
-    case 'unauthorized': return 'Spotify authorization is required.';
-    case 'forbidden': return 'Spotify playback access was denied.';
-    case 'rate_limited': return 'Spotify rate limit reached.';
-    case 'network_error': return 'Spotify network request failed.';
-    case 'storage_error': return 'Spotify認証情報を保存・復元できません。保存領域を確認して再接続してください。';
-    case 'unavailable': return 'Spotify is temporarily unavailable.';
-    case 'unknown_response_shape': return 'Spotify returned an unsupported response.';
-    case 'item_null': return 'Spotify is not currently playing an item.';
-  }
-};
-
-const retainsPlaybackEligibility = (kind: SpotifyPlaybackError['kind']): boolean =>
-  kind === 'network_error' || kind === 'rate_limited' || kind === 'unknown_response_shape';
